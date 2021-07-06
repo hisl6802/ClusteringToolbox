@@ -1,0 +1,2 @@
+def reinit():
+	import JuneLabClusteringGUI
