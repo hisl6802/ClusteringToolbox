@@ -3,6 +3,10 @@ from tkinter import ttk
 from tkinter import messagebox
 from tkinter import filedialog
 import tkinter as tk
+import math
+
+from matplotlib.pyplot import text
+from scipy.spatial import distance
 import GuiBackground as GB
 from GUIUtils import GUIUtils as GU 
 import logging
@@ -60,94 +64,234 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.master.destroy()
 		RI.reinit()
 
-
 	def createClustergram(self):
 		def linkageOutput(*args):
 			#grab the current selection of the list
+			global selection
 			selection = distListBox.curselection()
-			selectionIndex = binaryList[selection[0]]
-			for i in range(int(len(selectionIndex)/2)):
-				if i == 0:
-					linkLoc = (2*int(selectionIndex[0]) + int(selectionIndex[1]))
-					link = linkageList[linkLoc]
-				elif i == 1:
-					distLoc = (2*int(selectionIndex[2]) + int(selectionIndex[3]))
-					dist = distList[distLoc]
-					GU.createClustergram(0,link,dist)
+			curLink = linkageList[selection[0]]
+			if curLink == 'ward':
+				lenList = len(sampleListBox.get(0,tk.END))
+				if lenList > 0:
+					sampleListBox.delete(0,lenList-1)
 
+				sampleListBox.insert(0,distList[0])
+				self.sampleListBox = sampleListBox
+				self.sampleListBox.grid(column=2,row=2,columnspan=1)
+			else:
+				lenList = len(sampleListBox.get(0,tk.END))
+				if lenList > 0:
+					sampleListBox.delete(0,lenList-1)
+
+				for i in range(len(distList)):
+					sampleListBox.insert(i,distList[i])
+
+				#bind the output back to the GUI.
+				self.sampleListBox = sampleListBox
+				self.sampleListBox.grid(column=2,row=2,columnspan=1)
+			return selection
+
+		def submit(*args):
+			#submit the function output to the
+			#selection = distListBox.curselection() 
+			selection1 = sampleListBox.curselection()
+			dist = distList[selection1[0]]
+			link = linkageList[selection[0]]
+			GU.createClustergram(0,link,dist)
 
 		objects = self.grid_slaves()
 		for i in objects:
 			i.destroy()
 
 		#create widgets for the clustergram function input. 
-		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=0,row=0,sticky=(N))
-		self.home = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=2, sticky=(N))
-		distListBox = Listbox(self,height=5)#.grid(column=1,row=1,rowspan=4)
+		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
+		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
+		self.Distance = ttk.Label(self, text="Distance Measure",font=("TkHeadingFont",12)).grid(column=2,row=1,sticky=(N))
+		self.home = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1, row=4,sticky=(N),columnspan=2)
+		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=1, row=3,sticky=(N),columnspan=2)
+		distListBox = Listbox(self,height=8)
+		sampleListBox = Listbox(self,height=8)
 		
 		#Create the lists of available options for selection 
 		linkageList = ('single','ward','complete','average')
-		distList = ('euclidean','sqeuclidean','cosine','chebyshev')
-		linkDistList = ('single====euclidean','single====sqeuclidean','single====cosine','single====chebyshev','ward====euclidean','complete====euclidean',\
-					'complete====sqeuclidean','complete====cosine','complete====chebyshev','average====euclidean','average====sqeuclidean','average====cosine','average====chebyshev')
-		binaryList = ('0000','0001','0010','0011','0100','1000','1001','1010','1011','1100','1101','1110','1111')
-		distNames = StringVar(value=linkDistList)
-
-		for i in range(len(linkDistList)):
-			distListBox.insert(i,linkDistList[i])
+		distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
+		linkNames = StringVar(value=linkageList)
+		distNames = StringVar(value=distList)
+		
+		#input the linkage function values into the box
+		for i in range(len(linkageList)):
+			distListBox.insert(i,linkageList[i])
 
 		distListBox.bind('<Double-1>',linkageOutput)
 		self.distListBox = distListBox
-		self.distListBox.grid(column=0,row=1,columnspan=4)
+		self.distListBox.grid(column=1,row=2,columnspan=1)
+		self.sampleListBox = sampleListBox
+		self.sampleListBox.grid(column=2,row=2,columnspan=1)
 
 	def medians(self):
 	    #send the user to the groupMedians function
 	    GU.groupMedians()
 
 	def linkages(self):
-		def linkageComp(*args):
-			#get the file containing the groups
-			linkList = []
-			file = filedialog.askopenfilename()
-			selection = linkListBox.curselection()
-			selectionIndex = binaryList[selection[0]]
-			for i in range(int(len(selectionIndex))):
-				if int(selectionIndex[i]) == 1:
-					#put the output into the linkList to be sent to the linkageComparison function
-					linkList.append(linkageList[i])
-
-			#get the linkage length to tell the linkageComparison how many comparisons to perform
-			num_comps = len(linkList)
+		def distFunc(*args):
+			#make a global distance variable
+			global distance
+			distance = self.dist.get()
 			
-			#send the parameters for linkage comparison 		
-			GU.linkageComparison(file,num_comps,linkList)
+			#given the selection of a distance measure how many comparisons are possible. 
+			if distance == 'euclidean':
+				#give the full list to the second combobox
+				values = [1,2,3,4]
+				num_comps = StringVar()
+				self.numComps = ttk.Combobox(self,values=values,textvariable=num_comps)
+			else:
+				#give only three values to the second combobox
+				values = [1,2,3]
+				num_comps = StringVar()
+				self.numComps = ttk.Combobox(self,values=values,textvariable=num_comps)
+			
+			#place the combobox on the GUI
+			self.numComps.bind('<<ComboboxSelected>>', numCompsFunc)
+			self.numComps.grid(column=2,row=2)
+		
+		def numCompsFunc(*args):
+			#make a numberComps global variable
+			global numberComps
+			numberComps = self.numComps.get()
+
+			#create a list of linkage options
+			linkOpts = ['ward-single','ward-complete','ward-average','single-complete','single-average','complete-average',\
+						'ward-single-complete','ward-single-average','ward-complete-average','single-complete-average',\
+						'ward-single-complete-average']
+
+			if numberComps == '1':
+				#give the linkage funtions combobox a list of the linkage functions. 
+				linkages = ['ward','single','complete','average']
+
+				#check for the euclidean measure again.
+				if distance == 'euclidean':
+					#give the values of linkages[1:3]
+					value = linkages
+					linkage = StringVar()
+					self.linkage = ttk.Combobox(self,values=value,textvariable=linkage)
+				else:
+					value = linkages[3]
+					linkage = StringVar()
+					self.linkage = ttk.Combobox(self,values = value,textvariable=linkage)
+
+				#bind and place the combobox on the GUI
+				self.linkage.bind('<<ComboboxSelected>>', linkageComp)
+				self.linkage.grid(column=3,row=2)
+
+			elif numberComps == '2':
+				#give the linkage functions combobox a subset based upon distance measure. 
+				if distance == 'euclidean':
+					#give the list values from 0 to 5
+					value = linkOpts[0:6]
+					linkage = StringVar()
+					self.linkage = ttk.Combobox(self,values=value,textvariable=linkage)
+
+				else:
+					#give the list values from 3 to 5
+					value = linkOpts[3:5]
+					linkage = StringVar()
+					self.linkage = ttk.Combobox(self,values=value,textvariable=linkage)
+				
+				#bind and place the combobox on the GUI
+				self.linkage.bind('<<ComboboxSelected>>', linkageComp)
+				self.linkage.grid(column=3,row=2)
+
+			elif numberComps == '3':
+				#give the linkage functions combobox a subset based upon distance measure. 
+				if distance == 'euclidean':
+					#give the list values from 0 to 5
+					value = linkOpts[6:10]
+					linkage = StringVar()
+					self.linkage = ttk.Combobox(self,values=value,textvariable=linkage)
+
+				else:
+					#give the list values from 3 to 5
+					value = linkOpts[9]
+					linkage = StringVar()
+					self.linkage = ttk.Combobox(self,values=value,textvariable=linkage)
+				
+				#bind and place the combobox on the GUI
+				self.linkage.bind('<<ComboboxSelected>>', linkageComp)
+				self.linkage.grid(column=3,row=2)
+
+			elif numberComps == '4':
+				#give the list values from 3 to 5
+				value = linkOpts[10]
+				linkage = StringVar()
+				self.linkage = ttk.Combobox(self,values=value,textvariable=linkage)
+				
+				#bind and place the combobox on the GUI
+				self.linkage.bind('<<ComboboxSelected>>', linkageComp)
+				self.linkage.grid(column=3,row=2)
+
+		def linkageComp(*args):
+			#base linkage list for 4 comparisons.
+			linkageList = ['ward','single','complete','average']
+			
+			#create an empty list for linkage functions
+			linkList = []
+
+			#count the number of dashes in the string from combobox
+			selection = self.linkage.get()
+			locs = []
+			for i in range(len(selection)):
+				#find the dash locations
+				if selection[i] == '-':
+					locs.append(i)
+
+			if len(locs) > 0:
+				firstLetter = 0
+				for i in range(len(selection)):
+					#check vthe current string value for '-'
+					if selection[i] == '-':
+						lastLetter = i
+						#get current linkage
+						curLink = selection[firstLetter:lastLetter]
+						linkList.append(curLink)
+						firstLetter = i+1
+					elif i == len(selection)-1:
+						lastLetter = i+1
+						curLink = selection[firstLetter:lastLetter]
+						linkList.append(curLink)
+
+			else:
+				#append the selection to the linkage list
+				linkList.append(selection)
+			
+			# #send the parameters for linkage comparison 	
+			file = filedialog.askopenfilename()	
+			GU.linkageComparison(file,numberComps,linkList,distance)
+
+
 
 		objects = self.grid_slaves()
-		print(objects)
 		for i in objects:
 			i.destroy()
 
+		#create a list of values from 1 to 4
+		numLinkComps = [1,2,3,4]
+
 		#create widgets for the clustergram function input. 
-		self.JuneLab = ttk.Label(self, text="Linkage Comparison Options",font=("TkHeadingFont",36)).grid(column=0,row=0,sticky=(N))
-		self.home = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=2, sticky=(N))
-		linkListBox = Listbox(self,height=5)
-
-		#Create the list of available options for selection
-		linkageList = ('single','ward','complete','average')
-		linkageOptions = ('single====ward','single====complete','single====average','ward====complete','ward====average','complete====average',\
-					  'single==ward==complete','single==ward==average','single==complete==average','ward==complete==average',\
-					  'single=ward=complete=average')
-		binaryList = ('1100','1010','1001','0110','0101','0011','1110','1101','1011','0111','1111')
-		#Create linkages variables
-		linkages = StringVar(value=linkageOptions)
-
-		#
-		for i in range(len(linkageOptions)):
-			linkListBox.insert(i,linkageOptions[i])
-
-		linkListBox.bind('<Double-1>',linkageComp)
-		self.linkListBox = linkListBox
-		self.linkListBox.grid(column=0,row=1,columnspan=4)
+		self.JuneLab = ttk.Label(self, text="Linkage Comparison",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.numCompsLab = ttk.Label(self, text="Number of comparisons",font=("TkHeadingFont",12)).grid(column=2,row=1)
+		self.distLab = ttk.Label(self, text="Distance measure",font=("TkHeadingFont",12)).grid(column=1,row=1)
+		self.linkLab = ttk.Label(self,text="Linkage functions",font=("TkHeadingFont",12)).grid(column=3,row=1)
+		self.home = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=4, sticky=(N),columnspan=3)
+		
+		linkages = StringVar()
+		#create the distance measure combobox first, then update the GUI as the user selects the distance, measure than number of linkage comps. 
+		distances = StringVar()
+		distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
+		self.dist = ttk.Combobox(self,values = distList,textvariable=distances)
+		
+		#bind the combobox for distance measures to the selection of distance measure. 
+		self.dist.bind('<<ComboboxSelected>>', distFunc)
+		self.dist.grid(column=1,row=2)
 
 	def compound(self):
 	    #ask the user to select a clustergram file to run through a validition study.
@@ -187,8 +331,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		#create list box of the ensemble optimal clusters
 		optClustBox = Listbox(self,height=5)
 		#Create the lists of available options for selection 
-		optClusters = ('1','2','3','4','5','6',\
-					'7','8','9','10','11','12','13')
+		optClusters = tuple(range(1,101))
 		distNames = StringVar(value=optClusters)
 
 		for i in range(len(optClusters)):
@@ -210,9 +353,11 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 	def userRequest(self):
 
-		def generateRequest():
+		def generateRequest(*args):
 			#create the pdf and title for each page
 			pdf = fpdf.FPDF('P','mm','Letter')
+			title = self.title.get()
+			body = self.body.get()
 
 			#Create the title and set the default font
 			directory = 'C:/Users/Public/Documents/Requests'
@@ -221,37 +366,38 @@ class JuneLabClusteringGUI(ttk.Frame):
 			#determine the current user
 			curUser = getpass.getuser()
 			curUser = GB.who(curUser)
-			title = 'User Request' + '-' + curUser
+			
+			#create first page
 			pdf.add_page()
+			title += '-' + curUser
 			pdf.set_font('Arial', 'B', 24)
-			fileName = curUser + '.pdf'
+			pdf.cell(197, 10, title, 0, 0, 'C')
+			pdf.line(5,20,200,20)
+			pdf.ln(15)
+			pdf.set_font('Arial',style='',size=18)
+
+			pdf.multi_cell(197,8,body,0,0,'J')
+			ending = '.pdf'
+			fileName = ''
+			curTime = time.strftime("%a_%b_%d_%Y_%H_%M")
+			fileName += curUser + '_' + curTime + ending
 			pdf.output(fileName, 'F')
+			logging.info(': Sucessfully created a pdf of the results!')
+			logging.info(': Leaving the pdf User Request Function!')
 
 		objects = self.grid_slaves()
 		for i in objects:
 			i.destroy()
-		# #Generates User Request PDF
-		# canvas = tk.Canvas(width = 400, height = 800)
-		# canvas.pack()
 
-		# label = ttk.Label(self, text = 'Submit User Request')
-		# label.config(font = ('helvetica', 14))
-		# canvas.create_window(200, 25, window = label)
+		self.title = tk.StringVar()
+		self.body = tk.StringVar()
+		self.entrytitle = ttk.Entry(self,textvariable=self.title).grid(column=0,row=1,columnspan=4, pady=3)
+		self.entrybody = ttk.Entry(self,textvariable=self.body).grid(column=0,row=3,columnspan=4, pady=3)
+		self.labelTitle = ttk.Label(self, text='Title').grid(row=0)
+		self.labelBody = ttk.Label(self, text='Description').grid(row=2)
 
-		entrytitle = ttk.Entry(self).grid(column=0,row=1,columnspan=4, pady=3)
-		entrybody = ttk.Entry(self).grid(column=0,row=3,columnspan=4, pady=3)
-		labelTitle = ttk.Label(self, text='Title').grid(row=0)
-		labelBody = ttk.Label(self, text='Description').grid(row=2)
-
-		# canvas.create_window(200, 700, window = entrytitle)
-		# canvas.create_window(200, 600, window = entrybody)
-		buttonSubmit = ttk.Button(self,text = 'Submit Request', command = generateRequest).grid(column=0, columnspan=4)
-		# canvas.create_window(200, 100, window = buttonSubmit)
+		self.buttonSubmit = ttk.Button(self,text = 'Submit Request', command = generateRequest).grid(column=0, columnspan=4)
 		
-
-
-		
-
 
 curUser = getpass.getuser()
 curUser = GB.who(curUser)
@@ -276,7 +422,3 @@ app.master.resizable(0,0)
 
 app.master.title("Home")
 app.mainloop()
-
-
-
-

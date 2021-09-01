@@ -161,6 +161,7 @@ def createEnsemDendrogram(data,metab_data,norm=1,link='ward',dist='euclidean',fu
         for j in range(data.shape[0]):
             #going through the metabolites
             dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
+    
     g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap="viridis", cbar_pos=(0.01, 0.8, 0.025, 0.175))
     ax = g.ax_heatmap
 
@@ -209,6 +210,7 @@ def create_dendrogram(data, norm=1,link='ward',dist='euclidean'):
 
     if norm == 0:
         g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap="viridis", cbar_pos=(0.01, 0.8, 0.025, 0.175))
+        #g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap="viridis")
         plt.show()
 
     elif norm == 1:
@@ -864,29 +866,22 @@ def Validate(data,dists,num_groups):
         intraDist = sumIntra/(clusterings+1)
         
         # find the distance between the centers
+        interDist = 1000
         centerDists = pdist(centersNum)
-        lenCenters = len(centerDists)
-        centerDists = squareform(centerDists)
-        centerDists = csr_matrix(centerDists)
-        centerDistsInd = centerDists.nonzero()
-
-        dataMST = np.zeros([lenCenters,1])
-
-        for k in range(lenCenters):
-            #input the values of each matrix element to the numpy array for saving to csv file.
-            curVal0 = centerDistsInd[0][k]
-            curVal1 = centerDistsInd[1][k]
-            dataMST[k,0] = centerDists[curVal0,curVal1]
-        
+        for j in range(len(centerDists)):
+            #determine the minimum non-zero value in the distance array
+            #index does not matter for this algorithm. 
+            if centerDists[j] < interDist and centerDists[j] != 0:
+                interDist = centerDists[j]
 
         #calculate the inter-cluster distance for the current cluster set-up
-        if len(dataMST[:,0]) > 0:
-            interDist = np.min(dataMST[:,0])
+        if len(centerDists) > 0:
             #calculate the validation index
             val_index[0,i] = intraDist/interDist
             val_index[1,i] = clusterings - (i)
 
-        elif len(dataMST[:,0]) == 0:
+        # elif len(dataMST[:,0]) == 0:
+        elif len(centerDists) == 0:
             interDist = 0
             #set the validation index to a large number since denominator would be zero in current config.
             val_index[0,i] = 1
@@ -907,11 +902,8 @@ def Validate(data,dists,num_groups):
             message = str(i)+': ' + str(runTime)
             logging.info(message) 
 
-
         endTime = time.perf_counter()
         totalTime = endTime -startTime
-
-        print(totalTime, curClustersLength) 
 
     runTime = time.time()-initTime
     runTime = timeConverter(runTime)
@@ -1046,7 +1038,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data):
             ensembleClustersOut(found[0],groupDendLeaves,metab_data)
             #then simply take the current j value and give it limits of j-0.5 to j+0.5, in the x and y directions.
             arrays = {0:np.linspace(j-0.5, j+0.5, num=5),1:np.linspace(j-0.5, j-0.5, num=5),2:np.linspace(j+0.5, j+0.5, num=5)}
-            if len(found[0]) > 40:
+            if len(found[0]) > 10:
                 heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[1], arrays[0], 'r--', linewidth=3, markersize=3)
@@ -1059,7 +1051,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data):
             maxMetab = max(found[0])
             ensembleClustersOut(found[0],groupDendLeaves,metab_data)
             arrays = {0:np.linspace(j-0.5, maxMetab+0.5, num=5),1:np.linspace(j-0.5, j-0.5, num=5),2:np.linspace(maxMetab+0.5, maxMetab+0.5, num=5)}
-            if len(found[0]) > 40:
+            if len(found[0]) > 10:
 
                 heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
@@ -1113,7 +1105,7 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data):
     except:
         logging.warning(': Deleting variable prior to its creation is not advised!!')
 
-    if lenFound > 40:
+    if lenFound > 10:
         idents = []
         for i in range(lenFound):
             #find where in the row of metabData I need to extract from by determining which metabolite was clustered where from the groupDendLeaves

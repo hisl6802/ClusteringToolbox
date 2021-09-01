@@ -176,17 +176,21 @@ class GUIUtils:
 
         #get the group letters to know which groups to find the medians of
         groups = medians['mz']
+
         numObs = int(medians.shape[0]-1)
+        
 
         num_groups = int(medians['Unnamed: 0'][numObs][0])
+
         factor = len(medians['Unnamed: 0'])/num_groups
 
         #create a numpy array containing 7 columns to allow for input of the m/z values and the groups
         mediansOut = np.zeros((medians.shape[1]-2,num_groups+1))
             
         #populate the first column of the array with the m/z values
+        print(medians.columns[2:medians.shape[1]])
         mediansOut[:,0] = medians.columns[2:medians.shape[1]]
-
+        print('Good')
         #Get the medians for each group and metabolite
         for i in range(num_groups):
             #calculate the start and end for each set of median calculations
@@ -228,7 +232,7 @@ class GUIUtils:
         logging.info(': Sucessfully grouped the Medians of each group!')
         return
 
-    def linkageComparison(file,num_comps,linkList):
+    def linkageComparison(file,num_comps,linkList,distance):
         '''
         Compares 2-4 linkage functions on a given set of data. 
         
@@ -267,12 +271,15 @@ class GUIUtils:
         for i in range(metab_data.shape[0]):
             data[i,:] = GB.standardize(data[i,:])
         del(i)
+        #convert string to integer
+        num_comps = int(num_comps)
+        
         if num_comps == 2:
             #Create the linkage matrix
-            linkageOne = linkage(data,linkList[0])
+            linkageOne = linkage(data,linkList[0], metric=distance)
             distMeasure = pdist(data)
             distMeasure = squareform(distMeasure)
-            linkageTwo = linkage(data,linkList[1])
+            linkageTwo = linkage(data,linkList[1], metric=distance)
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,2,figsize=(8,8))
@@ -281,12 +288,12 @@ class GUIUtils:
             dend1 = dendrogram(linkageOne,ax=axes[0],above_threshold_color='y',orientation='left',no_labels=True)
             dend2 = dendrogram(linkageTwo,ax=axes[1],above_threshold_color='y',orientation='left',no_labels=True)
             del(linkageOne,linkageTwo,num_comps)
-
+            print('Good')
         elif num_comps == 3:
             #Create the linkage matrix
-            linkageOne = linkage(data,linkList[0])
-            linkageTwo = linkage(data,linkList[1])
-            linkageThree = linkage(data,linkList[2])
+            linkageOne = linkage(data,linkList[0],metric=distance)
+            linkageTwo = linkage(data,linkList[1],metric=distance)
+            linkageThree = linkage(data,linkList[2], metric=distance)
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,3,figsize=(8,8))
@@ -296,13 +303,13 @@ class GUIUtils:
             dend2 = dendrogram(linkageTwo,ax=axes[1],above_threshold_color='y',orientation='left',no_labels=True)
             dend3 = dendrogram(linkageThree,ax=axes[2],above_threshold_color='y',orientation='left',no_labels=True)
             del(linkageOne,linkageTwo,linkageThree,num_comps)
-
+            print('Good')
         elif num_comps == 4:
             #Create the linkage matrix
-            linkageOne = linkage(data,linkList[0])
-            linkageTwo = linkage(data,linkList[1])
-            linkageThree = linkage(data,linkList[2])
-            linkageFour = linkage(data, linkList[3])
+            linkageOne = linkage(data,linkList[0],metric=distance)
+            linkageTwo = linkage(data,linkList[1],metric=distance)
+            linkageThree = linkage(data,linkList[2],metric=distance)
+            linkageFour = linkage(data, linkList[3],metric=distance)
 
             #Create the appropriate figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(2,2,figsize=(8,8))
@@ -314,7 +321,7 @@ class GUIUtils:
             dend3 = dendrogram(linkageThree,ax=axes[1,0],above_threshold_color='y',orientation='left',no_labels=True)
             dend4 = dendrogram(linkageFour,ax=axes[1,1],above_threshold_color='y',orientation='left',no_labels=True)
             del(linkageOne,linkageTwo,linkageThree,linkageFour,num_comps)
-
+            print('Good')
         linkPre = 'LinkageComparison'
         linkSuf = '.png'
         sep = '_'
@@ -350,6 +357,7 @@ class GUIUtils:
         else:
             linkFile = firstCheck 
             plt.savefig(linkFile,dpi=600)
+        print('Still good')
         plt.show()
 
         #log the completion of the linkage comparison
@@ -428,7 +436,7 @@ class GUIUtils:
 
         #List for the use in creating and plotting the clustering results
         linkageList = ['single','complete','average']
-        distList = ['euclidean','sqeuclidean','chebyshev','cosine']
+        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean']  #,'cosine']
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
         numClusterings = (len(linkageList)*len(distList))+1
@@ -563,6 +571,7 @@ class GUIUtils:
             miniVals[i,0] = x[minimums[0][i]]
             miniVals[i,1] = y[minimums[0][i]]
         ind = np.unravel_index(np.argmin(miniVals, axis=None), miniVals.shape)
+        print(ind)
         minValIndex = miniVals[ind[0],:]
 
         valOut = np.zeros((2,valIndex.shape[1]))
@@ -588,7 +597,7 @@ class GUIUtils:
             plt.plot(valOut[1,:],valOut[0,:])
             plt.plot(minValIndex[0],minValIndex[1],'r*')
             font = {'family': 'serif','color':  'black','weight': 'bold','size': 20}
-            plt.text(valIndex.shape[1]/2, 0.75, str(int(minValIndex[0]))+' - Clusters!!',fontdict=font)
+            plt.text(valIndex.shape[1]/2, 0.75, str(int(minValIndex[0]))+' - Clusters!!', fontdict=font)
             plt.xlabel('Clusters')
             plt.ylabel('Validation Index')
             plt.title('Cluster Validation')
@@ -664,6 +673,7 @@ class GUIUtils:
                     dataClust[locRT[0][0],2] = 0.04
 
                 else:
+                    print(j+1)
                     logging.warning(': Creation of peaks to pathway files halted due to non-matching values, please make sure you have selected appropriate reference file.')
                     return
             #create the files that can be submitted to the csv saving file. 
