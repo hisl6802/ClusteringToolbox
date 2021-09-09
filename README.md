@@ -12,7 +12,8 @@
 - [sklearn](https://scikit-learn.org/stable/index.html)
 - [matplotlib](https://matplotlib.org/3.2.1/index.html)
 - [fpdf](https://pyfpdf.readthedocs.io/en/latest/#:~:text=%20FPDF%20for%20Python%20%201%20Main%20features.,priority%20technical%20support%2C%20you%20can%20contact...%20More%20)
-- [xlrd](https://www.gmail.com)
+- [xlrd](https://pypi.org/project/xlrd/)\
+- [seaborn](https://seaborn.pydata.org/index.html)
 
 
 ## After downloading the requisite libaries needed. Open a shell and run the following program:
