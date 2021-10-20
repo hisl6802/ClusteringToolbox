@@ -13,6 +13,7 @@ import statistics as stat
 import GuiBackground as GB
 from tkinter import filedialog
 from scipy.signal import argrelextrema
+import mplcursors
 
 class GUIUtils:
     def dataIntegrity(file):
@@ -283,12 +284,19 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,2,figsize=(8,8))
-
+            #grab the last entry of the linkage list
+            maxList = np.zeros((1,2))
+            maxList[0,0] = linkageOne[len(linkageOne)-1][0]
+            maxList[0,1] = linkageOne[len(linkageOne)-1][1]
+            maxLinkNum = int(np.amax(maxList))
+            sameColor = []
+            for i in range(maxLinkNum+2):
+                sameColor.append('k')
             #create the dendrograms
-            dend1 = dendrogram(linkageOne,ax=axes[0],above_threshold_color='y',orientation='left',no_labels=True)
-            dend2 = dendrogram(linkageTwo,ax=axes[1],above_threshold_color='y',orientation='left',no_labels=True)
+            dend1 = dendrogram(linkageOne,ax=axes[0],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+            dend2 = dendrogram(linkageTwo,ax=axes[1],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+                
             del(linkageOne,linkageTwo,num_comps)
-            print('Good')
         elif num_comps == 3:
             #Create the linkage matrix
             linkageOne = linkage(data,linkList[0],metric=distance)
@@ -297,13 +305,19 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,3,figsize=(8,8))
-
+            #grab the last entry of the linkage list
+            maxList = np.zeros((1,2))
+            maxList[0,0] = linkageOne[len(linkageOne)-1][0]
+            maxList[0,1] = linkageOne[len(linkageOne)-1][1]
+            maxLinkNum = int(np.amax(maxList))
+            sameColor = []
+            for i in range(maxLinkNum+2):
+                sameColor.append('k')
             #create the dendrograms
-            dend1 = dendrogram(linkageOne,ax=axes[0],above_threshold_color='y',orientation='left',no_labels=True)
-            dend2 = dendrogram(linkageTwo,ax=axes[1],above_threshold_color='y',orientation='left',no_labels=True)
-            dend3 = dendrogram(linkageThree,ax=axes[2],above_threshold_color='y',orientation='left',no_labels=True)
+            dend1 = dendrogram(linkageOne,ax=axes[0],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+            dend2 = dendrogram(linkageTwo,ax=axes[1],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+            dend3 = dendrogram(linkageThree,ax=axes[2],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
             del(linkageOne,linkageTwo,linkageThree,num_comps)
-            print('Good')
         elif num_comps == 4:
             #Create the linkage matrix
             linkageOne = linkage(data,linkList[0],metric=distance)
@@ -314,14 +328,42 @@ class GUIUtils:
             #Create the appropriate figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(2,2,figsize=(8,8))
             plt.title('Linkage Comparison')
+            #grab the last entry of the linkage list
+            maxList = np.zeros((1,2))
+            maxList[0,0] = linkageOne[len(linkageOne)-1][0]
+            maxList[0,1] = linkageOne[len(linkageOne)-1][1]
+            maxLinkNum = int(np.amax(maxList))
+            sameColor = []
+            for i in range(maxLinkNum+2):
+                sameColor.append('k')
 
             #create the dendrograms
-            dend1 = dendrogram(linkageOne,ax=axes[0,0],above_threshold_color='y',orientation='left',no_labels=True)
-            dend2 = dendrogram(linkageTwo,ax=axes[0,1],above_threshold_color='y',orientation='left',no_labels=True)
-            dend3 = dendrogram(linkageThree,ax=axes[1,0],above_threshold_color='y',orientation='left',no_labels=True)
-            dend4 = dendrogram(linkageFour,ax=axes[1,1],above_threshold_color='y',orientation='left',no_labels=True)
+            dend1 = dendrogram(linkageOne,ax=axes[0,0],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+            dend2 = dendrogram(linkageTwo,ax=axes[0,1],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+            dend3 = dendrogram(linkageThree,ax=axes[1,0],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+            dend4 = dendrogram(linkageFour,ax=axes[1,1],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
             del(linkageOne,linkageTwo,linkageThree,linkageFour,num_comps)
-            print('Good')
+        elif num_comps == 1:
+            #Create the linkage matrix
+            linkageOne = linkage(data,linkList[0], metric=distance)
+            distMeasure = pdist(data)
+            distMeasure = squareform(distMeasure)
+
+            #Create the appropriate plt figure to allow for the comparison of linkage functions
+            fig, axes = plt.subplots(1,1,figsize=(8,8))
+        
+            #grab the last entry of the linkage list
+            maxList = np.zeros((1,2))
+            maxList[0,0] = linkageOne[len(linkageOne)-1][0]
+            maxList[0,1] = linkageOne[len(linkageOne)-1][1]
+            maxLinkNum = int(np.amax(maxList))
+            sameColor = []
+            for i in range(maxLinkNum+2):
+                sameColor.append('k')
+
+            dend1 = dendrogram(linkageOne,ax=axes,above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
+                
+
         linkPre = 'LinkageComparison'
         linkSuf = '.png'
         sep = '_'
@@ -357,7 +399,7 @@ class GUIUtils:
         else:
             linkFile = firstCheck 
             plt.savefig(linkFile,dpi=600)
-        print('Still good')
+
         plt.show()
 
         #log the completion of the linkage comparison
@@ -637,6 +679,8 @@ class GUIUtils:
 
         nameCheckStriper = direct +'\\'
         ensemFiles = []
+        dirLog = os.getcwd()
+        print(dirLog)
         for i in range(len(files)):
             #strip the beginning of the strip off and then check the first 5 characters of the stripped string
             curCheck = files[i].strip(nameCheckStriper)
@@ -818,3 +862,92 @@ class GUIUtils:
         logging.info(': Sucessfully created a pdf of the results!')
         logging.info(': Leaving the pdf PDF Generator Function!')
         return
+
+
+    def selectClusters(link,dist):
+        '''
+        Function that pulls out the information from the plot and saves it until the user is ready to submit the clusters to the peaks to pathways function. 
+        '''
+
+        #log that the user called the Create Clustergram function
+        logging.info(': User called the Create Clustergram Function.')
+        #check that the file the user selects is appropriate
+        global metab_data
+        metab_data = GB.fileCheck()
+        if metab_data is None:
+            #log error message and return for soft exit.
+            logging.error(': Error loading in the Excel sheet.')
+            return  
+
+        #read in data
+        data = GB.readInColumns(metab_data)
+        data_orig = metab_data.to_numpy()
+        #Standardize the data before clustering the results
+        logging.info(': Standardizing the data.')
+        for i in range(metab_data.shape[0]):
+            data[i,:] = GB.standardize(data[i,:])
+        del(metab_data)
+
+        #Create the appropriate plt figure to allow for the comparison of linkage functions
+        fig, axes = plt.subplots(1,1,figsize=(8,8))
+
+        #find the linkages
+        linkageOne = linkage(data,link,metric=dist)
+        groupCluster = np.transpose(data)
+        linkageG = linkage(groupCluster,link,metric=dist)
+        #create the dendrogram
+        dend = dendrogram(linkageOne,ax=axes,above_threshold_color='y',orientation='left',no_labels=True)
+        dendG = dendrogram(linkageG,ax=axes,above_threshold_color='y',orientation='left',no_labels=True)
+        #Rework the data to create the clustergram
+        metaboliteDendLeaves = dend['leaves']
+        #find the maximum leaf to know what the index must be larger than for filling in the color
+        maxLeaf = np.array(metaboliteDendLeaves)
+        maxLeaf = np.amax(maxLeaf)
+        groupDendLeaves = dendG['leaves']
+        plt.close()
+        fig, axes = plt.subplots(1,1,figsize=(8,8))
+        dataFinal = np.zeros((data.shape[0],data.shape[1]))
+
+        for i in range(data.shape[1]):
+            #rearranging the data for heatmap
+            for j in range(data.shape[0]):
+                #going through the metabolites
+                dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
+
+        #create the axes in which the heatmap will be mapped upon
+        plt.cla()
+        heatmapAxes = [0.3, 0, 0.68, 1]
+        heatmapAxes = fig.add_axes(heatmapAxes)
+        heatmapAxes.matshow(dataFinal,aspect ='auto',origin='upper')
+        
+        maxList = np.zeros((1,2))
+        maxList[0,0] = linkageOne[len(linkageOne)-1][0]
+        maxList[0,1] = linkageOne[len(linkageOne)-1][1]
+        maxLinkNum = int(np.amax(maxList)+2)
+
+        metabDendAxes =[0,0, 0.3, 1]
+        metabAxes = fig.add_axes(metabDendAxes)
+        plt.cla()
+
+        for i in range(len(dend['icoord'])):
+            #plot each of the linkages one by one. 
+            x = np.array(dend['icoord'][i])
+            y = np.array(dend['dcoord'][i])
+        
+            plt.plot(-y, -x,'k')
+            plt.draw()
+        right, left = plt.xlim()
+        plt.xlim(right,0)
+        #find the length of data rows, to adjust the axes to fit the current heatmap 
+        lenRows = data.shape[0]
+        right = -(10*lenRows)
+        plt.ylim(right,0)
+
+        #sending linkageOne to the function which will point the selection to the appropriate
+        #number of linkages to color.
+        linkDir = GB.linkDir(linkageOne,maxLeaf)
+        linkageClusters = GB.clustConnectLink(linkageOne)
+        #create an interactive cursor
+        cursor = mplcursors.cursor(multiple=True)
+        cursor.connect("add", lambda sel: GB.select(sel.target,dend,linkageOne,linkDir,linkageClusters,data_orig))
+        plt.show()

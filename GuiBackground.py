@@ -5,11 +5,13 @@ from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import pdist,squareform
 from scipy.sparse import csr_matrix
 from matplotlib import pyplot as plt
+from matplotlib import colors as mcolors
 import pandas as pd
 import seaborn as sns
 from tkinter import filedialog
 import logging, time, glob,sys,os,ast
 from PIL import Image
+from seaborn.matrix import clustermap
 
 def fileCheck(file=''):
     '''
@@ -209,7 +211,7 @@ def create_dendrogram(data, norm=1,link='ward',dist='euclidean'):
     linkageGroupOut = linkage(groupCluster,link,dist)
 
     if norm == 0:
-        g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap="viridis", cbar_pos=(0.01, 0.8, 0.025, 0.175))
+        g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap="viridis", cbar_pos=(0.01, 0.8, 0.025, 0.175))
         #g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap="viridis")
         plt.show()
 
@@ -395,8 +397,8 @@ def clustConnectLink(linkageCheck):
                 curCon2 = int(connect2)
                 curCon1 = int(curCon1)
 
-            curCon1Connect = 0;
-            curCon2Connect = 0;
+            curCon1Connect = 0
+            curCon2Connect = 0
             unchanged = []
 
             previousKey = list(clusterPrevious.keys())
@@ -441,7 +443,7 @@ def clustConnectLink(linkageCheck):
                     elif curCon1Check == False and curCon2Check == False:
                         unchanged.append(k)
                     elif curCon1Check == True and curCon2Check == True:
-                        loggging.warning(': Issue clustering the data a duplication has been discovered.')
+                        logging.warning(': Issue clustering the data a duplication has been discovered.')
 
                 else:
                     logCheck = type(curCheck)
@@ -518,7 +520,6 @@ def clustConnectLink(linkageCheck):
 
         validationClusters.update({i:clusters})
     logging.info(': Success! Metabolite clusters determined.')
-    
     return validationClusters
 
 def clustConnect(dataMST,mstOutNp):
@@ -1178,3 +1179,180 @@ def readInColumns(metab_data):
             data[:,i-1] = medianCur
 
     return data
+    
+def select(index,dend,link,linkDir,linkClust,data_orig):
+    '''
+    Function responsible for the coloring clustergram based upon users selection.
+    Additionally, this function will eventually allow users to select many different clusters
+    and save them to a txt file which can then be used to get peaks to pathways files. 
+    '''
+
+    #grab the first value of the list. 
+    dCord = -index[0]
+    iCord = -index[1]
+    #value which needs to be subtracted from each of the indicies
+    sub = linkDir[0][0]
+
+    try:
+        countLink = 0
+        curSelection = -1
+        #find the list index which contains this value found.
+        for i in range(len(link)):
+            if abs(link[i][2] - dCord) < 0.0000001:
+                curSelection = i
+
+                countLink += 1
+
+        clustMetabs = linkClust[curSelection][0]
+
+        colors = dict(mcolors.BASE_COLORS, **mcolors.CSS4_COLORS)
+        colors = list(colors.keys())
+        lenColors = len(colors)
+  
+        if curSelection != -1:
+            #if current selection is valid grab the curSelection list from the linkage directory
+            curList = linkDir[curSelection]
+            
+            #if it's length is greater than 1 loop over the selections
+            if len(curList) > 1:
+                randNum = np.random.randint(lenColors, size=1)
+                count = []
+                for i in range(len(curList)):
+                    curCord = curList[i]-sub
+                    curDist = link[curCord][2]
+                    for j in range(len(dend['dcoord'])):
+                        if abs(dend['dcoord'][j][1] - curDist) < 0.0000001:
+                            curCord = j
+                            count.append(j)
+
+                
+                    #determine the number of counts in the current list
+                    if len(count) > 0:
+                        for j in count:
+                            if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
+                                curCord = j
+                    print(curCord)
+                    #plot the appropriate linkages        
+                    x = np.array(dend['icoord'][curCord])
+                    y = np.array(dend['dcoord'][curCord])
+                    plt.plot(-y,-x,colors[randNum[0]])
+                    plt.draw()
+            else:
+                count = []
+                curCord = curList[0]-sub
+                curDist = link[curCord][2]
+                
+                for j in range(len(dend['dcoord'])):
+                        if abs(dend['dcoord'][j][1] - curDist) < 0.0000001:
+                            curCord = j
+                            count.append(j)
+                            
+                #determine the number of counts in the current list
+                if len(count) > 0:
+                    for j in count:
+                        if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
+                            curCord = j
+                
+                print(curCord)
+                randNum = np.random.randint(lenColors, size=1)
+                #plot the appropriate linkages
+                x = np.array(dend['icoord'][curCord])
+                y = np.array(dend['dcoord'][curCord])
+                plt.plot(-y,-x, colors[randNum[0]])
+                plt.draw()
+    except:
+        logging.error('Cannot select the side of a linkage!')
+    
+    #make the current selection into a .csv file to be submitted to the peaks to Pathways function.
+    selectedMetabs = np.zeros([len(clustMetabs),data_orig.shape[1]])
+    for i in range(len(clustMetabs)):
+        #for each clustMetabs in the list put the value into a numpy array
+        selectedMetabs[i,:] = data_orig[clustMetabs[i],:]
+
+    clustPre = 'Cluster'
+    clustSuf = '.csv'
+    #create column headers for the data frame
+    columnHeaders = selectedMetabs.shape[1]
+    columns = []
+    for i in range(columnHeaders-1):
+        if i == 0:
+            columns.append("Identities")
+        else:
+            columns.append("M"+str(i))
+    columns.append("rt_med")
+
+    foundMetabs = pd.DataFrame(selectedMetabs,columns=columns)
+
+    # #add identities to the first column of the data that will be output
+    # foundMetabs.insert(0, "Identities", idents, True)
+
+    chkBuffer = glob.glob("*.csv")
+    count = 1
+    if 'Cluster01.csv' in chkBuffer:
+        checkVal = False
+        while checkVal == False:
+            count += 1
+            #search the "buffer" for ensemble cluster
+            if count < 10:
+                #determine if the file has already been made
+                curFileCheck = clustPre + '0' + str(count) + clustSuf
+                if curFileCheck not in chkBuffer:
+                    checkVal = True
+                    clustFile = curFileCheck
+            else:
+                curFileCheck = clustPre + str(count) + clustSuf
+                if curFileCheck not in chkBuffer:
+                    checkVal = True
+                    clustFile = curFileCheck
+        foundMetabs.to_csv(clustFile, index=False)
+    else:
+        clustFile = clustPre + '0'+ str(count) + clustSuf 
+        foundMetabs.to_csv(clustFile, index=False)
+    logging.info(':Success!')
+
+
+def linkDir(linkageOne,maxIndex):
+    '''
+    Creates dictionary containing all of the indicies and corresponding parameter which goes with the index.
+    '''
+
+    #initializing dictionary for storage of the linkage names.
+    linkageDir = {}
+    #create list with the linkage names embedded. 
+    linkNums = []
+
+    #fill the array with the linkage identifiers
+    for i in range(linkageOne.shape[0]):
+        curList = []
+        curList.append(int(linkageOne[i][0]))
+        curList.append(int(linkageOne[i][1]))
+        linkNums.append(curList)
+
+    for i in range(len(linkageOne)):
+        if i == 0:
+            #with the initial linkage just put the first index in.
+            linkageDir[i] = [maxIndex+(i+1)]
+        else:
+            curList = [maxIndex+(i+1)]
+            #check to see if items in curList are greater than maxIndex.
+            checks = []
+            if linkNums[i][0] > maxIndex:
+                curList.append(linkNums[i][0])
+                checks.append(linkNums[i][0])
+            if linkNums[i][1] > maxIndex:
+                curList.append(linkNums[i][1])
+                checks.append(linkNums[i][1])
+            
+            #loop over checks looking for connecting values in the list that needs to be checked.
+            if len(checks) > 0:
+                for k in range(len(checks)):
+                    #checks length, and then add all other values in this list to the current list
+                    curCheck = linkageDir[checks[k]-(maxIndex+1)]
+                    if len(curCheck) > 1:
+                        for j in range(1,len(curCheck)):
+                            #append the linkage numbers to the list of interest curList
+                            curList.append(curCheck[j])
+
+            linkageDir[i] = curList
+
+    return linkageDir

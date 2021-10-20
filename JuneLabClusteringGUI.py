@@ -29,7 +29,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.rowconfigure(3, weight = 2)
 		self.rowconfigure(4, weight = 2)
 		self.columnconfigure(3, weight=2) 
-		self.pack()
+		#self.pack()
 		self.create_widgets()
 
 	def create_widgets(self):
@@ -56,13 +56,43 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.generate = ttk.Button(self,text='Generate PDF Report', style="RW.TButton", command=self.generate).grid(column=3,row=3,sticky=(N,S,E,W))
 		#Create a button for the users to submit requests. 
 		self.request = ttk.Button(self, text="Submit Request", style = "RW.TButton", command=self.userRequest).grid(column=2, row=4, sticky=(N,S,E,W))
+		#Create a button for the selection of clusters
+		self.selection = ttk.Button(self, text="Cluster Selection",style = "RW.TButton",command=self.clusterSelection).grid(column=1, row=4,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
 
 	def home(self):
-		self.master.destroy()
-		RI.reinit()
+		#remove old objects and put the home objects back on grid
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_remove()
+		widgets = self.winfo_children()
+		widgetDict = {}
+		for i in range(12):
+			#create a dictionary of the widgets from home window
+			widgetDict[i] = widgets[i]
+
+		widgetDict[0].grid(column=0,row=0,columnspan=4)
+		widgetDict[1].grid(column=1,row=1, sticky=(N,S,E,W))
+		widgetDict[2].grid(column=1, row=3, sticky =(N,S,E,W))
+		widgetDict[3].grid(column=2, row=1,sticky =(N,S,E,W))
+		widgetDict[4].grid(column=3, row=2, sticky =(N,S,E,W))
+		widgetDict[5].grid(column=2, row=2, sticky =(N,S,E,W))
+		widgetDict[6].grid(column=2, row=3, sticky =(N,S,E,W))
+		widgetDict[7].grid(column=1,row=2,sticky=(N,S,E,W))
+		widgetDict[8].grid(column=3,row=1,sticky=(N,S,E,W))
+		widgetDict[9].grid(column=3,row=3,sticky=(N,S,E,W))
+		widgetDict[10].grid(column=2, row=4, sticky=(N,S,E,W))
+		widgetDict[11].grid(column=1, row=4,sticky=(N,S,E,W))
+
+		count = -1
+		for child in self.winfo_children():
+			#add padding to the current widgets
+			count += 1
+			if count < 11:
+				child.grid_configure(padx=5,pady=5)
+
 
 	def createClustergram(self):
 		def linkageOutput(*args):
@@ -91,6 +121,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 				self.sampleListBox.grid(column=2,row=2,columnspan=1)
 			return selection
 
+
 		def submit(*args):
 			#submit the function output to the
 			#selection = distListBox.curselection() 
@@ -101,17 +132,80 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		objects = self.grid_slaves()
 		for i in objects:
-			i.destroy()
+			i.grid_forget()
 
 		#create widgets for the clustergram function input. 
 		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
 		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
 		self.Distance = ttk.Label(self, text="Distance Measure",font=("TkHeadingFont",12)).grid(column=2,row=1,sticky=(N))
-		self.home = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1, row=4,sticky=(N),columnspan=2)
+		self.homepage = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1, row=4,sticky=(N),columnspan=2)
 		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=1, row=3,sticky=(N),columnspan=2)
 		distListBox = Listbox(self,height=8)
 		sampleListBox = Listbox(self,height=8)
 		
+		#Create the lists of available options for selection 
+		linkageList = ('single','ward','complete','average')
+		distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
+		linkNames = StringVar(value=linkageList)
+		distNames = StringVar(value=distList)
+		
+		#input the linkage function values into the box
+		for i in range(len(linkageList)):
+			distListBox.insert(i,linkageList[i])
+
+		distListBox.bind('<Double-1>',linkageOutput)
+		self.distListBox = distListBox
+		self.distListBox.grid(column=1,row=2,columnspan=1)
+		self.sampleListBox = sampleListBox
+		self.sampleListBox.grid(column=2,row=2,columnspan=1)
+
+	def clusterSelection(self):
+		def linkageOutput(*args):
+			#grab the current selection of the list
+			global selection
+			selection = distListBox.curselection()
+			curLink = linkageList[selection[0]]
+			if curLink == 'ward':
+				lenList = len(sampleListBox.get(0,tk.END))
+				if lenList > 0:
+					sampleListBox.delete(0,lenList-1)
+
+				sampleListBox.insert(0,distList[0])
+				self.sampleListBox = sampleListBox
+				self.sampleListBox.grid(column=2,row=2,columnspan=1)
+			else:
+				lenList = len(sampleListBox.get(0,tk.END))
+				if lenList > 0:
+					sampleListBox.delete(0,lenList-1)
+
+				for i in range(len(distList)):
+					sampleListBox.insert(i,distList[i])
+
+				#bind the output back to the GUI.
+				self.sampleListBox = sampleListBox
+				self.sampleListBox.grid(column=2,row=2,columnspan=1)
+			return selection
+		def submit(*args):
+			#submit the function output to the
+			#selection = distListBox.curselection() 
+			selection1 = sampleListBox.curselection()
+			dist = distList[selection1[0]]
+			link = linkageList[selection[0]]
+			GU.selectClusters(link,dist)
+		#select the same features as you did for the create clustergram, but build the dendrogram myself, for easy selection and redrawing. 
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+		#create widgets for the clustergram function input. 
+		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
+		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
+		self.Distance = ttk.Label(self, text="Distance Measure",font=("TkHeadingFont",12)).grid(column=2,row=1,sticky=(N))
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1, row=4,sticky=(N),columnspan=2)
+		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=1, row=3,sticky=(N),columnspan=2)
+		distListBox = Listbox(self,height=8)
+		sampleListBox = Listbox(self,height=8)
+
 		#Create the lists of available options for selection 
 		linkageList = ('single','ward','complete','average')
 		distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
@@ -271,7 +365,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		objects = self.grid_slaves()
 		for i in objects:
-			i.destroy()
+			i.grid_forget()
 
 		#create a list of values from 1 to 4
 		numLinkComps = [1,2,3,4]
@@ -281,8 +375,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.numCompsLab = ttk.Label(self, text="Number of comparisons",font=("TkHeadingFont",12)).grid(column=2,row=1)
 		self.distLab = ttk.Label(self, text="Distance measure",font=("TkHeadingFont",12)).grid(column=1,row=1)
 		self.linkLab = ttk.Label(self,text="Linkage functions",font=("TkHeadingFont",12)).grid(column=3,row=1)
-		self.home = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=4, sticky=(N),columnspan=3)
-		
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=4, sticky=(N),columnspan=3)
+
 		linkages = StringVar()
 		#create the distance measure combobox first, then update the GUI as the user selects the distance, measure than number of linkage comps. 
 		distances = StringVar()
@@ -301,6 +395,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 	def P2P(self):
 	    #Waiting until the MST functionality is complete. 
 	    GU.peaksToPathways()
+
 	def integrity(self):
 	    #ask the user to select a volcano plot file to check the integrity of the data against. 
 	    filename = filedialog.askopenfilename()
@@ -322,10 +417,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		objects = self.grid_slaves()
 		for i in objects:
-			i.destroy()
+			i.grid_forget()
 		#create widgets for the clustergram function input. 
 		self.JuneLab = ttk.Label(self, text="Input Optimal Number of Clusters",font=("TkHeadingFont",36)).grid(column=0,row=0,sticky=(N))
-		self.mstF = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=2,sticky=(N))
+		self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=2,sticky=(N))
 		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=3, sticky=(N))
 
 		#create list box of the ensemble optimal clusters
@@ -387,7 +482,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		objects = self.grid_slaves()
 		for i in objects:
-			i.destroy()
+			i.grid_forget()
 
 		self.title = tk.StringVar()
 		self.body = tk.StringVar()
