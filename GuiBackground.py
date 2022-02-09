@@ -1,3 +1,4 @@
+from email import message
 import numpy as np
 import statistics as stat
 from scipy.cluster.hierarchy import dendrogram
@@ -8,7 +9,10 @@ from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 import pandas as pd
 import seaborn as sns
-from tkinter import filedialog
+import tkinter as tk
+from tkinter import HORIZONTAL, filedialog, messagebox
+from tkinter.ttk import Button
+from tkinter.ttk import Progressbar
 import logging, time, glob,sys,os,ast
 from PIL import Image
 from seaborn.matrix import clustermap
@@ -34,24 +38,32 @@ def fileCheck(file=''):
     
     if file == '': 
         logging.error(': Failed to select a file')
+        messagebox.showerror(title ='Error' ,message='Please select file to continue!')
         return
 
     #Open the excel file that the user to looking to use for their clustering analysis
     try:
         data = pd.read_excel(file)
-        #data = pd.read_excel(file, sheet_name='Medians')
         del(file)
     except:
-        logging.error(': Failed to read in the excel sheet check the sheet name is Medians')
+        logging.error(': Failed to read in the excel sheet, it is recommended that an excel workbook with a single sheet is uploaded!')
+        messagebox.showerror(title='Error',message='Failed to read in the excel sheet, it is recommended that an excel workbook with a single sheet is uploaded!')
         return
     logging.info(': User file opened and submitted to the function.')
 
     return data
-        
-#Standardizing the data that is input to python.
+
+
+
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+###-------------------------------------------------------------- DATA SCALING---------------------------------------------------------------------------------------------------------
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+#Standardizing the data that is input to python. (Auto-scaling in Metaboanalyst)
 def standardize(data):
     '''
-    Standardize the input data for best clustering results.
+    Standardize the input data for best clustering results. This should be the same as Auto-scaling
     
     Input:
 
@@ -66,8 +78,8 @@ def standardize(data):
     #find the mean and standard deviation of the given row(eventually will need to move this to allow for the entire table to input.)
     mean_data = stat.mean(data)
     std_data = stat.stdev(data)
-    dataCur = np.zeros(data.shape[0])
 
+    dataCur = np.zeros(data.shape[0])
     if std_data == 0:
         for i in range(data.shape[0]):
             dataCur[i] = 0
@@ -109,13 +121,160 @@ def normStandardize(data,leaves):
     std_data = (residuals/(data.shape[0]-1))**0.5
     #standardize each row of data
     for i in leaves:
-        #Input the data into an array of standardized values
+        #Input the data into an array of standardized (auto-scaling in metaboanalyst) values
         dataCur[i] = (data[i]-mean)/std_data
 
     return dataCur
 
+
+def meanCentering(data):
+    '''
+    Mean centering the data, subtracting the mean from all data values
+
+    Input:
+
+    data - raw data
+
+    Output:
+
+    mean centered data
+    '''
+
+    logging.info(': Mean-centering the data.')
+    mean_data = stat.mean(data)
+
+    dataCur = np.zeros(data.shape[0])
+
+    for i in range(data.shape[0]):
+        dataCur[i] = (data[i]-mean_data)
+    
+    return dataCur
+
+def paretoScaling(data):
+    '''
+    Pareto scaling is similar to Auto-scaling but with data divided by the square root of the standard deviation.
+
+    Input:
+
+    data - raw data
+
+    Output:
+
+    Pareto scaled data
+    '''
+
+    logging.info(': Pareto scaling the data.')
+    mean_data = stat.mean(data)
+    std_data = stat.stdev(data)
+
+    dataCur = np.zeros(data.shape[0])
+
+    if std_data == 0:
+        for i in range(data.shape[0]):
+            dataCur[i] = data[i]-mean_data
+    else:
+        for i in range(data.shape[0]):
+            dataCur[i] = (data[i]-mean_data)/(std_data**.5)
+
+    return dataCur
+
+def rangeScaling(data):
+    '''
+    Range scaling is similar to Auto-scaling but with the data divided by the range of the data.
+
+    Input: 
+
+    data - raw data
+
+    Output:
+
+    Range scaled data
+    '''
+    logging.info(': Range scaling the data.')
+    mean_data = stat.mean(data)
+    max = np.max(data)
+    min = np.min(data)
+    rangeData = max-min
+
+    dataCur = np.zeros(data.shape[0])
+    if rangeData == 0:
+        for i in range(data.shape[0]):
+            dataCur[i] = data[i]-mean_data
+    else:
+        for i in range(data.shape[0]):
+            dataCur[i] = (data[i]-mean_data)/rangeData
+
+    return dataCur
+
+
+
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+###------------------------------------------------------------------------- DATA TRANSFORMATIONS -------------------------------------------------------------------------------------
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+### Log Transformation
+def logTrans(data):
+    '''
+    Log transform
+
+    Input:
+
+    Required 
+    data - raw data
+
+    Output:
+
+    Outputs the input data log transformed
+    '''
+    #given a row of data from the data take a log transform 
+    #add small amount amount to get past zeros
+    data +=0.1
+    dataUpdate = np.log10(data) 
+
+    
+    return dataUpdate
+
+### Square Root Transformation
+def sqrtTrans(data):
+    '''
+    Square root transformation
+
+    Input:
+
+    Require
+    data - raw data
+
+    Output:
+
+    Outputs the input data square root transformed
+    '''
+
+    dataUpdate = np.sqrt(data)
+
+    return dataUpdate
+
+### Cube Root Transformation
+def cubeRtTrans(data):
+    '''
+    Cubic root transformation
+
+    Input:
+
+    Required
+    data - raw data
+
+    Output:
+
+    Outputs the input data cube root transformed
+    '''
+
+    dataUpdate = np.cbrt(data)
+
+    return dataUpdate
+
+
 #ensemble dendrogram function
-def createEnsemDendrogram(data,metab_data,norm=1,link='ward',dist='euclidean',func="ensemble"):
+def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, link='ward',dist='euclidean',func="ensemble"):
     '''
     Create ensemble dendrogram
     
@@ -168,12 +327,12 @@ def createEnsemDendrogram(data,metab_data,norm=1,link='ward',dist='euclidean',fu
     ax = g.ax_heatmap
 
     
-    recClusters(dataFinal,ax,groupDendLeaves,metab_data)
-    plt.savefig('Clustergram01.png',dpi=600)
+    recClusters(dataFinal,ax,groupDendLeaves,metab_data,minMetabs)
+    plt.savefig('EnsembleClustergram01.png',dpi=600)
     plt.show()
 
 #dendrogram function
-def create_dendrogram(data, norm=1,link='ward',dist='euclidean'):
+def create_dendrogram(data, norm=1,link='ward',dist='euclidean', color='viridis'):
     '''
     Create dendrogram for either the ensemble or clustergram functions
 
@@ -206,13 +365,14 @@ def create_dendrogram(data, norm=1,link='ward',dist='euclidean'):
         logging.info(': Clustergram being generated.')
     except:
         logging.error(': Inappropriate entry for the create_dendrogram function. Check docs.')
+        messagebox.showerror(title ='Error' ,message='Inappropriate entry for the create_dendrogram function. Check docs.')
 
     #Create a linkage matrix for the data
     linkageGroupOut = linkage(groupCluster,link,dist)
 
     if norm == 0:
-        g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap="viridis", cbar_pos=(0.01, 0.8, 0.025, 0.175))
-        #g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap="viridis")
+        #g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=color, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+        g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap=color)
         plt.show()
 
     elif norm == 1:
@@ -792,11 +952,17 @@ def Validate(data,dists,num_groups):
     Array of the number of clusters and the validation index measure. 
 
     '''
+    # root1 = tk.Tk()
+
+    #create progress bar
+    # progress = Progressbar(root1, orient=HORIZONTAL, length=100, mode ='determinate')
+
+    # def valStart(*args):
     logging.info(': Starting cluster validation!')
     #grab the input dictionary size
     clusterings = len(data)
 
-    startPoint = 0.6*clusterings
+    startPoint = 0.1*clusterings
     startPoint = int(startPoint)
     numIts = clusterings - startPoint
 
@@ -898,6 +1064,8 @@ def Validate(data,dists,num_groups):
             runTime = timeConverter(runTime)
             percent = 100*(1 - ((clusterings-i)/numIts))
             message1 = round(percent,2) 
+            # progress['value']= message1
+            # root1.update_idletasks()
             message1 = str(message1) + '% completed'
             logging.info(message1)
             message = str(i)+': ' + str(runTime)
@@ -905,14 +1073,23 @@ def Validate(data,dists,num_groups):
 
         endTime = time.perf_counter()
         totalTime = endTime -startTime
-
+    # progress['value']=100
+    # root1.update_idletasks()
     runTime = time.time()-initTime
     runTime = timeConverter(runTime)
     logging.info(runTime)
 
     val_index = val_index[:,startPoint:clusterings]
     logging.info(': Cluster Validation complete!')
+    #messagebox.showinfo(title=None,message='Cluster Validation Complete, close this window and the progress bar to move forward!')
+    # root1.destroy()
     return val_index
+    
+    # progress.pack(pady=10)
+    # Button(root1,text='Start',command = valStart).pack(pady=10)
+
+    # root1.mainloop()
+    # return val_index
 
 def who(curUser):
     '''
@@ -934,6 +1111,7 @@ def who(curUser):
         curUser = users[curUser]
     except:
         logging.error(': Unknown User')
+        messagebox.showinfo(title='New User?', message = 'Are you a new user on the server? Contact Brady to have your name added!')
         curUser = 'Anonyomous'
     return curUser 
 
@@ -1002,7 +1180,7 @@ def pdfHeader(file):
             header = 'Unknown test, have Brady add the new test to the text file.'
             return header
 
-def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data):
+def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs):
     '''
     Determines the areas containing 100% clusters metabolites for the 13 separate clusterings performed. 
 
@@ -1033,13 +1211,14 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data):
         #
         #
         found = np.where(dataFinal[j,:]>12/13)
+        
 
         #determine the length of the array found
         if len(found[0])==1:
-            ensembleClustersOut(found[0],groupDendLeaves,metab_data)
+            ensembleClustersOut(found[0],groupDendLeaves,metab_data,minMetabs)
             #then simply take the current j value and give it limits of j-0.5 to j+0.5, in the x and y directions.
             arrays = {0:np.linspace(j-0.5, j+0.5, num=5),1:np.linspace(j-0.5, j-0.5, num=5),2:np.linspace(j+0.5, j+0.5, num=5)}
-            if len(found[0]) > 10:
+            if len(found[0]) >= minMetabs:
                 heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[1], arrays[0], 'r--', linewidth=3, markersize=3)
@@ -1050,9 +1229,9 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data):
         else:
             #use j and the maximum value from the connection search to locate create the outline
             maxMetab = max(found[0])
-            ensembleClustersOut(found[0],groupDendLeaves,metab_data)
+            ensembleClustersOut(found[0],groupDendLeaves,metab_data,minMetabs)
             arrays = {0:np.linspace(j-0.5, maxMetab+0.5, num=5),1:np.linspace(j-0.5, j-0.5, num=5),2:np.linspace(maxMetab+0.5, maxMetab+0.5, num=5)}
-            if len(found[0]) > 10:
+            if len(found[0]) >= minMetabs:
 
                 heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
@@ -1065,7 +1244,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data):
             del(arrays)
     return
 
-def ensembleClustersOut(found,groupDendLeaves,metab_data):
+def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     '''
     Intake the connected clusters of all ones and output a file with the appropriate title. This function should not be called on
     it's own but should be called through the recClusters function (which automatically recommends clusters for the user).
@@ -1106,7 +1285,7 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data):
     except:
         logging.warning(': Deleting variable prior to its creation is not advised!!')
 
-    if lenFound > 10:
+    if lenFound >= minMetabs:
         idents = []
         for i in range(lenFound):
             #find where in the row of metabData I need to extract from by determining which metabolite was clustered where from the groupDendLeaves
@@ -1174,6 +1353,7 @@ def readInColumns(metab_data):
                 medianCur = metab_data[columnsData[i]]
             except:
                 logging.error(': Unable to read in column headers. ')
+                messagebox.showerror(title='Error',message='Program unable to read column headers, check submitted file!')
 
             #add the medians data to the array to be clustered
             data[:,i-1] = medianCur
@@ -1248,6 +1428,8 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
                             count.append(j)
                             
                 #determine the number of counts in the current list
+                print(dend['icoord'][j][1])
+                print(dend['icoord'][j][2])
                 if len(count) > 0:
                     for j in count:
                         if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
@@ -1262,6 +1444,7 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
                 plt.draw()
     except:
         logging.error('Cannot select the side of a linkage!')
+        messagebox.showerror('Make sure to select vertical lines only, selecting horizontal lines will continue to result in this error!')
     
     #make the current selection into a .csv file to be submitted to the peaks to Pathways function.
     selectedMetabs = np.zeros([len(clustMetabs),data_orig.shape[1]])
@@ -1315,7 +1498,6 @@ def linkDir(linkageOne,maxIndex):
     '''
     Creates dictionary containing all of the indicies and corresponding parameter which goes with the index.
     '''
-
     #initializing dictionary for storage of the linkage names.
     linkageDir = {}
     #create list with the linkage names embedded. 
