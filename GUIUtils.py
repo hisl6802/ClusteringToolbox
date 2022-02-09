@@ -1,4 +1,7 @@
 #Creating a class containing functions that will be used in GUI
+#from curses import meta
+from email import message
+from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
@@ -11,7 +14,7 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
 import GuiBackground as GB
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from scipy.signal import argrelextrema
 import mplcursors
 
@@ -32,11 +35,15 @@ class GUIUtils:
         #log that the user called the data integrity function
         logging.info(': User called the Data Integrity function.')
 
-        #Read in Volcano Plot data
         try:
-            volcano = pd.read_excel(file)
+            #Read in Volcano Plot data
+            if file[len(file)-1] == 'x':
+                volcano = pd.read_excel(file)
+            elif file[len(file)-1 == 'v']:
+                volcano = pd.read_csv(file)
         except:
             logging.error(': Failed to read in the excel file. Please put error in the Github issues tab.')
+            messagebox.showerror(title='Error',message='Failed to read in the excel file. Please let Brady know!!')
             return
             
         #grab the first row the volcano data
@@ -74,6 +81,9 @@ class GUIUtils:
                             except:
                                 logging.error(': Unable to convert values to floats. Make sure all data values are only contain decimals or numberic values')
                                 return
+                    if decimal == 2:
+                        correctedArray[i] = corrected
+                        continue
             else:
                 #save the data that did not need to be corrected to the correctedArray
                 correctedArray[i] = curVal
@@ -104,7 +114,7 @@ class GUIUtils:
         logging.info(': Data Integrity check sucessfully completed.')
         return
 
-    def createClustergram(norm,linkFunc,distMet):
+    def createClustergram(norm,linkFunc,distMet,cmap, transform = 'None', scale ='None'):
         '''
         The function is responsible for generating the clustergrams for multivariate data. This function is capable of
         using all the linkage functions and distance measures currently implemented to the scipy.hierarchy method. OF
@@ -122,7 +132,7 @@ class GUIUtils:
 
         This function outputs a .png of the generated clustergram. 
         '''
-
+        
         #log that the user called the Create Clustergram function
         logging.info(': User called the Create Clustergram Function.')
         #check that the file the user selects is appropriate
@@ -136,20 +146,182 @@ class GUIUtils:
         data = GB.readInColumns(metab_data)
 
         #Standardize the data before clustering the results
+
+        #reply = messagebox.askquestion(title="Standardize/Scaling", message = "Data will be mean centered. Would you like to transform or scale the data differently?")
         logging.info(': Standardizing the data.')
-        for i in range(metab_data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
+
+        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+        ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
+        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+        #Log transform no scaling
+        if transform == 'Log transformation' and scale == 'None':
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+        #Log transform, mean centering
+        elif transform == 'Log transformation' and scale == 'Mean centering':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #mean center
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+        
+        #log transform, auto scaling
+        elif transform == 'Log transformation' and scale == 'Auto Scaling':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #Auto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        #log transform, pareto scaling
+        elif transform == 'Log transformation' and scale == 'Pareto Scaling':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #Pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        #log transform, range scaling
+        elif transform == 'Log transformation' and scale == 'Range Scaling':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #Range scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
+        #Square root transform, no scaling
+        elif transform == 'Square root transformation' and scale == 'None':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+        #square root transform, mean centering
+        elif transform == 'Square root transformation' and scale == 'Mean centering':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #mean center
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+
+        #square root transform, auto scaling
+        elif transform == 'Square root transformation' and scale == 'Auto Scaling':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #auto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        #square root transform, pareto scaling
+        elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        #square root transform, range scaling
+        elif transform == 'Square root transformation' and scale == 'Range Scaling':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #range scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
+        #cube root transform, no scaling
+        elif transform == 'Cube root transformation' and scale == 'None':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+        #cube root transform, mean centering
+        elif transform == 'Cube root transformation' and scale == 'Mean centering':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+            #mean centering
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+        
+        #cube root transform, auto scale
+        elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+            #auto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+            #pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        elif transform == 'Cube root transformation' and scale == 'Range Scaling':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+            
+            #range scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
+        elif transform == 'None' and scale == 'Mean centering':
+            #mean centering
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+
+        elif transform == 'None' and scale == 'Auto Scaling':
+            #auto scaling
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        elif transform == 'None' and scale == 'Pareto Scaling':
+            #pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        elif transform == 'None' and scale == 'Range Scaling':
+            #range scale 
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
         del(metab_data)
 
         #create dendrogram and plot data
-        GB.create_dendrogram(data,norm, link=linkFunc, dist=distMet)
+        
+        GB.create_dendrogram(data,norm, link=linkFunc, dist=distMet,color = cmap)
 
         del(data,norm,linkFunc,distMet)
 
         logging.info(': Sucessfully created the wanted Clustergram')
         return
 
-    def groupMedians():
+    def groupMedians(rmZeros=0):
         '''
         Determine the number of groups and then create a list or array of the appropriate
         beginning and ending of each group. This assumes that the groups are all of equal size which should be
@@ -169,7 +341,7 @@ class GUIUtils:
         #log that the user called the group medians function
         logging.info(': User called the Group Medians function.')
         file = filedialog.askopenfilename()
-        medians = GB.fileCheck(file =file)
+        medians = GB.fileCheck(file=file)
         if medians is None:
             #log error message and return the function for soft exit.
             logging.error(': Error reading in the excel sheet')
@@ -178,57 +350,98 @@ class GUIUtils:
         #get the group letters to know which groups to find the medians of
         groups = medians['mz']
 
-        numObs = int(medians.shape[0]-1)
-        
+        metaboliteIdentities = list(medians.columns)
+        metaboliteIdentities = metaboliteIdentities[2:len(metaboliteIdentities)]
 
-        num_groups = int(medians['Unnamed: 0'][numObs][0])
+        #put groups into a list so we know how many groups we need to find the median for.
+        groups = set(groups)
+        groups = sorted(groups)
 
-        factor = len(medians['Unnamed: 0'])/num_groups
+        #get the groupID for each sample
+        samples = list(medians['mz'])
 
-        #create a numpy array containing 7 columns to allow for input of the m/z values and the groups
-        mediansOut = np.zeros((medians.shape[1]-2,num_groups+1))
-            
-        #populate the first column of the array with the m/z values
-        print(medians.columns[2:medians.shape[1]])
-        mediansOut[:,0] = medians.columns[2:medians.shape[1]]
-        print('Good')
-        #Get the medians for each group and metabolite
-        for i in range(num_groups):
-            #calculate the start and end for each set of median calculations
-            start = int(factor*i)
-            end = int((factor*(i+1)))
-            for j in range(mediansOut.shape[0]):
-                #find the median for the first groups of values
-                curMean = stat.median(medians[medians.columns[j+2]][start:end])
-                #put medians into the appropriate table
-                mediansOut[j,i+1] = curMean
-        del(curMean,start,end,i,j,medians)
-        #create list contains the headers for the files
-        medianList = ['m/z']
-        for i in range(num_groups):
-            medianList.append('M' +str(i+1))
-        #create dictionary that contains the data with there appropriate headers to input to a dataframe and
-        #then be saved to a csv file
-        medianDict = {}
-        for i in range(num_groups+1):
-            #input the appropriate data and key to the dictionary
-            medianDict[medianList[i]] = mediansOut[:,i]
-        del(mediansOut)
-        #create dataframe that prepares the data to be input to a csv file
-        mediansCSV = pd.DataFrame(data=medianDict)
+        #create numpy array that contains the medians...
+        mediansOut = np.zeros((len(metaboliteIdentities),len(groups)+2))
 
-        finalSlash = 0
-        for i in range(len(file)):
-            #determine the location of the final / in the name
-            if file[i] == '/':
-                finalSlash = i
 
-        file = file[finalSlash+1:len(file)-5]
-        file += '_Medians.csv'
+        for i in range(len(groups)):
+            #create list of indicies for the program to obtain
+            curInd = []
+            numFound = 0
+            #get theh current number of times a particular group is present.
+            numLocs = samples.count(groups[i])
+            for j in range(len(samples)):
+                #find the numLocs
+                curEntry = samples[j]
+                if curEntry == groups[i]:
+                    #add one to the numFound
+                    numFound += 1
+                    curInd.append(j)
+                    if numFound == numLocs:
+                        break
 
-        #specify the file that I want the program to write to.
-        mediansCSV.to_csv(file,columns=medianList,index=False)
-        del(file,medianList,medianDict,mediansCSV)
+            #determine the median for each metabolite across the samples for each group
+            for j in range(len(metaboliteIdentities)):
+                #for each metabolite grab the current list of data
+                curMetabMed = []
+                for k in range(len(curInd)):
+                    #add values too list that are from the list of values
+                    curMetabMed.append(medians[metaboliteIdentities[j]][curInd[k]])
+
+                curMedian = stat.median(curMetabMed)
+                mediansOut[j,i+1] = curMedian
+
+        for i in range(len(metaboliteIdentities)):
+            #check if theh current value is a string, if it is then fix string. 
+            if isinstance(metaboliteIdentities[i], str):
+                #correct the string to a float.
+                #find the first instance of the decimal, then search for values after
+                curString = metaboliteIdentities[i]
+                first = curString.find('.')
+                startRemove = curString.find('.',first+1,len(curString))
+                updatedString = curString[0:startRemove]
+                curVal = float(updatedString)
+                mediansOut[i,0] = curVal
+
+            else:
+                mediansOut[i,0] = metaboliteIdentities[i]
+
+        if rmZeros == 1:
+            #create a numpy array that cna continually be added to. 
+            mediansNZ = np.zeros((1,mediansOut.shape[1]))
+
+            #remove the zeros from the data sheet, allowing the final data sheet to only contain detected metabolites.
+            #number of groups to determine whether or not to keep the column. 
+            numGroups = len(groups)
+            for i in range(len(metaboliteIdentities)):
+                #get the current row from the numpy array
+                curRow = mediansOut[i,1:mediansOut.shape[1]-1]
+                curZero = np.where(curRow == 0)
+                numZero = len(curZero[0])
+                if numZero/numGroups < 0.5:
+                    #add the row to the output of medians NZ
+                    newRow = np.zeros((1,mediansOut.shape[1]))
+                    newRow[0,0] = mediansOut[i,0]
+                    newRow[0,newRow.shape[1]-1] = mediansOut[i,mediansOut.shape[1]-1]
+                    newRow[0,1:newRow.shape[1]-1] = curRow
+                    mediansNZ = np.vstack([mediansNZ, newRow])
+
+            mediansNZ = np.delete(mediansNZ,0,0)
+            mediansOut = mediansNZ
+            logging.info(': Zeros removed from the data set!')
+        else:
+            logging.info(': Zeros are not being removed!')
+
+
+        columns =['m/z']
+        columns.extend(groups)
+        columns.append('rt_med')
+
+        mediansExcel = pd.DataFrame(data=mediansOut,columns=columns)
+        file = file[0:len(file)-5]
+        file = file + 'Medians.xlsx'
+        mediansExcel.to_excel('MediansOutput.xlsx',index=False,sheet_name="Medians")
+
         #logging the completion of the group medians function
         logging.info(': Sucessfully grouped the Medians of each group!')
         return
@@ -284,6 +497,8 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,2,figsize=(8,8))
+            axes[0].set_title(linkList[0])
+            axes[1].set_title(linkList[1])
             #grab the last entry of the linkage list
             maxList = np.zeros((1,2))
             maxList[0,0] = linkageOne[len(linkageOne)-1][0]
@@ -305,6 +520,11 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,3,figsize=(8,8))
+            print(axes[0])
+            axes[0].set_title(linkList[0])
+            axes[1].set_title(linkList[1])
+            axes[2].set_title(linkList[2])
+
             #grab the last entry of the linkage list
             maxList = np.zeros((1,2))
             maxList[0,0] = linkageOne[len(linkageOne)-1][0]
@@ -327,7 +547,12 @@ class GUIUtils:
 
             #Create the appropriate figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(2,2,figsize=(8,8))
-            plt.title('Linkage Comparison')
+
+            axes[0,0].set_title(linkList[0])
+            axes[0,1].set_title(linkList[1])
+            axes[1,0].set_title(linkList[2])
+            axes[1,1].set_title(linkList[3])
+
             #grab the last entry of the linkage list
             maxList = np.zeros((1,2))
             maxList[0,0] = linkageOne[len(linkageOne)-1][0]
@@ -351,6 +576,7 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,1,figsize=(8,8))
+            axes[0].set_title(linkList[0])
         
             #grab the last entry of the linkage list
             maxList = np.zeros((1,2))
@@ -443,7 +669,7 @@ class GUIUtils:
         my_final_data.to_csv(path_or_buf = "CompoundMatchups.csv")
         return
 
-    def ensembleClustering(optNum=2):
+    def ensembleClustering(optNum=2, minMetabs = 0):
         '''
         The distance measures and linkage functions should be consistent but we could also develop
         a GUI that allows for the users to select various distance measures. The linkage functions 
@@ -519,8 +745,8 @@ class GUIUtils:
         print(end-start)
 
         #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,link='ward',dist='euclidean',func="ensemble")
-        GB.plotting()
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs =minMetabs,link='ward',dist='euclidean',func="ensemble")
+
 
         #make the coOccurence matrix a dataframe.
         coOcc = pd.DataFrame(coOcc)
@@ -529,12 +755,13 @@ class GUIUtils:
             coOcc.to_csv('EnsembleCoOcc.csv',index=False)
         except:
             logging.error(': Failed to save the Ensemble CoOccurence matrix!!')
+            messagebox.showerror(title='Error',message='Unable to save Ensemble CoOccurent matrix, please inform Brady!')
             
         #Log the completgroupion of the ensemble clustering function
         logging.info(': Sucessfully completed Ensemble clustering!')
         return
 
-    def MST(func = "base"):
+    def MST(self,func = "base"):
         #*******Need for dataMST and mstoutNP??
 
         '''
@@ -567,14 +794,17 @@ class GUIUtils:
         
         #standardize the data before clustering
         logging.info(': Standardizing the Data.')
+
         for i in range(dataRaw.shape[0]):
             data[i,:] = GB.standardize(data[i,:])
 
         #find the distance matrix using the pairwise distance function, put into squareform, appropriate format for mst and submit. 
+ 
         pairWise = pdist(data)
         pairWise = squareform(pairWise)
         mstInput = csr_matrix(pairWise)
         mstOut = minimum_spanning_tree(mstInput)
+
         #get out the non-zero indicies. 
         mstOutInd = mstOut.nonzero()
 
@@ -600,9 +830,10 @@ class GUIUtils:
 
         #Validate the number of clusters that should be used in the clustering solutions.
         valIndex = GB.Validate(validationClusters,data,num_groups)
-
+        print('Completed')
         x=valIndex[1,:]
         y=valIndex[0,:]
+
         #find the local minimums
         minimums = argrelextrema(y,np.less)
 
@@ -612,8 +843,12 @@ class GUIUtils:
             #input the number of clusters and the validation index value.
             miniVals[i,0] = x[minimums[0][i]]
             miniVals[i,1] = y[minimums[0][i]]
+
+        clustersSub = miniVals[:,0]
+        clustersSub = clustersSub[clustersSub<=100.]
+        miniVals = miniVals[len(miniVals)-len(clustersSub):len(miniVals),:]
         ind = np.unravel_index(np.argmin(miniVals, axis=None), miniVals.shape)
-        print(ind)
+
         minValIndex = miniVals[ind[0],:]
 
         valOut = np.zeros((2,valIndex.shape[1]))
@@ -672,19 +907,30 @@ class GUIUtils:
 
         #ask user to select the directory containing the csv files from ensemble clustering output (currently only method available)
         direct = filedialog.askdirectory()
+        curDir = os.getcwd()
+
+        #change the current working directory to 
+        os.chdir(direct)
+
+        files = glob.glob('*.csv')
+
 
         #create string to check for csv files
-        globCheck = direct + "/*.csv"
-        files = glob.glob(globCheck)
+        #globCheck = direct + "/*.csv"
+        #files = glob.glob(globCheck)
 
-        nameCheckStriper = direct +'\\'
+        #nameCheckStriper = direct +'\\'
+
         ensemFiles = []
         dirLog = os.getcwd()
-        print(dirLog)
         for i in range(len(files)):
             #strip the beginning of the strip off and then check the first 5 characters of the stripped string
-            curCheck = files[i].strip(nameCheckStriper)
+            #curCheck = files[i].strip(nameCheckStriper)
+            curCheck =files[i]
             if curCheck[0:5] == 'Ensem':
+                #append to ensemFiles
+                ensemFiles.append(direct + '/' + curCheck)
+            elif curCheck[0:5] == 'Clust':
                 #append to ensemFiles
                 ensemFiles.append(direct + '/' + curCheck)
 
@@ -698,7 +944,8 @@ class GUIUtils:
             try:
                 dataCur = pd.read_csv(ensemFiles[i])
             except:
-                logging.error(': Failed to read in the excel sheet check the sheet name is Medians')
+                logging.error(': Failed to read in the excel sheet, it is recommend to upload an excel workbook with a single sheet!')
+                messagebox.showerror(title='Error', message="Failed to read the excel sheet, it is recommended to upload an excel workbook with a single sheet!")
                 return
 
             dataMzRt = np.zeros((dataCur.shape[0],2))
@@ -717,7 +964,6 @@ class GUIUtils:
                     dataClust[locRT[0][0],2] = 0.04
 
                 else:
-                    print(j+1)
                     logging.warning(': Creation of peaks to pathway files halted due to non-matching values, please make sure you have selected appropriate reference file.')
                     return
             #create the files that can be submitted to the csv saving file. 
@@ -732,7 +978,6 @@ class GUIUtils:
             p2pPre = 'PeaksToPathways'
             p2pSuf = '.csv'
             firstCheck = p2pPre + '01' + p2pSuf
-
             chkBuffer = glob.glob("*.csv")
             count = 1
             if firstCheck in chkBuffer:
@@ -758,6 +1003,8 @@ class GUIUtils:
                 dataOut.to_csv(p2pFile, index=False)
             logging.info(':Success!')
         logging.info(': Leaving the Peaks to Pathways Function!')
+        os.chdir(curDir)
+        print(os.getcwd())
         return
 
     def PDFGenerator():
@@ -887,6 +1134,10 @@ class GUIUtils:
         for i in range(metab_data.shape[0]):
             data[i,:] = GB.standardize(data[i,:])
         del(metab_data)
+
+
+        #create messagebox explaining to users how they need to select clusters.
+        messagebox.showinfo(title='Cluster Selection Info.', message='Select clusters of interest, the files will be generated automatically after selection of the clusters from the clustergram.')
 
         #Create the appropriate plt figure to allow for the comparison of linkage functions
         fig, axes = plt.subplots(1,1,figsize=(8,8))
