@@ -274,7 +274,7 @@ def cubeRtTrans(data):
 
 
 #ensemble dendrogram function
-def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, link='ward',dist='euclidean',func="ensemble"):
+def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, link='ward',dist='euclidean',func="ensemble",colMap ='viridis'):
     '''
     Create ensemble dendrogram
     
@@ -323,7 +323,7 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, link='ward',dist='
             #going through the metabolites
             dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
     
-    g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap="viridis", cbar_pos=(0.01, 0.8, 0.025, 0.175))
+    g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
     ax = g.ax_heatmap
 
     
@@ -372,7 +372,7 @@ def create_dendrogram(data, norm=1,link='ward',dist='euclidean', color='viridis'
 
     if norm == 0:
         #g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=color, cbar_pos=(0.01, 0.8, 0.025, 0.175))
-        g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap=color)
+        g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap=color,yticklabels=False,xticklabels=False)
         plt.show()
 
     elif norm == 1:
@@ -952,17 +952,12 @@ def Validate(data,dists,num_groups):
     Array of the number of clusters and the validation index measure. 
 
     '''
-    # root1 = tk.Tk()
 
-    #create progress bar
-    # progress = Progressbar(root1, orient=HORIZONTAL, length=100, mode ='determinate')
-
-    # def valStart(*args):
     logging.info(': Starting cluster validation!')
     #grab the input dictionary size
     clusterings = len(data)
-
-    startPoint = 0.1*clusterings
+    print(clusterings)
+    startPoint = 0.5*clusterings
     startPoint = int(startPoint)
     numIts = clusterings - startPoint
 
@@ -1030,7 +1025,7 @@ def Validate(data,dists,num_groups):
                 centersNum[j,:] = center
 
         #calculate the average compactness of the clusters
-        intraDist = sumIntra/(clusterings+1)
+        intraDist = sumIntra/(dists.shape[0])
         
         # find the distance between the centers
         interDist = 1000
@@ -1046,6 +1041,7 @@ def Validate(data,dists,num_groups):
             #calculate the validation index
             val_index[0,i] = intraDist/interDist
             val_index[1,i] = clusterings - (i)
+            val_index[1,i] = len(data[0])
 
         # elif len(dataMST[:,0]) == 0:
         elif len(centerDists) == 0:
@@ -1053,6 +1049,7 @@ def Validate(data,dists,num_groups):
             #set the validation index to a large number since denominator would be zero in current config.
             val_index[0,i] = 1
             val_index[1,i] = clusterings - (i)
+            val_index[1,i] = len(data[0])
 
         if i == 0:
             logging.info(': 0% completed')
@@ -1064,8 +1061,6 @@ def Validate(data,dists,num_groups):
             runTime = timeConverter(runTime)
             percent = 100*(1 - ((clusterings-i)/numIts))
             message1 = round(percent,2) 
-            # progress['value']= message1
-            # root1.update_idletasks()
             message1 = str(message1) + '% completed'
             logging.info(message1)
             message = str(i)+': ' + str(runTime)
@@ -1073,23 +1068,15 @@ def Validate(data,dists,num_groups):
 
         endTime = time.perf_counter()
         totalTime = endTime -startTime
-    # progress['value']=100
-    # root1.update_idletasks()
+
     runTime = time.time()-initTime
     runTime = timeConverter(runTime)
     logging.info(runTime)
 
     val_index = val_index[:,startPoint:clusterings]
     logging.info(': Cluster Validation complete!')
-    #messagebox.showinfo(title=None,message='Cluster Validation Complete, close this window and the progress bar to move forward!')
-    # root1.destroy()
-    return val_index
-    
-    # progress.pack(pady=10)
-    # Button(root1,text='Start',command = valStart).pack(pady=10)
 
-    # root1.mainloop()
-    # return val_index
+    return val_index
 
 def who(curUser):
     '''
@@ -1215,22 +1202,25 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs):
 
         #determine the length of the array found
         if len(found[0])==1:
+            maxMetab = found[0]
             ensembleClustersOut(found[0],groupDendLeaves,metab_data,minMetabs)
             #then simply take the current j value and give it limits of j-0.5 to j+0.5, in the x and y directions.
-            arrays = {0:np.linspace(j-0.5, j+0.5, num=5),1:np.linspace(j-0.5, j-0.5, num=5),2:np.linspace(j+0.5, j+0.5, num=5)}
+            arrays = {0:np.linspace(j, maxMetab+1, num=5),1:np.linspace(j, j, num=5),2:np.linspace(maxMetab+1, maxMetab+1, num=5)}
+
             if len(found[0]) >= minMetabs:
                 heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[1], arrays[0], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[2], arrays[0], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.text(j,j,"1",color='red',fontsize=7)
+                heatmapAxes.text(j+0.5,j+0.5,"1",color='red',fontsize=7)
             j += 1
             del(arrays)
         else:
             #use j and the maximum value from the connection search to locate create the outline
             maxMetab = max(found[0])
             ensembleClustersOut(found[0],groupDendLeaves,metab_data,minMetabs)
-            arrays = {0:np.linspace(j-0.5, maxMetab+0.5, num=5),1:np.linspace(j-0.5, j-0.5, num=5),2:np.linspace(maxMetab+0.5, maxMetab+0.5, num=5)}
+            arrays = {0:np.linspace(j, maxMetab+1, num=5),1:np.linspace(j, j, num=5),2:np.linspace(maxMetab+1, maxMetab+1, num=5)}
+
             if len(found[0]) >= minMetabs:
 
                 heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
@@ -1238,7 +1228,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs):
                 heatmapAxes.plot(arrays[1], arrays[0], 'r--', linewidth=3, markersize=3)
                 heatmapAxes.plot(arrays[2], arrays[0], 'r--', linewidth=3, markersize=3)
                 numMetabs = str(maxMetab - j + 1)
-                midPoint = (maxMetab + j)/2
+                midPoint = ((maxMetab+1)+j)/2
                 heatmapAxes.text(midPoint,midPoint,numMetabs,color='red',fontsize=7)
             j = maxMetab + 1
             del(arrays)
@@ -1258,6 +1248,8 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     Output:
     csv files of the found metabolite clusters. 
     '''
+
+
     logging.info(': Creating ensemble clusters output files.')
     #take the found metabolites/biomarkers/etc. and grab the indicies which are matching in the Leaves of the dendrogram. 
     lenFound = len(found)
@@ -1345,7 +1337,7 @@ def readInColumns(metab_data):
     data = np.zeros((metab_data.shape[0],metab_data.shape[1]-2))
 
     columnsData = list(metab_data.columns)
-
+    
     for i in range(len(columnsData)):
         if i > 0 and i < len(columnsData)-1:
             #try to add the values to the current medians values
@@ -1357,7 +1349,7 @@ def readInColumns(metab_data):
 
             #add the medians data to the array to be clustered
             data[:,i-1] = medianCur
-
+    
     return data
     
 def select(index,dend,link,linkDir,linkClust,data_orig):

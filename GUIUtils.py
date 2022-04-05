@@ -1,6 +1,6 @@
 #Creating a class containing functions that will be used in GUI
-#from curses import meta
 from email import message
+from lib2to3 import refactor
 from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
@@ -13,10 +13,15 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
+from multiprocessing import Pool
+
+from sklearn import cluster
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
 from scipy.signal import argrelextrema
 import mplcursors
+from LocallyWeighted import LocallyWeighted as LW 
+import DaviesBouldin as DB
 
 class GUIUtils:
     def dataIntegrity(file):
@@ -632,7 +637,7 @@ class GUIUtils:
         logging.info(': Sucessfuly completed the comparison of the linkage functions!')
         return
             
-    def compoundMatchUp():
+    def compoundMatchUp(typeFile = 'all'):
         '''
         The compoundMatchUp function is responsible for matching the output compounds from mummichog to compounds from the KEGG data base spreadsheet. 
 
@@ -642,6 +647,8 @@ class GUIUtils:
 
         *** Stay tuned this function will be updated soon. 
         '''
+        
+        print(typeFile)
         logging.info(': Compound Match-Up function called!')
         # Reads in our Kegg Compound Dataset (Single Column)
         kegg_data = pd.read_excel("kegg_compound_IDs_3.xlsx")
@@ -654,22 +661,56 @@ class GUIUtils:
         file = filedialog.askopenfilename()
         my_data = pd.read_csv(file)
 
-        # Makes an ID column
-        my_data["ID"] = my_data["Matched.Compound"]
+        if typeFile == 'all':
+            # Makes an ID column
+            my_data["ID"] = my_data["Matched.Compound"]
 
-        # Deletes the unneeded columns
-        gonecolumns = ["Query.Mass", "Matched.Form", "Mass.Diff", "Matched.Compound"]
-        my_data = my_data.drop(axis = 1, labels = gonecolumns)
+            # Deletes the unneeded columns
+            gonecolumns = ["Query.Mass", "Matched.Form", "Mass.Diff", "Matched.Compound"]
+            my_data = my_data.drop(axis = 1, labels = gonecolumns)
 
-        # Filters the keggs data to only the ids that are
-        # in the matched compound dataset
-        my_final_data = kegg_data[kegg_data["ID"].isin(my_data["ID"])]
+            # Filters the keggs data to only the ids that are
+            # in the matched compound dataset
+            my_final_data = kegg_data[kegg_data["ID"].isin(my_data["ID"])]
 
-        # Writes this final dataset to a csv
-        my_final_data.to_csv(path_or_buf = "CompoundMatchups.csv")
+            # Writes this final dataset to a csv
+            my_final_data.to_csv(path_or_buf = "CompoundMatchups.csv")
+        
+        elif typeFile == 'enrich':
+            #print(len(my_data["Cpd.Hits"]))
+            for i in range(len(my_data["Cpd.Hits"])):
+                curString = my_data["Cpd.Hits"][i]
+
+                #number of compounds in the current string
+                numCompounds = curString.count(';') + 1
+                curCpds = []
+                for j in range(numCompounds):
+                    curCpds.append(curString[j*7:(j*7)+6])
+                
+                #create a dataframe for easy search
+                curDf = pd.DataFrame({"Cpd.Hits":curCpds})
+
+                matches = kegg_data[kegg_data["ID"].isin(curDf["Cpd.Hits"])]
+                
+                curIndex = list(matches.index)
+                curMatches = []
+                if len(matches["compound"]) > 0:
+
+                    for j in range(len(matches["compound"])):
+                        curI = int(curIndex[j])
+                        curMatches.append(matches["compound"][curI])
+                
+                else:
+                    curMatches.append("No matches check KEGG, also let Brady know to look for updated list from KEGG!!")
+
+                my_data['Cpd.Hits'][i] = curMatches
+
+            
+            my_data.to_csv(path_or_buf="EnrichmentIdentifications.csv")
+
         return
 
-    def ensembleClustering(optNum=2, minMetabs = 0):
+    def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis'):
         '''
         The distance measures and linkage functions should be consistent but we could also develop
         a GUI that allows for the users to select various distance measures. The linkage functions 
@@ -699,12 +740,12 @@ class GUIUtils:
         #Make sure file can be read in. 
         metab_data = GB.fileCheck()
         if metab_data is None:
-            logging.error(': File to not meet input requirements.')
+            logging.error(': File does not meet input requirements.')
             return
 
         #List for the use in creating and plotting the clustering results
         linkageList = ['single','complete','average']
-        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean']  #,'cosine']
+        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean'] #,'cosine']
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
         numClusterings = (len(linkageList)*len(distList))+1
@@ -743,9 +784,9 @@ class GUIUtils:
         end = time.perf_counter()
         logging.info('Ward-Euclidean done!')
         print(end-start)
-
+        print(colorMap)
         #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs =minMetabs,link='ward',dist='euclidean',func="ensemble")
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs =minMetabs,link='ward',dist='euclidean',func="ensemble",colMap=colorMap)
 
 
         #make the coOccurence matrix a dataframe.
@@ -829,10 +870,26 @@ class GUIUtils:
         validationClusters = GB.clustConnect(dataMST,mstOutNp)
 
         #Validate the number of clusters that should be used in the clustering solutions.
-        valIndex = GB.Validate(validationClusters,data,num_groups)
-        print('Completed')
-        x=valIndex[1,:]
-        y=valIndex[0,:]
+        #create a list of tuples containing the single cluster set, with the data and the num_groups
+        argsMulti = []
+        
+        start = time.perf_counter()
+        for i in range(len(validationClusters)):
+            argsMulti.append(({0:validationClusters[i]},data,num_groups))
+        
+        if __name__ == 'GUIUtils':
+            with Pool() as p:
+                print(p)
+                valIndex = p.starmap(GB.Validate,argsMulti)
+
+        end = time.perf_counter()
+        print(end-start)
+        valIndex = np.asarray(valIndex)
+
+        #valIndex = GB.Validate(validationClusters,data,num_groups)
+        x=valIndex[:,1]
+        y=valIndex[:,0]
+
 
         #find the local minimums
         minimums = argrelextrema(y,np.less)
@@ -851,17 +908,20 @@ class GUIUtils:
 
         minValIndex = miniVals[ind[0],:]
 
-        valOut = np.zeros((2,valIndex.shape[1]))
-        for j in range(valIndex.shape[1]):
+        valOut = np.zeros((2,valIndex.shape[0]))
+        for j in range(valIndex.shape[0]):
             #flip the array so that lower clusters start at lower positions
-            valOut[0,j] = valIndex[0,valIndex.shape[1]-j-1]
-            valOut[1,j] = valIndex[1,valIndex.shape[1]-j-1]
+            valOut[0,j] = valIndex[valIndex.shape[0]-j-1,0]
+            valOut[1,j] = valIndex[valIndex.shape[0]-j-1,1]
 
         valIHeaders = list(valOut[1,:])
+        # print(valIndex)
         valIndex = pd.DataFrame(valOut,columns=valIHeaders)
+        # print(valIndex)
         valIndex = valIndex.drop(1,axis=0)
         rowLabels = ["Validation Index"]
         valIndex.insert(0,"Clusters",rowLabels)
+        
 
         #save to a csv file
         mstOut.to_csv('MST_branches.csv',index=False)
@@ -871,7 +931,7 @@ class GUIUtils:
         if func == "base":
             #logging the completion of the Minimum spanning tree
             logging.info(': Sucessfully completed MST and clustering validation!')
-            plt.plot(valOut[1,:],valOut[0,:])
+            plt.plot(x,y)
             plt.plot(minValIndex[0],minValIndex[1],'r*')
             font = {'family': 'serif','color':  'black','weight': 'bold','size': 20}
             plt.text(valIndex.shape[1]/2, 0.75, str(int(minValIndex[0]))+' - Clusters!!', fontdict=font)
@@ -1111,7 +1171,7 @@ class GUIUtils:
         return
 
 
-    def selectClusters(link,dist):
+    def selectClusters(link,dist,transform = 'None', scale = 'None',cmap = 'viridis'):
         '''
         Function that pulls out the information from the plot and saves it until the user is ready to submit the clusters to the peaks to pathways function. 
         '''
@@ -1130,9 +1190,163 @@ class GUIUtils:
         data = GB.readInColumns(metab_data)
         data_orig = metab_data.to_numpy()
         #Standardize the data before clustering the results
-        logging.info(': Standardizing the data.')
-        for i in range(metab_data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
+        logging.info(': Pre-processing the data.')
+
+
+        #Log transform no scaling
+        if transform == 'Log transformation' and scale == 'None':
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+        #Log transform, mean centering
+        elif transform == 'Log transformation' and scale == 'Mean centering':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #mean center
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+        
+        #log transform, auto scaling
+        elif transform == 'Log transformation' and scale == 'Auto Scaling':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #Auto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        #log transform, pareto scaling
+        elif transform == 'Log transformation' and scale == 'Pareto Scaling':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #Pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        #log transform, range scaling
+        elif transform == 'Log transformation' and scale == 'Range Scaling':
+            #log transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.logTrans(data[i,:])
+
+            #Range scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
+        #Square root transform, no scaling
+        elif transform == 'Square root transformation' and scale == 'None':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+        #square root transform, mean centering
+        elif transform == 'Square root transformation' and scale == 'Mean centering':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #mean center
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+
+        #square root transform, auto scaling
+        elif transform == 'Square root transformation' and scale == 'Auto Scaling':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #auto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        #square root transform, pareto scaling
+        elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        #square root transform, range scaling
+        elif transform == 'Square root transformation' and scale == 'Range Scaling':
+            #square root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.sqrtTrans(data[i,:])
+
+            #range scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
+        #cube root transform, no scaling
+        elif transform == 'Cube root transformation' and scale == 'None':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+        #cube root transform, mean centering
+        elif transform == 'Cube root transformation' and scale == 'Mean centering':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+            #mean centering
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+        
+        #cube root transform, auto scale
+        elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+            #auto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+
+            #pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        elif transform == 'Cube root transformation' and scale == 'Range Scaling':
+            #cube root transform
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.cubeRtTrans(data[i,:])
+            
+            #range scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
+
+        elif transform == 'None' and scale == 'Mean centering':
+            #mean centering
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.meanCentering(data[i,:])
+
+        elif transform == 'None' and scale == 'Auto Scaling':
+            #auto scaling
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.standardize(data[i,:])
+
+        elif transform == 'None' and scale == 'Pareto Scaling':
+            #pareto scale
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.paretoScaling(data[i,:])
+
+        elif transform == 'None' and scale == 'Range Scaling':
+            #range scale 
+            for i in range(metab_data.shape[0]):
+                data[i,:] = GB.rangeScaling(data[i,:])
         del(metab_data)
 
 
@@ -1169,7 +1383,7 @@ class GUIUtils:
         plt.cla()
         heatmapAxes = [0.3, 0, 0.68, 1]
         heatmapAxes = fig.add_axes(heatmapAxes)
-        heatmapAxes.matshow(dataFinal,aspect ='auto',origin='upper')
+        heatmapAxes.matshow(dataFinal,aspect ='auto',origin='upper',cmap= cmap)
         
         maxList = np.zeros((1,2))
         maxList[0,0] = linkageOne[len(linkageOne)-1][0]
@@ -1202,3 +1416,79 @@ class GUIUtils:
         cursor = mplcursors.cursor(multiple=True)
         cursor.connect("add", lambda sel: GB.select(sel.target,dend,linkageOne,linkDir,linkageClusters,data_orig))
         plt.show()
+
+
+    def localWeighted():
+        #optimum number of clusters from validation index.
+        sys.setrecursionlimit(10**8) 
+        metab_data = GB.fileCheck()
+
+        if metab_data is None:
+            logging.error(': File does not meet input requirements.')   
+            return
+       
+        #List for the use in creating and plotting the clustering results
+        linkageList = ['single','complete','average']
+        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean'] 
+        
+        #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
+        numClusterings = (len(linkageList)*len(distList))+1
+
+        #read in the data
+        data = GB.readInColumns(metab_data)
+        
+        #Standardize the data before clustering the results
+        logging.info(': Pre-processing data.')
+        for i in range(data.shape[0]):
+            data[i,:] = GB.standardize(data[i,:])
+
+        #creates empty dictionary for clusterings
+        clusters = {}
+
+        #performs first 12 base clusterings and populates clusters dictionary
+        for i in range(len(linkageList)):
+            for j in range(len(distList)):
+                linkCur = linkage(data,linkageList[i],distList[j])
+                valid = GB.clustConnectLink(linkCur)
+                index = str(linkageList[i] + '_' + distList[j])
+                clusters.update({index:valid})
+                logging.info(str(linkageList[i])+'-'+str(distList[j]) +' done!')
+
+        #performs 13th base clustering and populates clusters dictionary
+        linkCur = linkage(data, 'ward', 'euclidean')
+        valid = GB.clustConnectLink(linkCur)
+        logging.info(str('ward-euclidean done!'))
+        clusters.update({'ward_euclidean':valid})
+
+
+        optNum = 2
+        
+        refClust = LW.clustFinder(data=data,optNum=optNum,clusters=clusters)
+        
+        
+        ECI = LW.clustCompare(refClust)
+       
+        consensusMat = LW.consensus(ECI,refClust,data)
+        regionsOut = LW.regions(consensusMat)
+        print(regionsOut)
+
+
+    def daviesBouldin():
+        '''
+        '''
+
+        #optimum number of clusters from validation index.
+        sys.setrecursionlimit(10**8) 
+        metab_data = GB.fileCheck()
+
+        if metab_data is None:
+            logging.error(': File does not meet input requirements.')   
+            return
+
+        #read in the data
+        data = GB.readInColumns(metab_data)
+        
+        #Standardize the data before clustering the results
+        logging.info(': Pre-processing data.')
+        for i in range(data.shape[0]):
+            data[i,:] = GB.standardize(data[i,:])

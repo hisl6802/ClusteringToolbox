@@ -14,7 +14,6 @@ import logging
 import time
 import getpass
 import os
-import reinit as RI
 import fpdf
 import webbrowser
 
@@ -35,8 +34,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 	def create_widgets(self):
 		self.style = ttk.Style()
-		self.style.configure("RW.TLabel", foreground="#f03d33",font=("TkHeadingFont",36))
-		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="black", background="#000000",font=("TkHeadingFont",20))
+		self.style.configure("RW.TLabel", foreground="#f03d33",font=("TkHeadingFont",30))
+		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="black", background="#000000",font=("Arial",14))
 		self.JuneLab = ttk.Label(self, text="Welcome to the June Lab Clustering GUI",style="RW.TLabel").grid(column=0,row=0,columnspan=4)
 		self.clust = ttk.Button(self,text="Create Clustergram",style="RW.TButton",command=self.createClustergram).grid(column=1,row=1, sticky=(N,S,E,W))
 		#Create a button to allow the user to create a medians file for better clustering results. 
@@ -59,6 +58,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.request = ttk.Button(self, text="Submit Request", style = "RW.TButton", command=self.userRequest).grid(column=2, row=4, sticky=(N,S,E,W))
 		#Create a button for the selection of clusters
 		self.selection = ttk.Button(self, text="Cluster Selection",style = "RW.TButton",command=self.clusterSelection).grid(column=1, row=4,sticky=(N,S,E,W))
+		#Create a button for locally weighted clustering
+		self.localWeight = ttk.Button(self,text="Locally Weighted Ensemble",style="RW.TButton",command=self.localWeighted).grid(column=3, row=4,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -69,8 +70,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 		for i in objects:
 			i.grid_remove()
 		widgets = self.winfo_children()
+
 		widgetDict = {}
-		for i in range(12):
+		for i in range(13):
 			#create a dictionary of the widgets from home window
 			widgetDict[i] = widgets[i]
 
@@ -86,12 +88,13 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[9].grid(column=3,row=3,sticky=(N,S,E,W))
 		widgetDict[10].grid(column=2, row=4, sticky=(N,S,E,W))
 		widgetDict[11].grid(column=1, row=4,sticky=(N,S,E,W))
+		widgetDict[12].grid(column=3, row=4, sticky=(N,S,E,W))
 
 		count = -1
 		for child in self.winfo_children():
 			#add padding to the current widgets
 			count += 1
-			if count < 11:
+			if count < 13:
 				child.grid_configure(padx=5,pady=5)
 
 
@@ -260,6 +263,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 					sampleListBox.delete(0,lenList-1)
 
 				sampleListBox.insert(0,distList[0])
+				
 				self.sampleListBox = sampleListBox
 				self.sampleListBox.grid(column=2,row=2,columnspan=1)
 			else:
@@ -274,42 +278,131 @@ class JuneLabClusteringGUI(ttk.Frame):
 				self.sampleListBox = sampleListBox
 				self.sampleListBox.grid(column=2,row=2,columnspan=1)
 			return selection
+
+		def colorMap(*args):
+			global selection1
+			selection1 = sampleListBox.curselection()
+			#create a list of the color map options
+			lenList = len(colorListBox.get(0,tk.END))
+			if lenList > 0:
+				colorListBox.delete(0,lenList-1)
+
+			for i in range(len(colorList)):
+				colorListBox.insert(i,colorList[i])
+
+			#bind the output back to the GUI
+			self.colorListBox = colorListBox
+			self.colorListBox.grid(column=3,row=2,columnspan=1)
+			return selection1
+
+		def dataTransform(*args):
+			#dataTransform
+			global selection2
+			selection2 = colorListBox.curselection()
+
+			#put the data transform options into the list
+			lenList = len(transformListBox.get(0,tk.END))
+			if lenList > 0:
+				transformListBox.delete(0,lenList-1)
+
+			for i in range(len(transformList)):
+				transformListBox.insert(i,transformList[i])
+
+			self.transformListBox = transformListBox
+			self.transformListBox.grid(column=1,row=4,columnspan=1)
+			return selection2
+
+		def dataScale(*args):
+			#dataScaling
+			global selection3
+			selection3 = transformListBox.curselection()
+			print(selection,selection1,selection2,selection3)
+			#put the data scaling optoins into the list
+			lenList = len(scaleListBox.get(0,tk.END))
+			if lenList > 0:
+				scaleListBox.delete(0,lenList-1)
+
+			for i in range(len(scaleList)):
+				scaleListBox.insert(i,scaleList[i])
+
+			self.scaleListBox = scaleListBox
+			self.scaleListBox.grid(column=2,row=4,columnspan=1)
+			return selection3
+
+
 		def submit(*args):
 			#submit the function output to the
 			#selection = distListBox.curselection() 
-			selection1 = sampleListBox.curselection()
+			selection4 = scaleListBox.curselection()
 			dist = distList[selection1[0]]
 			link = linkageList[selection[0]]
-			GU.selectClusters(link,dist)
-		#select the same features as you did for the create clustergram, but build the dendrogram myself, for easy selection and redrawing. 
+			color = colorList[selection2[0]]
+			transform = transformList[selection3[0]]
+			scale = scaleList[selection4[0]]
+			GU.selectClusters(link,dist,transform=transform, scale=scale,cmap=color)
+
+		def cmapO(*args):
+			#send users to webpage of 
+			webbrowser.open('https://matplotlib.org/stable/tutorials/colors/colormaps.html')
+
 		objects = self.grid_slaves()
 		for i in objects:
 			i.grid_forget()
 
 		#create widgets for the clustergram function input. 
-		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
+		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
 		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
 		self.Distance = ttk.Label(self, text="Distance Measure",font=("TkHeadingFont",12)).grid(column=2,row=1,sticky=(N))
-		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1, row=4,sticky=(N),columnspan=2)
-		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=1, row=3,sticky=(N),columnspan=2)
+		self.Color = ttk.Label(self,text="Color-Map", font=("TkHeadingFont",12)).grid(column=3,row=1,sticky=(N))
+		self.Transform = ttk.Label(self,text="Transform", font=("TkHeadingFont",12)).grid(column=1,row=3,sticky=(N))
+		self.Scale = ttk.Label(self,text="Scale",font=('TkHeadingFont',12)).grid(column=2,row=3,sticky=(N))
+		self.homepage = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2, row=6,sticky=(N),columnspan=1)
+		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=2, row=5,sticky=(N),columnspan=1)
+		self.cmapW = ttk.Button(self,text="ColorMap Options", command=cmapO).grid(column=3,row=3,sticky=(N),columnspan=1)
 		distListBox = Listbox(self,height=8)
 		sampleListBox = Listbox(self,height=8)
-
+		colorListBox = Listbox(self,height=8)
+		transformListBox = Listbox(self, height=8)
+		scaleListBox = Listbox(self, height=8)
+		
 		#Create the lists of available options for selection 
 		linkageList = ('single','ward','complete','average')
 		distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
+		colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
+                      'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
+		transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
+		scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
+
+		
 		linkNames = StringVar(value=linkageList)
 		distNames = StringVar(value=distList)
+		colorNames = StringVar(value=colorList)
+		transformNames = StringVar(value=transformList)
+		scaleNames = StringVar(value=scaleList)
+
 		
 		#input the linkage function values into the box
 		for i in range(len(linkageList)):
 			distListBox.insert(i,linkageList[i])
 
 		distListBox.bind('<Double-1>',linkageOutput)
+		sampleListBox.bind('<Double-1>',colorMap)
+		colorListBox.bind('<Double-1>',dataTransform)
+		transformListBox.bind('<Double-1>', dataScale)
 		self.distListBox = distListBox
 		self.distListBox.grid(column=1,row=2,columnspan=1)
 		self.sampleListBox = sampleListBox
 		self.sampleListBox.grid(column=2,row=2,columnspan=1)
+		self.colorListBox = colorListBox
+		self.colorListBox.grid(column=3,row=2,columnspan=1)
+		self.transformListBox = transformListBox
+		self.transformListBox.grid(column=1,row=4,columnspan=1)
+		self.scaleListBox = scaleListBox
+		self.scaleListBox.grid(column=2,row=4,columnspan=1)
 
 	def medians(self):
 		global rmZeros
@@ -495,7 +588,22 @@ class JuneLabClusteringGUI(ttk.Frame):
 	def compound(self):
 	    #ask the user to select a clustergram file to run through a validition study.
 	    #Waiting on confirmation...
-	    GU.compoundMatchUp()
+		def allCompounds(*args):
+			GU.compoundMatchUp(typeFile='all')
+
+		def enrichment(*args):
+			GU.compoundMatchUp(typeFile='enrich')
+
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="black", background="#000000",font=("Arial",14))
+		self.JuneLab = ttk.Label(self, text ="Compound Match-Up",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.allCompounds = ttk.Button(self,text="All Compounds",command=allCompounds,style="RW.TButton").grid(column=1,row=1, sticky=(N),columnspan=3)
+		self.enrichmentCompounds = ttk.Button(self,text="Enrichment Compounds",command = enrichment,style="RW.TButton").grid(column=1,row=2, sticky=(N),columnspan=3)
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home,style="RW.TButton").grid(column=1,row=3, sticky=(N),columnspan=3)
+
 
 	def P2P(self):
 	    #Waiting until the MST functionality is complete. 
@@ -519,31 +627,49 @@ class JuneLabClusteringGUI(ttk.Frame):
 			selection = optClustBox.curselection()
 			selection = int(selection[0])+1
 
-		def ensembleGo(*args):
+		def ensembleMin(*args):
 			#grab the selection and minimum number of clusters
+			global selection1
 			selection1 = minNumMetabClust.curselection()
 			selection1 = int(selection1[0])
-			
+
+		def ensembleGo(*args):
+			selection2 = colorMapEnsem.curselection()
+			selection2 = colorList[selection2[0]]
+			print(selection)
+			print(selection1)
+			print(selection2)
 			#send to ensemble clustering algorithm
-			GU.ensembleClustering(optNum= selection, minMetabs= selection1)
+			GU.ensembleClustering(optNum= selection, minMetabs= selection1, colorMap = selection2)
 
 		objects = self.grid_slaves()
 		for i in objects:
 			i.grid_forget()
+
+		colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
+                      'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')	
 		#create widgets for the clustergram function input. 
 		self.JuneLab = ttk.Label(self, text="Number of Clusters",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
 		self.MetabNumPClustL = ttk.Label(self, text="Min. number of metabolites (per cluster)?", font=("TkHeadingFont",18)).grid(column=0,row=3,sticky=(N))
-		self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=5,sticky=(N),columnspan=2)
-		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=6, sticky=(N),columnspan=2)
+		self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=5,sticky=(N))
+		self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=7,sticky=(N),columnspan=2)
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=8, sticky=(N),columnspan=2)
 
 		#create list box of the ensemble optimal clusters
 		optClustBox = Listbox(self,height=5)
 		minNumMetabClust = Listbox(self, height=5)
+		colorMapEnsem = Listbox(self, height=5)
+
 		#Create the lists of available options for selection 
 		optClusters = tuple(range(1,101))
 		minMetab = tuple(range(0,101))
 		distNames = StringVar(value=optClusters)
 		minNum = StringVar(value=minMetab)
+		colMap = StringVar(value=colorList)
 
 
 		for i in range(len(optClusters)):
@@ -552,24 +678,66 @@ class JuneLabClusteringGUI(ttk.Frame):
 		for i in range(len(minMetab)):
 			minNumMetabClust.insert(i,minMetab[i])
 
+		for i in range(len(colorList)):
+			colorMapEnsem.insert(i,colorList[i])
 
 		#create binding event and 
 		optClustBox.bind('<Double-1>',ensembleOutput)
-		minNumMetabClust.bind('<Double-1>',ensembleGo)
+		minNumMetabClust.bind('<Double-1>',ensembleMin)
+		colorMapEnsem.bind('<Double-1>',ensembleGo)
 		self.optClustBox = optClustBox
 		self.optClustBox.grid(column=0,row=1,columnspan=1)
 		self.minNumMetabClust = minNumMetabClust
 		self.minNumMetabClust.grid(column=0,row=4,columnspan=1)
+		self.colorMapEnsem = colorMapEnsem
+		self.colorMapEnsem.grid(column=0,row=6,columnspan=1)
 
 
 	def mst(self):
-		#send the user to the minimum spanning tree function.
-		GU.MST(self,func="base")
+		def valType(*args):
+			selection = valTypeBox.curselection()
+			index = selection[0]
+			#print(type(index))
+			selection =valList[selection[0]]
+			print(selection)
+			#send the user to the minimum spanning tree function.
+			GU.MST(self,func='base')
+		
+
+		#delete previous objects on the GUI
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+		#create widgets for the clustergram function input. 
+		self.JuneLab = ttk.Label(self, text="Validation Measure",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=3, sticky=(N),columnspan=2)
+
+		#validation index list (MST-based, DBI)
+		valList = ('MST-based','DBI')
+		valTypeBox = Listbox(self,height=5)
+
+		valName = StringVar(value=valTypeBox)
+
+		for i in range(len(valList)):
+			valTypeBox.insert(i, valList[i])
+
+		#create a binding event
+		valTypeBox.bind('<Double-1>',valType)
+		self.valTypeBox = valTypeBox
+		self.valTypeBox.grid(column=0,row=1,sticky=(N))
+
+		
+		
 
 
 	def generate(self):
 	    #ask the user to select the file in which will be used to create a minimum spanning tree.
 	    GU.PDFGenerator()
+
+	def localWeighted(self):
+		#send the user to locally weighted ensemble clustering
+		GU.localWeighted()
 	
 	def userRequest(self):
 		def generateRequest(*args):
@@ -614,6 +782,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.entrybody = ttk.Entry(self,textvariable=self.body).grid(column=0,row=3,columnspan=4, pady=3)
 		self.labelTitle = ttk.Label(self, text='Title').grid(row=0)
 		self.labelBody = ttk.Label(self, text='Description').grid(row=2)
+		self.home4 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=4, sticky=(N),columnspan=2)
 
 		self.buttonSubmit = ttk.Button(self,text = 'Submit Request', command = generateRequest).grid(column=0, columnspan=4)
 		
@@ -627,17 +796,19 @@ log_file = curUser + '_' + str(log_time) + '.log'
 logging.basicConfig(filename=log_file,format='%(asctime)s %(message)s',datefmt='%m/%d/%Y %I:%M:%S %p',level=logging.INFO)
 logging.info('Started GUI')
 
-root = tk.Tk()
-app = JuneLabClusteringGUI(master=None)
-app.master.minsize(200,200)
-height = app.master.winfo_screenheight() - 400
-width = app.master.winfo_screenwidth()-400
-app.master.maxsize(width,height)
-width = str(width)
-height = str(height)
-screenSize = width +'x' + height + '+0+100'
-app.master.geometry("")
-app.master.resizable(0,0)
+if __name__ == '__main__':
+	root = tk.Tk()
+	app = JuneLabClusteringGUI(master=None)
+	app.master.minsize(200,200)
+	height = app.master.winfo_screenheight() - 400
+	width = (app.master.winfo_screenwidth())*0.9
+	width = int(width)
+	app.master.maxsize(800,800)
+	width = str(width)
+	height = str(height)
+	screenSize = width +'x' + height + '+0+100'
+	app.master.geometry("")
+	app.master.resizable(0,0)
 
-app.master.title("Home")
-app.mainloop()
+	app.master.title("Home")
+	app.mainloop()
