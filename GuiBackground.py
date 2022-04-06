@@ -971,6 +971,7 @@ def Validate(data,dists,num_groups):
         #**********************************Threading should occur here*********************************************
         #**********************************************************************************************************
         #**********************************************************************************************************
+        
         startTime = time.perf_counter()
         #grab the current set of metabolite clusters
         curClusters = data[i]
@@ -1530,3 +1531,187 @@ def linkDir(linkageOne,maxIndex):
             linkageDir[i] = curList
 
     return linkageDir
+
+
+def readAndPreProcess(file='',transform = 'None', scale ='None'):
+    '''
+    readAndPreProcess
+
+    This function is designed to remove the reading in and pre-processing of the data from the beginning of each function which needs to read-in and pre-process the data, saying large amounts of lines in this program.
+
+
+    '''
+
+    #check that the file the user selects is appropriate
+    ###Should only be used when reading in excel files.
+    metab_data = fileCheck(file=file)
+    if metab_data is None:
+        #log error message and return for soft exit.
+        logging.error(': Error loading in the Excel sheet.')
+        return
+
+    #read in data
+    data = readInColumns(metab_data)
+
+    ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+    ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
+    ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+    #Log transform no scaling
+    if transform == 'Log transformation' and scale == 'None':
+        for i in range(metab_data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+    #Log transform, mean centering
+    elif transform == 'Log transformation' and scale == 'Mean centering':
+        #log transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #mean center
+        for i in range(metab_data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+    
+    #log transform, auto scaling
+    elif transform == 'Log transformation' and scale == 'Auto Scaling':
+        #log transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #Auto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    #log transform, pareto scaling
+    elif transform == 'Log transformation' and scale == 'Pareto Scaling':
+        #log transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #Pareto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    #log transform, range scaling
+    elif transform == 'Log transformation' and scale == 'Range Scaling':
+        #log transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #Range scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    #Square root transform, no scaling
+    elif transform == 'Square root transformation' and scale == 'None':
+        #square root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+    #square root transform, mean centering
+    elif transform == 'Square root transformation' and scale == 'Mean centering':
+        #square root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #mean center
+        for i in range(metab_data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+
+    #square root transform, auto scaling
+    elif transform == 'Square root transformation' and scale == 'Auto Scaling':
+        #square root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #auto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    #square root transform, pareto scaling
+    elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
+        #square root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #pareto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    #square root transform, range scaling
+    elif transform == 'Square root transformation' and scale == 'Range Scaling':
+        #square root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #range scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    #cube root transform, no scaling
+    elif transform == 'Cube root transformation' and scale == 'None':
+        #cube root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+    #cube root transform, mean centering
+    elif transform == 'Cube root transformation' and scale == 'Mean centering':
+        #cube root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+        #mean centering
+        for i in range(metab_data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+    
+    #cube root transform, auto scale
+    elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
+        #cube root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+        #auto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
+        #cube root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+        #pareto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    elif transform == 'Cube root transformation' and scale == 'Range Scaling':
+        #cube root transform
+        for i in range(metab_data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+        
+        #range scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    elif transform == 'None' and scale == 'Mean centering':
+        #mean centering
+        for i in range(metab_data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+
+    elif transform == 'None' and scale == 'Auto Scaling':
+        #auto scaling
+        for i in range(metab_data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    elif transform == 'None' and scale == 'Pareto Scaling':
+        #pareto scale
+        for i in range(metab_data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    elif transform == 'None' and scale == 'Range Scaling':
+        #range scale 
+        for i in range(metab_data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+
+    return data

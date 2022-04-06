@@ -139,184 +139,17 @@ class GUIUtils:
         '''
         
         #log that the user called the Create Clustergram function
+        logging.info(':-------------------------------------------------------------')
         logging.info(': User called the Create Clustergram Function.')
-        #check that the file the user selects is appropriate
-        metab_data = GB.fileCheck()
-        if metab_data is None:
-            #log error message and return for soft exit.
-            logging.error(': Error loading in the Excel sheet.')
-            return
-
-        #read in data
-        data = GB.readInColumns(metab_data)
-
-        #Standardize the data before clustering the results
-
-        #reply = messagebox.askquestion(title="Standardize/Scaling", message = "Data will be mean centered. Would you like to transform or scale the data differently?")
-        logging.info(': Standardizing the data.')
-
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-        ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-        #Log transform no scaling
-        if transform == 'Log transformation' and scale == 'None':
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-        #Log transform, mean centering
-        elif transform == 'Log transformation' and scale == 'Mean centering':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #mean center
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-        
-        #log transform, auto scaling
-        elif transform == 'Log transformation' and scale == 'Auto Scaling':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #Auto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        #log transform, pareto scaling
-        elif transform == 'Log transformation' and scale == 'Pareto Scaling':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #Pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        #log transform, range scaling
-        elif transform == 'Log transformation' and scale == 'Range Scaling':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #Range scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        #Square root transform, no scaling
-        elif transform == 'Square root transformation' and scale == 'None':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-        #square root transform, mean centering
-        elif transform == 'Square root transformation' and scale == 'Mean centering':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #mean center
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-
-        #square root transform, auto scaling
-        elif transform == 'Square root transformation' and scale == 'Auto Scaling':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #auto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        #square root transform, pareto scaling
-        elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        #square root transform, range scaling
-        elif transform == 'Square root transformation' and scale == 'Range Scaling':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #range scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        #cube root transform, no scaling
-        elif transform == 'Cube root transformation' and scale == 'None':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-        #cube root transform, mean centering
-        elif transform == 'Cube root transformation' and scale == 'Mean centering':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-            #mean centering
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-        
-        #cube root transform, auto scale
-        elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-            #auto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Range Scaling':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-            
-            #range scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Mean centering':
-            #mean centering
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-
-        elif transform == 'None' and scale == 'Auto Scaling':
-            #auto scaling
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        elif transform == 'None' and scale == 'Pareto Scaling':
-            #pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Range Scaling':
-            #range scale 
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        del(metab_data)
-
+        logMessage = ': Linkage Function:' + linkFunc
+        logging.info(logMessage)
+        logMessage = ': Distance Metric:' + distMet
+        logging.info(logMessage)
+        logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
+        logging.info(logMessage)
+       
+        data = GB.readAndPreProcess(file='',transform=transform,scale=scale)
+        # print(dataCheck[:,:2])
         #create dendrogram and plot data
         
         GB.create_dendrogram(data,norm, link=linkFunc, dist=distMet,color = cmap)
@@ -451,7 +284,7 @@ class GUIUtils:
         logging.info(': Sucessfully grouped the Medians of each group!')
         return
 
-    def linkageComparison(file,num_comps,linkList,distance):
+    def linkageComparison(file,num_comps,linkList,distance, transform,scale):
         '''
         Compares 2-4 linkage functions on a given set of data. 
         
@@ -469,27 +302,29 @@ class GUIUtils:
 
         linkageComparison saves a .png file of the output to the current working directory. 
         '''
-
+        print(transform)
+        print(scale)
         #set recursion limit above the common max for our data.
         sys.setrecursionlimit(10**8)
         #Log that user called linkage comparison function
         logging.info(': User called the Linkage Comparison function.')
         #check that the file is appropriate for our data set
-        metab_data = GB.fileCheck(file)   
 
-        if metab_data is None:
-            #Logs error and returns function to ensure soft exit.
-            logging.error(': Error loading in excel file check log file!')
-            return
+        data = GB.readAndPreProcess(file =file,transform=transform,scale=scale)
 
-        #read in column data
-        data = GB.readInColumns(metab_data)
+        #input the arguments to the log file so user has record of what was input.
+        logging.info(':-------------------------------------------------------------')
+        logMessage = file
+        logging.info(logMessage)
+        logMessage = ': Number of comparisons: ' + str(num_comps)
+        logging.info(logMessage)
+        logMessage = ': Linkage functions: ' + str(linkList)
+        logging.info(logMessage)
+        logMessage = ': Distance metric: ' + distance
+        logging.info(logMessage)
+        logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
+        logging.info(logMessage)
 
-        #Standardize the data before clustering the results
-        logging.info('Standardizing the data.')
-        for i in range(metab_data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
-        del(i)
         #convert string to integer
         num_comps = int(num_comps)
         
@@ -745,7 +580,7 @@ class GUIUtils:
 
         #List for the use in creating and plotting the clustering results
         linkageList = ['single','complete','average']
-        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean'] #,'cosine']
+        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean']
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
         numClusterings = (len(linkageList)*len(distList))+1
@@ -840,7 +675,6 @@ class GUIUtils:
             data[i,:] = GB.standardize(data[i,:])
 
         #find the distance matrix using the pairwise distance function, put into squareform, appropriate format for mst and submit. 
- 
         pairWise = pdist(data)
         pairWise = squareform(pairWise)
         mstInput = csr_matrix(pairWise)
@@ -873,6 +707,7 @@ class GUIUtils:
         #create a list of tuples containing the single cluster set, with the data and the num_groups
         argsMulti = []
         
+        logging.info(": Starting cluster validation!")
         start = time.perf_counter()
         for i in range(len(validationClusters)):
             argsMulti.append(({0:validationClusters[i]},data,num_groups))
@@ -1470,7 +1305,6 @@ class GUIUtils:
        
         consensusMat = LW.consensus(ECI,refClust,data)
         regionsOut = LW.regions(consensusMat)
-        print(regionsOut)
 
 
     def daviesBouldin():
@@ -1492,3 +1326,6 @@ class GUIUtils:
         logging.info(': Pre-processing data.')
         for i in range(data.shape[0]):
             data[i,:] = GB.standardize(data[i,:])
+
+
+    

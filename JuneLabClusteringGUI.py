@@ -17,7 +17,6 @@ import os
 import fpdf
 import webbrowser
 
-
 class JuneLabClusteringGUI(ttk.Frame):
 	def __init__(self, master=None):
 		super().__init__(master)
@@ -427,11 +426,11 @@ class JuneLabClusteringGUI(ttk.Frame):
 	def linkages(self):
 		def distFunc(*args):
 			#make a global distance variable
-			global distance
-			distance = self.dist.get()
+			global distanceMet
+			distanceMet = self.dist.get()
 			
 			#given the selection of a distance measure how many comparisons are possible. 
-			if distance == 'euclidean':
+			if distanceMet == 'euclidean':
 				#give the full list to the second combobox
 				values = [1,2,3,4]
 				num_comps = StringVar()
@@ -455,6 +454,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			linkOpts = ['ward-single','ward-complete','ward-average','single-complete','single-average','complete-average',\
 						'ward-single-complete','ward-single-average','ward-complete-average','single-complete-average',\
 						'ward-single-complete-average']
+			
 
 			if numberComps == '1':
 				#give the linkage funtions combobox a list of the linkage functions. 
@@ -523,6 +523,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		def linkageComp(*args):
 			#base linkage list for 4 comparisons.
+			global linkList
 			linkageList = ['ward','single','complete','average']
 			
 			#create an empty list for linkage functions
@@ -555,10 +556,33 @@ class JuneLabClusteringGUI(ttk.Frame):
 				#append the selection to the linkage list
 				linkList.append(selection)
 			
-			# #send the parameters for linkage comparison 	
-			file = filedialog.askopenfilename()	
-			GU.linkageComparison(file,numberComps,linkList,distance)
+			#send the parameters for linkage comparison 
+			for i in range(len(transformList)):
+				transformListBox.insert(i,transformList[i])	
+			#file = filedialog.askopenfilename()	
+			#GU.linkageComparison(file,numberComps,linkList,distance)
 
+		def dataScale(*args):
+			global dataTrans
+			dataTrans = transformListBox.curselection()
+			dataTrans = transformList[dataTrans[0]]
+
+			for i in range(len(scaleList)):
+				scaleListBox.insert(i,scaleList[i])
+			
+		def submit(*args):
+			#get current selection of the scaling list box
+			dataScale = scaleListBox.curselection()
+			dataScale = scaleList[dataScale[0]]
+
+			print(distanceMet)
+			print(numberComps)
+			print(linkList)
+			print(dataTrans)
+			print(dataScale)
+
+			file = filedialog.askopenfilename()
+			GU.linkageComparison(file, numberComps,linkList,distanceMet,dataTrans,dataScale)
 
 
 		objects = self.grid_slaves()
@@ -573,17 +597,33 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.numCompsLab = ttk.Label(self, text="Number of comparisons",font=("TkHeadingFont",12)).grid(column=2,row=1)
 		self.distLab = ttk.Label(self, text="Distance measure",font=("TkHeadingFont",12)).grid(column=1,row=1)
 		self.linkLab = ttk.Label(self,text="Linkage functions",font=("TkHeadingFont",12)).grid(column=3,row=1)
-		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=4, sticky=(N),columnspan=3)
+		self.Transform = ttk.Label(self,text="Transform",font=("TkHeadingFont",12)).grid(column=1,row=4)
+		self.Scale = ttk.Label(self,text="Scale",font=("TkHeadingFont",12)).grid(column=2,row=4)
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=7, sticky=(N),columnspan=3)
+		self.sumbitIt = ttk.Button(self,text="Submit",command=submit).grid(column=1,row=6, sticky=(N),columnspan=3)
+		
+		transformListBox = Listbox(self, height=8)
+		scaleListBox = Listbox(self, height=8)
 
 		linkages = StringVar()
 		#create the distance measure combobox first, then update the GUI as the user selects the distance, measure than number of linkage comps. 
 		distances = StringVar()
 		distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
+		transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
+		scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
 		self.dist = ttk.Combobox(self,values = distList,textvariable=distances)
+
+
 		
 		#bind the combobox for distance measures to the selection of distance measure. 
 		self.dist.bind('<<ComboboxSelected>>', distFunc)
 		self.dist.grid(column=1,row=2)
+		transformListBox.bind('<Double-1>', dataScale)
+		scaleNames = StringVar(value=scaleList)
+		self.transformListBox = transformListBox
+		self.transformListBox.grid(column=1,row=5,columnspan=1)
+		self.scaleListBox = scaleListBox
+		self.scaleListBox.grid(column=2,row=5,columnspan=1)
 
 	def compound(self):
 	    #ask the user to select a clustergram file to run through a validition study.
@@ -658,6 +698,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=5,sticky=(N))
 		self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=7,sticky=(N),columnspan=2)
 		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=8, sticky=(N),columnspan=2)
+
+		# #Create the starting window
+		# self.EnsembleLabel = ttk.Label(self,text="Ensemble Clustering",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
+		# self.
 
 		#create list box of the ensemble optimal clusters
 		optClustBox = Listbox(self,height=5)
