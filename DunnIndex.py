@@ -41,7 +41,6 @@ def dunnIndex(data,dists,num_groups):
         curClusters = data[i]
 
         #from the current clusters determine the length in order to determine the next step
-        print('hi')
         curClustersLength = len(curClusters)
 
         #sum of intra cluster distances
@@ -53,13 +52,12 @@ def dunnIndex(data,dists,num_groups):
         #create a numpy array for cluster centers
         centersNum = np.zeros((curClustersLength,num_groups))
 
+        #create a numpy array for the maximum spread of points in cluster
+        maxIntra = np.zeros((curClustersLength,1))
 
         for j in range(curClustersLength):
             #pull out the current cluster of metabolites
             cluster = curClusters[j]
-
-            #current sum of intra cluster distances
-            sumIntra = 0
 
             #determine whether the current cluster is a list or integer
             if isinstance(cluster,list):
@@ -80,21 +78,13 @@ def dunnIndex(data,dists,num_groups):
                 #update the numpy array of cluster centers
                 centersNum[j,:] = center
 
-                #an array containing the current intra cluster comparison
-                curDistIntra = np.zeros((2,num_groups))
-
-                #calculate the intra cluster distance
                 print('staying alive, ah ah ah staying aliiiiiveee')
-                for k in range(lengthList):
-                    #calculate the pdist for each metabolite feature against the center
-                    curMetab = clustCoordinates[k,:]
-                    curDistIntra[0,:] = curMetab
-                    curDistIntra[1,:] = center
-                    sumIntra += pdist(curDistIntra)
 
+                #calculate the pairwise distances for the current cluster of interest
+                intraDists = pdist(clustCoordinates)
 
-                #calculating the dispersion of the current cluster of interest
-                dispersion[j] = sumIntra/lengthList
+                #input the maximum intra cluster distance for the current cluster
+                maxIntra[j] =  max(intraDists)
 
             elif isinstance(cluster, np.integer) or isinstance(cluster, int):
                 #find center and place in dictionary
@@ -102,41 +92,25 @@ def dunnIndex(data,dists,num_groups):
                 center[0,:] = dists[cluster]
                 centersNum[j,:] = center
 
-            
-        ##
-        ##------------Calculating the R_i for the current subset of cluster--------------------
-        ##
-            
-        #calculate the euclidean distances between the centers...
-        cenDists = pdist(centersNum)
-        cenDists = squareform(cenDists)
+                #put the maximum intra distance as 0, only a single point (these will just be place holders)
+                maxIntra[j] = 0
 
-        #setting the maximum value of the R_i to zero initially, will test each iteration to determine the maximum 
-        riMaxes = np.zeros((1,curClustersLength))
+
+        #calculate the max intra cluster spread
+        compactness = max(maxIntra)
+
+        #calculate the pairwise distances between cluster centers
+        sepDists = pdist(centersNum)
+
+        sepDist = min(sepDists)
         
-        for k in range(curClustersLength):
-            curMax = 0
-            for j in range(curClustersLength):
-                if k != j:
-                    #calculate the R_i and compare to the curMax
-                    R_i = (dispersion[k]+dispersion[j])/cenDists[k,j]
-                    
-                    if R_i > curMax:
-                        curMax = R_i
-
-            riMaxes[k] = curMax
-
-        #sum up the R_i maxes and divide by the number of clusters in the current partition
-        sumRi = np.sum(riMaxes)
-        K = curClustersLength
-
-        if K > 1:
+        if curClustersLength > 1:
             #calculate the validation index
-            val_index[0,i] = sumRi/K
+            val_index[0,i] = compactness/sepDist
             val_index[1,i] = clusterings - (i)
 
         else:
-            val_index[0,i] = 10
+            val_index[0,i] = 0
             val_index[1,i] = clusterings - (i)
 
         if i == 0:

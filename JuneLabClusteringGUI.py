@@ -1,3 +1,4 @@
+from msilib.schema import ListBox
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
@@ -16,6 +17,7 @@ import getpass
 import os
 import fpdf
 import webbrowser
+from Bio.KEGG import REST
 
 class JuneLabClusteringGUI(ttk.Frame):
 	def __init__(self, master=None):
@@ -64,6 +66,21 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 
 	def home(self):
+		#start listing out the global variables that need to be removed for each function upon returning home
+		if 'ensemble' in globals():
+			try:
+				del(globals()['ensemble'])
+			except:
+				messagebox.showerror(title='Error', message="GUI didn't properly reset. Restart recommended, IF you want to run another ensemble.")
+				logging.error(': Ensemble environment did not delete, this may cause errors in the computation of wanted ensemble clustergram!')
+			
+			if 'standard' in globals():
+				try:
+					del(globals()['standard'])
+				except:
+					messagebox.showerror(title='Error', message="GUI didn't properly reset. Restart recommended, IF you want to run another ensemble.")
+					logging.error(': Standard ensemble was selected but global variable didn''t delete this may cause issues with other ensemble clusterings!')
+
 		#remove old objects and put the home objects back on grid
 		objects = self.grid_slaves()
 		for i in objects:
@@ -177,8 +194,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 
 		def submit(*args):
-			#submit the function output to the
-			#selection = distListBox.curselection() 
+			#submit the function output to the 
 			selection4 = scaleListBox.curselection()
 			dist = distList[selection1[0]]
 			link = linkageList[selection[0]]
@@ -634,15 +650,195 @@ class JuneLabClusteringGUI(ttk.Frame):
 		def enrichment(*args):
 			GU.compoundMatchUp(typeFile='enrich')
 
+		def compLookUp(*args):
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			global lookUp
+			lookUp = 'comp'
+
+			self.compLabel = ttk.Label(self, text="Compound Look-Up", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N))
+			global inputLab1
+			inputLab1 = tk.StringVar()
+			self.inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			global formulaBox
+			global exactMassBox
+			global molWeightBox
+			formulaBox = tk.StringVar()
+			exactMassBox = tk.StringVar()
+			molWeightBox = tk.StringVar()
+			self.ex = ttk.Label(self,text="(Give range: 174.045-174.055)",font=("TkHeadingFont",12)).grid(column=1,row=2,sticky=(N))
+			self.formula = ttk.Checkbutton(self,text="Formula",variable=formulaBox,onvalue="formula",offvalue='').grid(column=1,row=3,sticky=(N))
+			self.exactMass = ttk.Checkbutton(self,text="Exact Mass",variable=exactMassBox,onvalue="exact_mass",offvalue='').grid(column=1,row=4,sticky=(N))
+			self.molWeightBox = ttk.Checkbutton(self,text="Molecular Weight",variable=molWeightBox,onvalue="mol_weight",offvalue='').grid(column=1,row=5,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=6,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=7,sticky=(N))
+
+		def pathwayLookUp(*args):
+			print('pathway')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+		def genomeLookUp(*args):
+			print('genome')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+		def enzymeLookUp(*args):
+			print('enzyme')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+		def glycanLookUp(*args):
+			print('glycan')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+		def genesLookUp(*args):
+			print('genes')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+		def ligandLookUp(*args):
+			print('ligand')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+		def reactionLookUp(*args):
+			print('reaction')
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global inputLab1
+			inputLab = ttk.Entry(self,textvariable=inputLab1).grid(column=1,row=1,sticky=(N))
+			self.submitBut = ttk.Button(self, text='Submit',command=submitML).grid(column=1,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+
+
+		def manualLookup(*args):
+			#updating the GUI to allow user to input data
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+
+			self.JuneLab = ttk.Label(self, text ="Manual look-up",font=("TkHeadingFont",24)).grid(column=2,row=0,sticky=(N),columnspan=2)
+			self.compoundBtn = ttk.Button(self,text="Compound", command=compLookUp).grid(column=1,row=1,sticky=(N))
+			self.pathwayBtn = ttk.Button(self,text="Pathway", command=pathwayLookUp).grid(column=2,row=1,sticky=(N))
+			self.genomeBtn = ttk.Button(self,text="Genome", command=genomeLookUp).grid(column=3,row=1,sticky=(N))
+			self.enzymeBtn = ttk.Button(self,text="Enzyme", command=enzymeLookUp).grid(column=4,row=1,sticky=(N))
+			self.glycanBtn = ttk.Button(self,text="Glycan", command=glycanLookUp).grid(column=1,row=2,sticky=(N))
+			self.genesBtn = ttk.Button(self,text="Genes", command=genesLookUp).grid(column=2,row=2,sticky=(N))
+			self.ligandBtn = ttk.Button(self,text="Ligand", command=ligandLookUp).grid(column=3,row=2,sticky=(N))
+			self.reactionBtn = ttk.Button(self,text="Reaction", command=reactionLookUp).grid(column=4,row=2,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=3,sticky=(N),columnspan=2)
+
+
+		def submitML(*args):
+			if lookUp =='comp':
+				objects = self.grid_slaves()
+				for i in objects:
+					i.grid_forget()
+				
+				formYN = formulaBox.get()
+				emYN = exactMassBox.get()
+				mwYN = molWeightBox.get()
+
+				input = inputLab1.get()
+				#input into a list
+				lookType = [formYN,emYN,mwYN]
+				typeLookUp = []
+				for i in range(len(lookType)):
+					if len(lookType[i]) > 0:
+						typeLookUp.append(lookType[i])
+
+				self.header = ttk.Label(self,text="Compound matches",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
+				self.CompoundMatches = ttk.Label(self,text="ID",font=("TkHeadingFont",18)).grid(column=1,row=1,sticky=(N))
+				self.approHeader = ttk.Label(self,text=typeLookUp[0],font=("TkHeadingFont",18)).grid(column=2, row=1,sticky=(N))
+
+				request = REST.kegg_find('compound',input,typeLookUp[0])
+				open('CompoundMatches.txt','w').write(request.read())
+
+				lines = []
+				with open('CompoundMatches.txt') as f:
+					line = f.readline()
+					while line:
+						line = f.readline()
+						lines.append(line)
+				print(lines)
+				#find length of found compounds
+				if len(lines) > 0:
+					for j in range(len(lines)):
+						if len(lines[j])>0:
+							#strip cpd:
+							curLine = lines[j].strip()
+							curLine = curLine.lstrip('cpd:')
+							curLine = curLine.split("\t")
+							print(curLine)
+							self.curLab = ttk.Label(self,text=curLine[0],font=("TkHeadingFont",14)).grid(column=1,row=1+j+1,sticky=(N))
+							self.curLab1 = ttk.Label(self,text=curLine[1],font=("TkHeadingFont",14)).grid(column=2,row=1+j+1,sticky=(N))
+				
+
+				
+				self.home1 =ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=1+len(lines)+1,sticky=(N),columnspan=2)
+
+
+
+
 		objects = self.grid_slaves()
 		for i in objects:
 			i.grid_forget()
 
-		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="black", background="#000000",font=("Arial",14))
-		self.JuneLab = ttk.Label(self, text ="Compound Match-Up",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
-		self.allCompounds = ttk.Button(self,text="All Compounds",command=allCompounds,style="RW.TButton").grid(column=1,row=1, sticky=(N),columnspan=3)
-		self.enrichmentCompounds = ttk.Button(self,text="Enrichment Compounds",command = enrichment,style="RW.TButton").grid(column=1,row=2, sticky=(N),columnspan=3)
-		self.home1 = ttk.Button(self,text="Return to Home",command=self.home,style="RW.TButton").grid(column=1,row=3, sticky=(N),columnspan=3)
+		self.JuneLab = ttk.Label(self, text ="Compound Match-Up",font=("TkHeadingFont",24)).grid(column=1,row=0,sticky=(N),columnspan=2)
+		self.allCompounds = ttk.Button(self,text="All Compounds (Not Recommended)",command=allCompounds).grid(column=1,row=1, sticky=(N),columnspan=2)
+		self.enrichmentCompounds = ttk.Button(self,text="Enrichment Compounds",command = enrichment).grid(column=1,row=2, sticky=(N),columnspan=2)
+		self.manualLookup = ttk.Button(self,text="Manual KEGG Look-up", command=manualLookup).grid(column=1,row=3,sticky=(N),columnspan=2)
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=4, sticky=(N),columnspan=2)
 
 
 	def P2P(self):
@@ -661,80 +857,310 @@ class JuneLabClusteringGUI(ttk.Frame):
 		GU.ensembleClustering(optNum = numClust)
 
 	def ensemble(self):
-		def ensembleOutput(*args):
-			#grab the current selection of the list
-			global selection
-			selection = optClustBox.curselection()
-			selection = int(selection[0])+1
+		global ensemble
+		ensemble = 1
 
-		def ensembleMin(*args):
+		def firstNext(*args):
+			global ensemLinkList 
+			singleBoxOut = singleBox.get()
+			completeBoxOut = completeBox.get()
+			averageBoxOut = averageBox.get()
+			wardBoxOut = wardBox.get()
+
+			linkList = [singleBoxOut,completeBoxOut,averageBoxOut,wardBoxOut]
+			ensemLinkList = []
+			for i in range(len(linkList)):
+				if len(linkList[i]) > 0:
+					ensemLinkList.append(linkList[i])
+
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			global euclideanBox
+			global seuclideanBox
+			global sqeuclideanBox
+			global cosineBox
+			global chebyshevBox
+			global correlationBox
+			global canberraBox
+			global braycurtisBox
+			global minkowskiBox
+			global cityblockBox
+
+			euclideanBox = tk.StringVar()
+			seuclideanBox = tk.StringVar()
+			sqeuclideanBox = tk.StringVar()
+			cosineBox = tk.StringVar()
+			chebyshevBox = tk.StringVar()
+			correlationBox = tk.StringVar()
+			canberraBox = tk.StringVar()
+			braycurtisBox = tk.StringVar()
+			minkowskiBox = tk.StringVar()
+			cityblockBox = tk.StringVar()
+
+			#create widgets
+			self.EnsemSecondWindow = ttk.Label(self,text="EnsembleClustring").grid(column=1,row=0,columnspan=3,sticky=(N))
+			self.DistMetInterest = ttk.Label(self,text="Which distance metrics would you like to use?").grid(column=1,row=1,columnspan=3,sticky=(N))
+			self.euclideanCheck = ttk.Checkbutton(self,text="Euclidean",variable=euclideanBox,onvalue='euclidean',offvalue='Not').grid(column=1,row=2,sticky=(N,W))
+			self.seuclideanCheck = ttk.Checkbutton(self,text="Standardized Euclidean",variable=seuclideanBox,onvalue='seuclidean',offvalue='Not').grid(column=2,row=2,sticky=(N,W))
+			self.sqeuclideanCheck = ttk.Checkbutton(self,text="Square Root-Euclidean",variable=sqeuclideanBox,onvalue='sqeuclidean',offvalue='Not').grid(column=3,row=2,sticky=(N,W))
+			self.cosineCheck = ttk.Checkbutton(self,text="Cosine",variable=cosineBox,onvalue='cosine',offvalue='Not').grid(column=1,row=3,sticky=(N,W))
+			self.chebyshevCheck = ttk.Checkbutton(self,text="Chebyshev",variable=chebyshevBox,onvalue='chebyshev',offvalue='Not').grid(column=2,row=3,sticky=(N,W))
+			self.correlationCheck = ttk.Checkbutton(self,text="Correlation",variable=correlationBox,onvalue='correlation',offvalue='Not').grid(column=3,row=3,sticky=(N,W))
+			self.canberraCheck = ttk.Checkbutton(self,text="Canberra",variable=canberraBox,onvalue='canberra',offvalue='Not').grid(column=1,row=4,sticky=(N,W))
+			self.braycurtisCheck = ttk.Checkbutton(self,text="Bray-Curtis",variable=braycurtisBox,onvalue='braycurtis',offvalue='Not').grid(column=2,row=4,sticky=(N,W))
+			self.minkowskiCheck = ttk.Checkbutton(self,text="Minkowski",variable=minkowskiBox,onvalue='minkowski',offvalue='Not').grid(column=3,row=4,sticky=(N,W))
+			self.cityblockCheck = ttk.Checkbutton(self,text="City Block",variable=cityblockBox,onvalue='cityblock',offvalue='Not').grid(column=1,row=5,sticky=(N,W))
+			self.SecondNextButton = ttk.Button(self, text="Next->", command = secondNext).grid(column=2,row=6,sticky=(N))
+			self.home1 = ttk.Button(self, text="Return to Home",command=self.home).grid(column=2,row=7,sticky=(N))
+
+		def secondNext(*args):
+			global distanceMetList
+			euclideanBoxOut = euclideanBox.get()
+			seuclideanBoxOut = seuclideanBox.get()
+			sqeuclideanBoxOut = sqeuclideanBox.get()
+			cosineBoxOut = cosineBox.get()
+			chebyshevBoxOut = chebyshevBox.get()
+			correlationBoxOut= correlationBox.get()
+			canberraBoxOut = canberraBox.get()
+			braycurtisBoxOut = braycurtisBox.get()
+			minkowskiBoxOut = minkowskiBox.get()
+			cityblockBoxOut = cityblockBox.get()
+
+
+			distMetL = [euclideanBoxOut,seuclideanBoxOut,sqeuclideanBoxOut,cosineBoxOut,chebyshevBoxOut,correlationBoxOut,canberraBoxOut,braycurtisBoxOut,minkowskiBoxOut,cityblockBoxOut]
+			distanceMetList = []
+			for i in range(len(distMetL)):
+				#distance metric list for usage
+				if len(distMetL[i]) > 0:
+					distanceMetList.append(distMetL[i])
+
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			#create widgets for the clustergram function input. 
+			self.EnsembleLabel = ttk.Label(self, text="Ensemble Clustering",font=("TkHeadingFont",24)).grid(column=0,row=0,sticky=(N),columnspan=3)
+			self.JuneLab = ttk.Label(self, text="# of Clusters",font=("TkHeadingFont",18)).grid(column=0,row=4,sticky=(N))
+			self.MetabNumPClustL = ttk.Label(self, text="Min. # of features?", font=("TkHeadingFont",18)).grid(column=1,row=4,sticky=(N))
+			self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=1,sticky=(N))
+			self.trans = ttk.Label(self,text="Transform",font=("TkHeadingFont",18)).grid(column=1,row=1,sticky=(N))
+			self.scale = ttk.Label(self,text="Scale", font=("TkHeadingFont",18)).grid(column=2,row=1,sticky=(N))
+			self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=8,sticky=(N))
+			self.ButtonColormaps = ttk.Button(self,text="ColorMap Options",command=cMapOpt).grid(column=0,row=3,sticky=(N))
+			self.ButtonTransforms = ttk.Button(self,text="Transform Opttions",command=transOpts).grid(column=1,row=3,sticky=(N))
+			self.ButtonScale = ttk.Button(self,text="Scale Options", command=scaleOpts).grid(column=2,row=3,sticky=(N))
+			# self.submit = ttk.Button(self,text="Submit",command=ensembleGo).grid(column=1,row=8,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2,row=8, sticky=(N))
+			
+			global colorList
+			colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
+                      'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
+			
+			#create list box of the ensemble optimal clusters
+			global optClustBox
+			global minNumMetabClust
+			global colorMapEnsem
+			global transformEnsem
+			global scaleEnsem
+			optClustBox = Listbox(self,height=5,width=35)
+			minNumMetabClust = Listbox(self, height=5,width=35)
+			colorMapEnsem = Listbox(self, height=5,width=35)
+			transformEnsem = Listbox(self, height=5,width=35)
+			scaleEnsem = Listbox(self, height=5,width=35)
+
+			global transformList
+			global scaleList
+			transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
+			scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
+
+
+			#Create the lists of available options for selection 
+			optClusters = tuple(range(1,101))
+			minMetab = tuple(range(0,101))
+			distNames = StringVar(value=optClusters)
+			minNum = StringVar(value=minMetab)
+			colMap = StringVar(value=colorList)
+			transType = StringVar(value=transformList)
+			scaleType = StringVar(value=scaleList)
+
+			for i in range(len(colorList)):
+				colorMapEnsem.insert(i,colorList[i])
+			
+			#create binding event and 
+			optClustBox.bind('<Double-1>',ensembleOptClust)
+			scaleEnsem.bind('<Double-1>',ensembleScale)
+			colorMapEnsem.bind('<Double-1>',ensembleCMap)
+			transformEnsem.bind('<Double-1>',ensembleTransform)
+			self.optClustBox = optClustBox
+			self.optClustBox.grid(column=0,row=5,columnspan=1)
+			self.minNumMetabClust = minNumMetabClust
+			self.minNumMetabClust.grid(column=1,row=5,columnspan=1)
+			self.colorMapEnsem = colorMapEnsem
+			self.colorMapEnsem.grid(column=0,row=2,columnspan=1)
+			self.transformEnsem = transformEnsem
+			self.transformEnsem.grid(column=1,row=2,columnspan=1)
+			self.scaleEnsem = scaleEnsem
+			self.scaleEnsem.grid(column=2,row=2,columnspan=1)
+
+			
+		def ensembleOptClust(*args):
+			#grab the current selection of the list
+			global optClust
+			optClust = optClustBox.curselection()
+			optClust = int(optClust[0])+1
+			minMetab = tuple(range(0,101))
+			for i in range(len(minMetab)):
+				minNumMetabClust.insert(i,minMetab[i])
+			self.submit = ttk.Button(self,text="Submit",command=ensembleGo).grid(column=1,row=8,sticky=(N))
+		
+		def ensembleScale(*args):
 			#grab the selection and minimum number of clusters
-			global selection1
-			selection1 = minNumMetabClust.curselection()
-			selection1 = int(selection1[0])
+			global scaleSel
+			scaleSel = scaleEnsem.curselection()
+			scaleSel = scaleList[scaleSel[0]]
+			optClusters = tuple(range(1,101))
+			for i in range(len(optClusters)):
+				optClustBox.insert(i,optClusters[i])
+
+		def ensembleCMap(*args):
+			#grab the selection and colormap wanted
+			global cMapSel
+			cMapSel = colorMapEnsem.curselection()
+			cMapSel = colorList[cMapSel[0]]
+			for i in range(len(transformList)):
+				transformEnsem.insert(i,transformList[i])
+
+		def ensembleTransform(*args):
+			#grab the data transform of interest
+			global transSel
+			transSel = transformEnsem.curselection()
+			transSel = transformList[transSel[0]]
+			for i in range(len(scaleList)):
+				scaleEnsem.insert(i,scaleList[i])
 
 		def ensembleGo(*args):
-			selection2 = colorMapEnsem.curselection()
-			selection2 = colorList[selection2[0]]
-			print(selection)
-			print(selection1)
-			print(selection2)
+			minFeature = minNumMetabClust.curselection()
+			minFeature = int(minFeature[0])
+			if 'standard' in globals():
+				print('Yes sir')
+
+			print(distanceMetList)
+			print(ensemLinkList)
+			print(cMapSel)
+			print(optClust)
+			print(minFeature)
+			print(transSel)
+			print(scaleSel)
 			#send to ensemble clustering algorithm
-			GU.ensembleClustering(optNum= selection, minMetabs= selection1, colorMap = selection2)
+			GU.ensembleClustering(optNum= optClust, minMetabs= minFeature, colorMap = cMapSel,transform=transSel,scale=scaleSel)
+
+		def cMapOpt(*args):
+			#send to webpage of colormap options in python
+			webbrowser.open('https://matplotlib.org/stable/tutorials/colors/colormaps.html')
+
+		def transOpts(*args):
+			webbrowser.open('www.google.com')
+
+		def scaleOpts(*args):
+			webbrowser.open('www.google.com')
+
+		def standardEnsemble(*args):
+			objects = self.grid_slaves()
+			for i in objects:
+				i.grid_forget()
+			
+			global standard
+			standard = 'Set ensemble'
+			
+			#create widgets for the clustergram function input. 
+			self.EnsembleLabel = ttk.Label(self, text="Ensemble Clustering",font=("TkHeadingFont",24)).grid(column=0,row=0,sticky=(N),columnspan=3)
+			self.JuneLab = ttk.Label(self, text="# of Clusters",font=("TkHeadingFont",18)).grid(column=0,row=4,sticky=(N))
+			self.MetabNumPClustL = ttk.Label(self, text="Min. # of features?", font=("TkHeadingFont",18)).grid(column=1,row=4,sticky=(N))
+			self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=1,sticky=(N))
+			self.trans = ttk.Label(self,text="Transform",font=("TkHeadingFont",18)).grid(column=1,row=1,sticky=(N))
+			self.scale = ttk.Label(self,text="Scale", font=("TkHeadingFont",18)).grid(column=2,row=1,sticky=(N))
+			self.ButtonColormaps = ttk.Button(self,text="ColorMap Options",command=cMapOpt).grid(column=0,row=3,sticky=(N))
+			self.ButtonTransforms = ttk.Button(self,text="Transform Opttions",command=transOpts).grid(column=1,row=3,sticky=(N))
+			self.ButtonScale = ttk.Button(self,text="Scale Options", command=scaleOpts).grid(column=2,row=3,sticky=(N))
+			self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2,row=8, sticky=(N))
+			
+			global colorList
+			colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
+                      'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
+			
+			#create list box of the ensemble optimal clusters
+			global optClustBox
+			global minNumMetabClust
+			global colorMapEnsem
+			global transformEnsem
+			global scaleEnsem
+			optClustBox = Listbox(self,height=5,width=35)
+			minNumMetabClust = Listbox(self, height=5,width=35)
+			colorMapEnsem = Listbox(self, height=5,width=35)
+			transformEnsem = Listbox(self, height=5,width=35)
+			scaleEnsem = Listbox(self, height=5,width=35)
+
+			global transformList
+			global scaleList
+			transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
+			scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
+
+
+			#Create the lists of available options for selection 
+			optClusters = tuple(range(1,101))
+			minMetab = tuple(range(0,101))
+			distNames = StringVar(value=optClusters)
+			minNum = StringVar(value=minMetab)
+			colMap = StringVar(value=colorList)
+			transType = StringVar(value=transformList)
+			scaleType = StringVar(value=scaleList)
+
+			for i in range(len(colorList)):
+				colorMapEnsem.insert(i,colorList[i])
+			
+			#create binding event and 
+			optClustBox.bind('<Double-1>',ensembleOptClust)
+			scaleEnsem.bind('<Double-1>',ensembleScale)
+			colorMapEnsem.bind('<Double-1>',ensembleCMap)
+			transformEnsem.bind('<Double-1>',ensembleTransform)
+			self.optClustBox = optClustBox
+			self.optClustBox.grid(column=0,row=5,columnspan=1)
+			self.minNumMetabClust = minNumMetabClust
+			self.minNumMetabClust.grid(column=1,row=5,columnspan=1)
+			self.colorMapEnsem = colorMapEnsem
+			self.colorMapEnsem.grid(column=0,row=2,columnspan=1)
+			self.transformEnsem = transformEnsem
+			self.transformEnsem.grid(column=1,row=2,columnspan=1)
+			self.scaleEnsem = scaleEnsem
+			self.scaleEnsem.grid(column=2,row=2,columnspan=1)
 
 		objects = self.grid_slaves()
 		for i in objects:
 			i.grid_forget()
 
-		colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
-                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
-                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
-                      'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
-                      'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
-                      'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')	
-		#create widgets for the clustergram function input. 
-		self.JuneLab = ttk.Label(self, text="Number of Clusters",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
-		self.MetabNumPClustL = ttk.Label(self, text="Min. number of metabolites (per cluster)?", font=("TkHeadingFont",18)).grid(column=0,row=3,sticky=(N))
-		self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=5,sticky=(N))
-		self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=7,sticky=(N),columnspan=2)
-		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=8, sticky=(N),columnspan=2)
-
-		# #Create the starting window
-		# self.EnsembleLabel = ttk.Label(self,text="Ensemble Clustering",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
-		# self.
-
-		#create list box of the ensemble optimal clusters
-		optClustBox = Listbox(self,height=5)
-		minNumMetabClust = Listbox(self, height=5)
-		colorMapEnsem = Listbox(self, height=5)
-
-		#Create the lists of available options for selection 
-		optClusters = tuple(range(1,101))
-		minMetab = tuple(range(0,101))
-		distNames = StringVar(value=optClusters)
-		minNum = StringVar(value=minMetab)
-		colMap = StringVar(value=colorList)
-
-
-		for i in range(len(optClusters)):
-			optClustBox.insert(i,optClusters[i])
-
-		for i in range(len(minMetab)):
-			minNumMetabClust.insert(i,minMetab[i])
-
-		for i in range(len(colorList)):
-			colorMapEnsem.insert(i,colorList[i])
-
-		#create binding event and 
-		optClustBox.bind('<Double-1>',ensembleOutput)
-		minNumMetabClust.bind('<Double-1>',ensembleMin)
-		colorMapEnsem.bind('<Double-1>',ensembleGo)
-		self.optClustBox = optClustBox
-		self.optClustBox.grid(column=0,row=1,columnspan=1)
-		self.minNumMetabClust = minNumMetabClust
-		self.minNumMetabClust.grid(column=0,row=4,columnspan=1)
-		self.colorMapEnsem = colorMapEnsem
-		self.colorMapEnsem.grid(column=0,row=6,columnspan=1)
+		#create first window
+		self.EnsembleLabel = ttk.Label(self,text="Ensemble Clustering",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
+		self.Win1Q = ttk.Label(self,text="Which linkage functions would you like to include?",font=("TkHeadingFont",16)).grid(column=0,row=1,sticky=(N))
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=7, sticky=(N),columnspan=2)
+		self.FirstNext = ttk.Button(self,text="Next->",command=firstNext).grid(column=0,row=6,sticky=(N))
+		self.standardEnsemble = ttk.Button(self, text="Starndard Ensemble",command=standardEnsemble).grid(column=0,row=8)
+		singleBox = tk.StringVar()
+		completeBox = tk.StringVar()
+		averageBox = tk.StringVar()
+		wardBox = tk.StringVar()
+		self.SingleCheck = ttk.Checkbutton(self,text="Single",variable=singleBox,onvalue='Single',offvalue='Not').grid(column=0,row=2,sticky=(N))
+		self.CompleteCheck = ttk.Checkbutton(self,text="Complete",variable=completeBox,onvalue='Complete',offvalue='Not').grid(column=0,row=3,sticky=(N))
+		self.AverageCheck = ttk.Checkbutton(self,text="Average",variable=averageBox,onvalue='Average',offvalue='Not').grid(column=0,row=4,sticky=(N))
+		self.WardCheck = ttk.Checkbutton(self,text="Ward",variable=wardBox,onvalue='Ward',offvalue='Not').grid(column=0,row=5,sticky=(N))
 
 
 	def mst(self):

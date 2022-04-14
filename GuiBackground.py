@@ -17,6 +17,11 @@ import logging, time, glob,sys,os,ast
 from PIL import Image
 from seaborn.matrix import clustermap
 
+from Bio.KEGG import REST
+from Bio.KEGG import Compound
+from Bio.KEGG import Enzyme
+
+
 def fileCheck(file=''):
     '''
     Check that the selected file is of the appropriate file extension and is able to be read in. 
@@ -372,7 +377,7 @@ def create_dendrogram(data, norm=1,link='ward',dist='euclidean', color='viridis'
 
     if norm == 0:
         #g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=color, cbar_pos=(0.01, 0.8, 0.025, 0.175))
-        g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap=color,yticklabels=False,xticklabels=False)
+        g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=False,cmap=color,yticklabels=True,xticklabels=False)
         plt.show()
 
     elif norm == 1:
@@ -1359,13 +1364,24 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
     Additionally, this function will eventually allow users to select many different clusters
     and save them to a txt file which can then be used to get peaks to pathways files. 
     '''
+    with open('ClustColor.txt') as f:
+        contents = f.read()
+        f.close()
+    colSel = int(contents)
+
+    if colSel == 0:
+        colSel = 1
+        open('ClustColor.txt','w').write(str(colSel))
+
+    else:
+        colSel = 0
+        open('ClustColor.txt','w').write(str(colSel))
 
     #grab the first value of the list. 
     dCord = -index[0]
     iCord = -index[1]
     #value which needs to be subtracted from each of the indicies
     sub = linkDir[0][0]
-
     try:
         countLink = 0
         curSelection = -1
@@ -1378,37 +1394,36 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
 
         clustMetabs = linkClust[curSelection][0]
 
-        colors = dict(mcolors.BASE_COLORS, **mcolors.CSS4_COLORS)
-        colors = list(colors.keys())
+        colors = ['steelblue','darkkhaki']
         lenColors = len(colors)
-  
+        print(type(clustMetabs[0]))
         if curSelection != -1:
             #if current selection is valid grab the curSelection list from the linkage directory
             curList = linkDir[curSelection]
-            
+            #print(curList)
             #if it's length is greater than 1 loop over the selections
             if len(curList) > 1:
-                randNum = np.random.randint(lenColors, size=1)
                 count = []
                 for i in range(len(curList)):
                     curCord = curList[i]-sub
                     curDist = link[curCord][2]
                     for j in range(len(dend['dcoord'])):
+
                         if abs(dend['dcoord'][j][1] - curDist) < 0.0000001:
+                            #print(i,j)
                             curCord = j
                             count.append(j)
 
-                
                     #determine the number of counts in the current list
                     if len(count) > 0:
                         for j in count:
-                            if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
-                                curCord = j
-                    print(curCord)
+                            # if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
+                            curCord = j
                     #plot the appropriate linkages        
                     x = np.array(dend['icoord'][curCord])
                     y = np.array(dend['dcoord'][curCord])
-                    plt.plot(-y,-x,colors[randNum[0]])
+                    #plt.plot(-y,-x,colors[bSel])
+                    plt.plot(-y,-x,colors[colSel])
                     plt.draw()
             else:
                 count = []
@@ -1421,26 +1436,31 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
                             count.append(j)
                             
                 #determine the number of counts in the current list
-                print(dend['icoord'][j][1])
-                print(dend['icoord'][j][2])
                 if len(count) > 0:
                     for j in count:
-                        if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
-                            curCord = j
+                        # if abs(iCord - dend['icoord'][j][1]) < 15.001 and abs(dend['icoord'][j][2]- iCord) < 15.001:
+                        curCord = j
                 
-                print(curCord)
-                randNum = np.random.randint(lenColors, size=1)
                 #plot the appropriate linkages
                 x = np.array(dend['icoord'][curCord])
                 y = np.array(dend['dcoord'][curCord])
-                plt.plot(-y,-x, colors[randNum[0]])
+                #plt.plot(-y,-x,colors[bSel])
+                plt.plot(-y,-x, colors[colSel])
                 plt.draw()
     except:
         logging.error('Cannot select the side of a linkage!')
-        messagebox.showerror('Make sure to select vertical lines only, selecting horizontal lines will continue to result in this error!')
+        messagebox.showerror(title="Error",message='Make sure to select vertical lines only, selecting horizontal lines will continue to result in this error! YOU MAY NEED TO RESTART THE CLUSTER SELECTION!')
     
     #make the current selection into a .csv file to be submitted to the peaks to Pathways function.
     selectedMetabs = np.zeros([len(clustMetabs),data_orig.shape[1]])
+    p2pMetabs = np.ones([data_orig.shape[0],3])
+
+    p2pMetabs[:,0] = data_orig[:,0]
+    p2pMetabs[:,2] = data_orig[:,data_orig.shape[1]-1]
+
+    for j in clustMetabs:
+        p2pMetabs[j,1] = 0.04
+    
     for i in range(len(clustMetabs)):
         #for each clustMetabs in the list put the value into a numpy array
         selectedMetabs[i,:] = data_orig[clustMetabs[i],:]
@@ -1458,7 +1478,8 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
     columns.append("rt_med")
 
     foundMetabs = pd.DataFrame(selectedMetabs,columns=columns)
-
+    p2pFile = pd.DataFrame(p2pMetabs,columns=["m.z","p.value","r.t"])
+    p2pFile = p2pFile.sort_values(by=['p.value'], ascending=True)
     # #add identities to the first column of the data that will be output
     # foundMetabs.insert(0, "Identities", idents, True)
 
@@ -1481,9 +1502,13 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
                     checkVal = True
                     clustFile = curFileCheck
         foundMetabs.to_csv(clustFile, index=False)
+        p2pF = "P2P_"+clustFile
+        p2pFile.to_csv(p2pF,index=False)
     else:
         clustFile = clustPre + '0'+ str(count) + clustSuf 
         foundMetabs.to_csv(clustFile, index=False)
+        p2pF = "P2P_"+clustFile
+        p2pFile.to_csv(p2pF,index=False)
     logging.info(':Success!')
 
 
@@ -1715,3 +1740,20 @@ def readAndPreProcess(file='',transform = 'None', scale ='None'):
 
 
     return data
+
+def threadCompound(curCompound):
+    '''
+    '''
+    print(curCompound)
+    compoundOut =[]
+    request = REST.kegg_get(curCompound)
+    txtFCur = curCompound + '.txt'
+    open(txtFCur,'w').write(request.read())
+    records = Compound.parse(open(txtFCur))
+    record = list(records)[0]
+    os.remove(txtFCur)
+
+    compoundOut.append(curCompound)
+    compoundOut.append(record.name)
+
+    return compoundOut

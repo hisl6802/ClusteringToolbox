@@ -23,6 +23,9 @@ import mplcursors
 from LocallyWeighted import LocallyWeighted as LW 
 import DaviesBouldin as DB
 
+from Bio.KEGG import REST
+from Bio.KEGG import Compound
+
 class GUIUtils:
     def dataIntegrity(file):
         '''
@@ -149,9 +152,12 @@ class GUIUtils:
         logging.info(logMessage)
        
         data = GB.readAndPreProcess(file='',transform=transform,scale=scale)
-        # print(dataCheck[:,:2])
-        #create dendrogram and plot data
         
+        if data is None:
+            messagebox.showerror(title='Error',message=': No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
+            return
+       
+        #create dendrogram and plot data        
         GB.create_dendrogram(data,norm, link=linkFunc, dist=distMet,color = cmap)
 
         del(data,norm,linkFunc,distMet)
@@ -483,7 +489,7 @@ class GUIUtils:
         *** Stay tuned this function will be updated soon. 
         '''
         
-        print(typeFile)
+
         logging.info(': Compound Match-Up function called!')
         # Reads in our Kegg Compound Dataset (Single Column)
         kegg_data = pd.read_excel("kegg_compound_IDs_3.xlsx")
@@ -495,22 +501,47 @@ class GUIUtils:
         #ask user for file input and read in the csv file. 
         file = filedialog.askopenfilename()
         my_data = pd.read_csv(file)
+        my_final_data = np.zeros((len(my_data["Matched.Compound"]),2))
+        my_final_data = pd.DataFrame(my_final_data,columns=['ID', 'Compound Name'])
 
-        if typeFile == 'all':
-            # Makes an ID column
-            my_data["ID"] = my_data["Matched.Compound"]
-
-            # Deletes the unneeded columns
-            gonecolumns = ["Query.Mass", "Matched.Form", "Mass.Diff", "Matched.Compound"]
-            my_data = my_data.drop(axis = 1, labels = gonecolumns)
-
-            # Filters the keggs data to only the ids that are
-            # in the matched compound dataset
-            my_final_data = kegg_data[kegg_data["ID"].isin(my_data["ID"])]
-
-            # Writes this final dataset to a csv
-            my_final_data.to_csv(path_or_buf = "CompoundMatchups.csv")
+        print('Good here!')
         
+        if typeFile == 'all':
+            #grab the compound ID of interest
+            lenCompounds = len(my_data['Matched.Compound'])
+            for i in range(len(my_data["Matched.Compound"])):
+                if (i+1)%100 ==0:
+                    x = (i+1)/lenCompounds
+                    x = float("{0:.2f}".format(x))
+                    logging.info(': ' + str(x)+'%' + ' completed!')
+
+                #input the values into a request from KEGG API
+                request = REST.kegg_get(my_data['Matched.Compound'][i])
+                txtFCur = my_data['Matched.Compound'][i] + '.txt'
+                open(txtFCur,'w').write(request.read())
+                records = Compound.parse(open(txtFCur))
+                record = list(records)[0]
+                os.remove(txtFCur)
+
+                my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                my_final_data['Compound Name'][i] = record.name
+
+            
+            #save data frame as csv file for users
+            my_final_data.to_csv(path_or_buf="CompoundMatchUps.csv", index=False)
+
+        elif typeFile == 'manual':
+            #allowing the user to input a compound ID or a mass and look it up in KEGG
+            inputTupleList = []
+            print('Still good')
+
+
+
+
+            print('Hooray!!')
+            #GB.threadCompound(my_data)
+
+
         elif typeFile == 'enrich':
             #print(len(my_data["Cpd.Hits"]))
             for i in range(len(my_data["Cpd.Hits"])):
@@ -545,7 +576,7 @@ class GUIUtils:
 
         return
 
-    def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis'):
+    def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',distmetList = [],linkList=[],transform = 'None',scale='None', type='base'):
         '''
         The distance measures and linkage functions should be consistent but we could also develop
         a GUI that allows for the users to select various distance measures. The linkage functions 
@@ -571,12 +602,14 @@ class GUIUtils:
 
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8)
-
-        #Make sure file can be read in. 
-        metab_data = GB.fileCheck()
-        if metab_data is None:
-            logging.error(': File does not meet input requirements.')
+        
+        data = GB.readAndPreProcess(file='',transform=transform,scale=scale)
+        
+        if data is None:
+            messagebox.showerror(title='Error',message=': No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
             return
+        
+        metab_data = data
 
         #List for the use in creating and plotting the clustering results
         linkageList = ['single','complete','average']
@@ -584,14 +617,6 @@ class GUIUtils:
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
         numClusterings = (len(linkageList)*len(distList))+1
-
-        #read in the data
-        data = GB.readInColumns(metab_data)
-
-        #Standardize the data before clustering the results
-        logging.info(': Standardizing data.')
-        for i in range(data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
 
         #determine the the number of clusters and the dictionary location that needs to be called. 
         numMetabs = data.shape[0]
@@ -608,7 +633,7 @@ class GUIUtils:
                 coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
                 end = time.perf_counter()
                 logging.info(str(linkageList[i])+'-'+str(distList[j]) +' done!')
-                print(end-start)
+                logging.info(str(end-start))
         del(linkageList,distList)
 
         #add a ward euclidean clustering to the ensemble. 
@@ -618,8 +643,7 @@ class GUIUtils:
         coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
         end = time.perf_counter()
         logging.info('Ward-Euclidean done!')
-        print(end-start)
-        print(colorMap)
+
         #create the ensemble dendrogram using ward-euclidean inputs. 
         GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs =minMetabs,link='ward',dist='euclidean',func="ensemble",colMap=colorMap)
 
@@ -1193,6 +1217,25 @@ class GUIUtils:
 
         #find the linkages
         linkageOne = linkage(data,link,metric=dist)
+
+        if len(linkageOne[:,2]) == len(np.unique(linkageOne[:,2])):
+            logging.info('No need to jitter data!')
+
+        else:
+            logging.info(': Matching distance need to jitter distances')
+            values, counts = np.unique(linkageOne[:,2],return_counts=True)
+
+            #get the locations where the counts are greater than 1 (i.e., the distances are matching)
+            matchingDists = np.where(counts>1)
+            #print(matchingDists[0][0])
+            for j in range(len(matchingDists[0])):
+                #find the location of the values which have matching distances
+                curLinkListLoc = np.where(linkageOne[:,2]==values[matchingDists[0][j]])
+                curLinkListLoc = curLinkListLoc[0]
+                for k in range(len(curLinkListLoc)):
+                    if k > 0:
+                        linkageOne[curLinkListLoc[k],2] += (k*0.000001)+0.000001
+
         groupCluster = np.transpose(data)
         linkageG = linkage(groupCluster,link,metric=dist)
         #create the dendrogram
@@ -1247,8 +1290,12 @@ class GUIUtils:
         #number of linkages to color.
         linkDir = GB.linkDir(linkageOne,maxLeaf)
         linkageClusters = GB.clustConnectLink(linkageOne)
+
+        colSel = 0
+        open('ClustColor.txt','w').write(str(colSel))
         #create an interactive cursor
         cursor = mplcursors.cursor(multiple=True)
+        cursor.visible =False
         cursor.connect("add", lambda sel: GB.select(sel.target,dend,linkageOne,linkDir,linkageClusters,data_orig))
         plt.show()
 
