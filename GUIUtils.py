@@ -1,10 +1,9 @@
 #Creating a class containing functions that will be used in GUI
-#from curses import meta
-from email import message
+import re
 from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import cm, pyplot as plt
 from scipy.cluster.hierarchy import dendrogram
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial import distance_matrix
@@ -13,10 +12,22 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
+from multiprocessing import Pool
+import seaborn as sns
+import config
+
+from sklearn import cluster
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
-from scipy.signal import argrelextrema
+from scipy.signal import argrelextrema,argrelmin, argrelmax
 import mplcursors
+from LocallyWeighted import LocallyWeighted as LW 
+import ValidationMetric
+
+from Bio.KEGG import REST
+from Bio.KEGG import Compound
+
+from ValidationMetric import ValidationMetric as VM
 
 class GUIUtils:
     def dataIntegrity(file):
@@ -112,6 +123,7 @@ class GUIUtils:
         logging.info(logOut)
         #log that the data integrity function has been sucessfully completed. 
         logging.info(': Data Integrity check sucessfully completed.')
+        messagebox.showinfo(title="Success",message="Removed data integrity issues!!")
         return
 
     def createClustergram(norm,linkFunc,distMet,cmap, transform = 'None', scale ='None'):
@@ -134,187 +146,24 @@ class GUIUtils:
         '''
         
         #log that the user called the Create Clustergram function
+        logging.info(':-------------------------------------------------------------')
         logging.info(': User called the Create Clustergram Function.')
-        #check that the file the user selects is appropriate
-        metab_data = GB.fileCheck()
-        if metab_data is None:
-            #log error message and return for soft exit.
-            logging.error(': Error loading in the Excel sheet.')
+        logMessage = ': Linkage Function:' + linkFunc
+        logging.info(logMessage)
+        logMessage = ': Distance Metric:' + distMet
+        logging.info(logMessage)
+        logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
+        logging.info(logMessage)
+
+        try:
+            data, col_groups = GB.readAndPreProcess(file='',transform=transform,scale=scale,func="CC")
+        except TypeError:
+            logging.error(': No file selected!')
+            messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with creating a clustergram, click continue and submit!')
             return
 
-        #read in data
-        data = GB.readInColumns(metab_data)
-
-        #Standardize the data before clustering the results
-
-        #reply = messagebox.askquestion(title="Standardize/Scaling", message = "Data will be mean centered. Would you like to transform or scale the data differently?")
-        logging.info(': Standardizing the data.')
-
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-        ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-        #Log transform no scaling
-        if transform == 'Log transformation' and scale == 'None':
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-        #Log transform, mean centering
-        elif transform == 'Log transformation' and scale == 'Mean centering':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #mean center
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-        
-        #log transform, auto scaling
-        elif transform == 'Log transformation' and scale == 'Auto Scaling':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #Auto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        #log transform, pareto scaling
-        elif transform == 'Log transformation' and scale == 'Pareto Scaling':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #Pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        #log transform, range scaling
-        elif transform == 'Log transformation' and scale == 'Range Scaling':
-            #log transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.logTrans(data[i,:])
-
-            #Range scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        #Square root transform, no scaling
-        elif transform == 'Square root transformation' and scale == 'None':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-        #square root transform, mean centering
-        elif transform == 'Square root transformation' and scale == 'Mean centering':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #mean center
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-
-        #square root transform, auto scaling
-        elif transform == 'Square root transformation' and scale == 'Auto Scaling':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #auto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        #square root transform, pareto scaling
-        elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        #square root transform, range scaling
-        elif transform == 'Square root transformation' and scale == 'Range Scaling':
-            #square root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.sqrtTrans(data[i,:])
-
-            #range scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        #cube root transform, no scaling
-        elif transform == 'Cube root transformation' and scale == 'None':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-        #cube root transform, mean centering
-        elif transform == 'Cube root transformation' and scale == 'Mean centering':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-            #mean centering
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-        
-        #cube root transform, auto scale
-        elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-            #auto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Range Scaling':
-            #cube root transform
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.cubeRtTrans(data[i,:])
-            
-            #range scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Mean centering':
-            #mean centering
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.meanCentering(data[i,:])
-
-        elif transform == 'None' and scale == 'Auto Scaling':
-            #auto scaling
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.standardize(data[i,:])
-
-        elif transform == 'None' and scale == 'Pareto Scaling':
-            #pareto scale
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.paretoScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Range Scaling':
-            #range scale 
-            for i in range(metab_data.shape[0]):
-                data[i,:] = GB.rangeScaling(data[i,:])
-
-        del(metab_data)
-
-        #create dendrogram and plot data
-        
-        GB.create_dendrogram(data,norm, link=linkFunc, dist=distMet,color = cmap)
+        #create dendrogram and plot data        
+        GB.create_dendrogram(data,col_groups, norm, link=linkFunc, dist=distMet,color = cmap)
 
         del(data,norm,linkFunc,distMet)
 
@@ -443,10 +292,11 @@ class GUIUtils:
         mediansExcel.to_excel('MediansOutput.xlsx',index=False,sheet_name="Medians")
 
         #logging the completion of the group medians function
-        logging.info(': Sucessfully grouped the Medians of each group!')
+        logging.info(': Successfully grouped the Medians of each group!')
+        messagebox.showinfo(title="Success",message="Successfully created MediansOutput.xlsx file!!")
         return
 
-    def linkageComparison(file,num_comps,linkList,distance):
+    def linkageComparison(file,num_comps,linkList,distance, transform,scale):
         '''
         Compares 2-4 linkage functions on a given set of data. 
         
@@ -470,21 +320,22 @@ class GUIUtils:
         #Log that user called linkage comparison function
         logging.info(': User called the Linkage Comparison function.')
         #check that the file is appropriate for our data set
-        metab_data = GB.fileCheck(file)   
 
-        if metab_data is None:
-            #Logs error and returns function to ensure soft exit.
-            logging.error(': Error loading in excel file check log file!')
-            return
+        data = GB.readAndPreProcess(file =file,transform=transform,scale=scale)
 
-        #read in column data
-        data = GB.readInColumns(metab_data)
+        #input the arguments to the log file so user has record of what was input.
+        logging.info(':-------------------------------------------------------------')
+        logMessage = file
+        logging.info(logMessage)
+        logMessage = ': Number of comparisons: ' + str(num_comps)
+        logging.info(logMessage)
+        logMessage = ': Linkage functions: ' + str(linkList)
+        logging.info(logMessage)
+        logMessage = ': Distance metric: ' + distance
+        logging.info(logMessage)
+        logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
+        logging.info(logMessage)
 
-        #Standardize the data before clustering the results
-        logging.info('Standardizing the data.')
-        for i in range(metab_data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
-        del(i)
         #convert string to integer
         num_comps = int(num_comps)
         
@@ -520,7 +371,7 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,3,figsize=(8,8))
-            print(axes[0])
+
             axes[0].set_title(linkList[0])
             axes[1].set_title(linkList[1])
             axes[2].set_title(linkList[2])
@@ -548,10 +399,10 @@ class GUIUtils:
             #Create the appropriate figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(2,2,figsize=(8,8))
 
-            axes[0,0].set_title(linkList[0])
-            axes[0,1].set_title(linkList[1])
-            axes[1,0].set_title(linkList[2])
-            axes[1,1].set_title(linkList[3])
+            axes[0,0].set_title(linkList[0],fontsize=24)
+            axes[0,1].set_title(linkList[1],fontsize=24)
+            axes[1,0].set_title(linkList[2],fontsize=24)
+            axes[1,1].set_title(linkList[3],fontsize=24)
 
             #grab the last entry of the linkage list
             maxList = np.zeros((1,2))
@@ -576,8 +427,7 @@ class GUIUtils:
 
             #Create the appropriate plt figure to allow for the comparison of linkage functions
             fig, axes = plt.subplots(1,1,figsize=(8,8))
-            axes[0].set_title(linkList[0])
-        
+            axes.set_title(linkList[0],fontsize=24)
             #grab the last entry of the linkage list
             maxList = np.zeros((1,2))
             maxList[0,0] = linkageOne[len(linkageOne)-1][0]
@@ -621,10 +471,10 @@ class GUIUtils:
                     if curFileCheck not in chkBuffer:
                         checkVal = True
                         linkFile = curFileCheck
-            plt.savefig(linkFile,dpi=600)
+            plt.savefig(linkFile,dpi=600,transparent=True)
         else:
             linkFile = firstCheck 
-            plt.savefig(linkFile,dpi=600)
+            plt.savefig(linkFile,dpi=600,transparent=True)
 
         plt.show()
 
@@ -632,7 +482,7 @@ class GUIUtils:
         logging.info(': Sucessfuly completed the comparison of the linkage functions!')
         return
             
-    def compoundMatchUp():
+    def compoundMatchUp(typeFile = 'all'):
         '''
         The compoundMatchUp function is responsible for matching the output compounds from mummichog to compounds from the KEGG data base spreadsheet. 
 
@@ -642,34 +492,200 @@ class GUIUtils:
 
         *** Stay tuned this function will be updated soon. 
         '''
-        logging.info(': Compound Match-Up function called!')
-        # Reads in our Kegg Compound Dataset (Single Column)
-        kegg_data = pd.read_excel("kegg_compound_IDs_3.xlsx")
+        
 
-        # Splits our single column into two more user friendly ones
-        kegg_data[["ID","compound"]] = kegg_data["ID"].str.split(" ", 1, expand = True)
+        logging.info(': Compound Match-Up function called!')
 
         # Pulls in our matched compound data
         #ask user for file input and read in the csv file. 
         file = filedialog.askopenfilename()
         my_data = pd.read_csv(file)
 
-        # Makes an ID column
-        my_data["ID"] = my_data["Matched.Compound"]
+        
+        if typeFile == 'all':
 
-        # Deletes the unneeded columns
-        gonecolumns = ["Query.Mass", "Matched.Form", "Mass.Diff", "Matched.Compound"]
-        my_data = my_data.drop(axis = 1, labels = gonecolumns)
+            my_final_data = np.zeros((len(my_data["Matched.Compound"]),2))
+            my_final_data = pd.DataFrame(my_final_data,columns=['ID', 'Compound Name'])
+            #grab the compound ID of interest
+            lenCompounds = len(my_data['Matched.Compound'])
+            for i in range(len(my_data["Matched.Compound"])):
+                if (i+1)%100 ==0:
+                    x = (i+1)/lenCompounds
+                    x = float("{0:.2f}".format(x))
+                    logging.info(': ' + str(x)+'%' + ' completed!')
 
-        # Filters the keggs data to only the ids that are
-        # in the matched compound dataset
-        my_final_data = kegg_data[kegg_data["ID"].isin(my_data["ID"])]
+                #input the values into a request from KEGG API
+                try:
+                    request = REST.kegg_get(my_data['Matched.Compound'][i])
 
-        # Writes this final dataset to a csv
-        my_final_data.to_csv(path_or_buf = "CompoundMatchups.csv")
+                except:
+                    logging.error(": No KEGG match found! Check KEGG Website!")
+                    messagebox.showerror(title="Error",message="ID not found in KEGG, as of 04.17.22, this is likely because it is a Glycan!!")
+
+                txtFCur = my_data['Matched.Compound'][i] + '.txt'
+                open(txtFCur,'w').write(request.read())
+                records = Compound.parse(open(txtFCur))
+                record = list(records)[0]
+                os.remove(txtFCur)
+
+                my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                my_final_data['Compound Name'][i] = record.name
+
+            
+            #save data frame as csv file for users
+            my_final_data.to_csv(path_or_buf="CompoundMatchUps.csv", index=False)
+
+
+
+        elif typeFile == 'enrich':
+            
+            for i in range(len(my_data["Cpd.Hits"])):
+                curString = my_data["Cpd.Hits"][i]
+
+                #number of compounds in the current string
+                numCompounds = curString.count(';') + 1
+                curCpds = []
+                for j in range(numCompounds):
+                    curCpds.append(curString[j*7:(j*7)+6])
+
+            
+                #loop through each curCpds list to find matching compounds
+                for j in range(len(curCpds)):
+                    if curCpds[j][0] == 'G':
+                        try:
+
+                            curCpds[j] = 'GAG subunits'
+                            my_data["Unnamed: 0"][i] = "GAG Metabolism"
+                        except:
+                            logging.error(': Failed to update the row Cpd.Hits!')
+                            messagebox.showerror(title="Error",message="Unable to update excel sheet let Brady know and send him input spreadsheet")
+                            return
+                        
+
+                    elif curCpds[j][0] =='C':
+
+                        try:
+                            curHit = REST.kegg_get(curCpds[j])
+                        except:
+                            logString = curCpds[j]
+                            logString = ': Failed to find-' + logString
+                            logging.info(logString)
+                            messagebox.showerror(title='Error',message='Failed to get information from KEGG! Check KEGG to ensure ID is appropriate.')
+                            return
+
+
+                        try:
+                            open('Compound.txt','w').write(curHit.read())
+
+                        except:
+                            logging.error(': Failed to open text! Let Brady know, this should rarely if ever occur!')
+                            messagebox.showerror(title='Error',message='Failed to open text! Let Brady know, this should rarely if ever occur!')
+                            return
+
+                        records = Compound.parse(open('Compound.txt'))
+                        record = list(records)[0]
+                        curCpds[j] = record.name
+                try:
+                    my_data["Cpd.Hits"][i] = curCpds
+                except:
+                    logging.error(': Failed to update the row Cpd.Hits!')
+                    messagebox.showerror(title="Error",message="Unable to update excel sheet let Brady know and send him input spreadsheet")
+                    return
+
+            #save the updated DataFrame as a EnrichmentIdentifications.csv
+            my_data.to_csv(path_or_buf="EnrichmentIdentifications.csv",index=False)
+            messagebox.showinfo(title="Sucess",message="EnrichmentIdentifications.csv has been been successfully created!!")
+
         return
 
-    def ensembleClustering(optNum=2, minMetabs = 0):
+    def compoundList(tol):
+        '''
+        Input a list of exact monoisotopic masses and determine the compounds associated with the masses
+
+        Input:
+        Excel sheet with exact masses. 
+
+        Output:
+        Updated excel sheet with Compound matches
+
+        '''
+        filename = filedialog.askopenfilename()
+        glyList = pd.read_excel('C:/Users/Public/Documents/ClusteringGUI-develop/Glycans.xlsx')
+        glyList = glyList.to_numpy()
+        glyListMasses = glyList[:,1]
+        glyListGID = glyList[:,0]
+
+
+
+        #read in the data as a dataframe and convert to 
+        data = GB.fileCheck(file=filename)
+        compoundLookUp = data.to_numpy()
+
+        tol = int(tol)/(10**6)
+        
+
+        compoundMatches = []
+        for i in range(compoundLookUp.shape[0]):
+            low = compoundLookUp[i] - (compoundLookUp[i]*tol)
+            high = compoundLookUp[i] + (compoundLookUp[i]*tol)
+            inputEM = str(low[0]) +'-'+ str(high[0])
+            
+
+            #input exact masses to kegg_find to determine the compound IDs on KEGG
+            try:
+                request = REST.kegg_find('compound',inputEM,"exact_mass")
+
+            except:
+                logging.error(': No matches found!')
+                request = ['No matches']
+
+            if isinstance(request,list):
+                compoundMatches.append(request)
+            else:
+                
+                try:
+                    open('CompoundMatches.txt','w').write(request.read())
+
+                except:
+                    logging.error(': Failed to open text file! Let Brady know, this should rarely if ever happen!!')
+                    messagebox.showerror(title='Error',message='Failed to open text file! Let Brady know, this should rarely if ever happen!')
+                    return
+                
+
+                #open found compoundMatches file and put compound matches into a list. 
+                lines = []
+                with open('CompoundMatches.txt') as f:
+                    line = f.readline()
+                    while line:
+                        line = f.readline()
+                        lines.append(line)
+
+                if len(lines) > 1:
+                    for j in range(len(lines)):
+                        if len(lines[j])>0:
+                            #reformat string
+                            curLine = lines[j].strip()
+                            curLine = curLine.lstrip('cpd:')
+                            curLine = curLine.split("\t")
+                            lines[j] = curLine[0]
+
+                        lookUpMasses = glyListGID[(np.where((glyListMasses >= low) & (glyListMasses <= high)))]
+                    
+                    if len(lookUpMasses) > 0:
+                        lines.append(lookUpMasses)
+                    compoundMatches.append(lines)
+
+                else:
+                    lookUpMasses = glyListGID[(np.where((glyListMasses >= low) & (glyListMasses <= high)))]
+                    if len(lookUpMasses) == 0:
+                        compoundMatches.append('No Matches')
+                    else:
+                        lookUpMasses = lookUpMasses.tolist()
+                        compoundMatches.append(lookUpMasses)
+                
+
+
+    def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', type='base'):
         '''
         The distance measures and linkage functions should be consistent but we could also develop
         a GUI that allows for the users to select various distance measures. The linkage functions 
@@ -695,27 +711,22 @@ class GUIUtils:
 
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8)
-
-        #Make sure file can be read in. 
-        metab_data = GB.fileCheck()
-        if metab_data is None:
-            logging.error(': File to not meet input requirements.')
+        file = filedialog.askopenfilename()
+        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
+        
+        #determine whether data read in or not.
+        if data is None:
+            messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
             return
+        
+        #read in data as dataframe for ease of use in recClusters, and ensembleClustersOut
+        metab_data = GB.fileCheck(file=file)
 
         #List for the use in creating and plotting the clustering results
-        linkageList = ['single','complete','average']
-        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean']  #,'cosine']
+        # linkParams = [['ward','euclidean'],['single','euclidean'],['single','sqeuclidean'],['single','seuclidean'],['single','chebyshev'],['complete','euclidean'],['complete','sqeuclidean'],['complete','seuclidean'],['complete','chebyshev'],['average','euclidean'],['average','sqeuclidean'],['average','seuclidean'],['average','chebyshev']]
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
-        numClusterings = (len(linkageList)*len(distList))+1
-
-        #read in the data
-        data = GB.readInColumns(metab_data)
-
-        #Standardize the data before clustering the results
-        logging.info(': Standardizing data.')
-        for i in range(data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
+        numClusterings = (len(linkParams))
 
         #determine the the number of clusters and the dictionary location that needs to be called. 
         numMetabs = data.shape[0]
@@ -724,46 +735,34 @@ class GUIUtils:
         #create co-occurrence matrix.
         coOcc = GB.cooccurrence(data)
 
-        for i in range(len(linkageList)):
-            for j in range(len(distList)):
-                start = time.perf_counter()
-                linkCur = linkage(data,linkageList[i],distList[j])
-                valid = GB.clustConnectLink(linkCur)
-                coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
-                end = time.perf_counter()
-                logging.info(str(linkageList[i])+'-'+str(distList[j]) +' done!')
-                print(end-start)
-        del(linkageList,distList)
-
-        #add a ward euclidean clustering to the ensemble. 
-        start = time.perf_counter()
-        linkCur = linkage(data,'ward','euclidean')
-        valid = GB.clustConnectLink(linkCur)
-        coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
-        end = time.perf_counter()
-        logging.info('Ward-Euclidean done!')
-        print(end-start)
-
-        #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs =minMetabs,link='ward',dist='euclidean',func="ensemble")
-
+        for i in range(len(linkParams)):
+            start = time.perf_counter()
+            linkCur = linkage(data,linkParams[i][0],linkParams[i][1])
+            valid = GB.clustConnectLink(linkCur)
+            coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
+            end = time.perf_counter()
+            logging.info(': ' +str(linkParams[i][0])+'-'+str(linkParams[i][1]) +' done!')
+            logging.info(str(end-start))
+        del(linkParams)
 
         #make the coOccurence matrix a dataframe.
-        coOcc = pd.DataFrame(coOcc)
+        coOcc1 = pd.DataFrame(coOcc)
         try:
             #try to save the large .csv file of the CoOccurence matrix.
-            coOcc.to_csv('EnsembleCoOcc.csv',index=False)
+            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
         except:
             logging.error(': Failed to save the Ensemble CoOccurence matrix!!')
             messagebox.showerror(title='Error',message='Unable to save Ensemble CoOccurent matrix, please inform Brady!')
-            
+
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minMetabs,numClusts=numClusterings,link='ward',dist='euclidean',func="ensemble",colMap=colorMap)
+
         #Log the completgroupion of the ensemble clustering function
         logging.info(': Sucessfully completed Ensemble clustering!')
+        
         return
 
-    def MST(self,func = "base"):
-        #*******Need for dataMST and mstoutNP??
-
+    def MST(self,transform ='None',scale ='None', func = 'k-means based'):
         '''
         MST generates a minimum spanning tree of input data, and then validates the optimum number of clusters based upon a validation index of 
         the ***intra/inter*** cluster distances.
@@ -779,27 +778,19 @@ class GUIUtils:
         '''
 
         #log that user called MST
-        logging.info(': User called Minimum Spanning Tree function.')
-        #check the stability of the file
-        dataRaw = GB.fileCheck()
-        if dataRaw is None:
-            #log error and return function to ensure a soft closing of the class
-            logging.error(': Error loading the Excel sheet.')
+        logging.info(': User called Cluster validation function.')
+
+        filename = filedialog.askopenfilename()
+        try:
+            data = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='else')
+        except BaseException:
+            logging.error(': Unable to proceed, due to file error!')
+            messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
             return
 
-        #read in raw data
-        data = GB.readInColumns(dataRaw)
-        #find the number of groups in that data
-        num_groups = dataRaw.shape[1]-2
-        
-        #standardize the data before clustering
-        logging.info(': Standardizing the Data.')
-
-        for i in range(dataRaw.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
+        num_groups=data.shape[1]
 
         #find the distance matrix using the pairwise distance function, put into squareform, appropriate format for mst and submit. 
- 
         pairWise = pdist(data)
         pairWise = squareform(pairWise)
         mstInput = csr_matrix(pairWise)
@@ -828,59 +819,147 @@ class GUIUtils:
         #determine how the minimum spanning tree was created for validation of clusters
         validationClusters = GB.clustConnect(dataMST,mstOutNp)
 
-        #Validate the number of clusters that should be used in the clustering solutions.
-        valIndex = GB.Validate(validationClusters,data,num_groups)
-        print('Completed')
-        x=valIndex[1,:]
-        y=valIndex[0,:]
+        if func == 'k-means based':
+            #Validate the number of clusters that should be used in the clustering solutions.
+            #create a list of tuples containing the single cluster set, with the data and the num_groups
+            argsMulti = []
+            
+            logging.info(": Starting k-means based cluster validation!")
+            start = time.perf_counter()
+            if len(validationClusters) < 100:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            else:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-101:
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            
+            if __name__ == 'GUIUtils':
+                with Pool(config.numThreads) as p:
+                    valIndex = p.starmap(GB.Validate,argsMulti)
+            
+            end = time.perf_counter()
+            logging.info(':'+str(end-start))
+            valIndex = np.asarray(valIndex)
+            GB.valPlotting(valIndex,mstOut)
 
-        #find the local minimums
-        minimums = argrelextrema(y,np.less)
+        elif func=='DBI':
+            logging.info(": Starting Davies-Bouldin cluster validation!")
 
-        #determine the minimums y values to for plotting
-        miniVals = np.zeros((len(minimums[0]),2))
-        for i in range(len(minimums[0])):
-            #input the number of clusters and the validation index value.
-            miniVals[i,0] = x[minimums[0][i]]
-            miniVals[i,1] = y[minimums[0][i]]
+            #start tracking the performance of non-threaded DBI validation
+            start = time.perf_counter()
+            valIndex = np.zeros((len(validationClusters),2))
 
-        clustersSub = miniVals[:,0]
-        clustersSub = clustersSub[clustersSub<=100.]
-        miniVals = miniVals[len(miniVals)-len(clustersSub):len(miniVals),:]
-        ind = np.unravel_index(np.argmin(miniVals, axis=None), miniVals.shape)
+            argsMulti = []
+            if len(validationClusters) < 100:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            else:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-101:
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
 
-        minValIndex = miniVals[ind[0],:]
+            if __name__ == 'GUIUtils':
+                with Pool(config.numThreads) as p:
+                    valIndex = p.starmap(VM.daviesBouldin,argsMulti)
 
-        valOut = np.zeros((2,valIndex.shape[1]))
-        for j in range(valIndex.shape[1]):
-            #flip the array so that lower clusters start at lower positions
-            valOut[0,j] = valIndex[0,valIndex.shape[1]-j-1]
-            valOut[1,j] = valIndex[1,valIndex.shape[1]-j-1]
+            
+            end = time.perf_counter()
+            valIndex = np.asarray(valIndex)
 
-        valIHeaders = list(valOut[1,:])
-        valIndex = pd.DataFrame(valOut,columns=valIHeaders)
-        valIndex = valIndex.drop(1,axis=0)
-        rowLabels = ["Validation Index"]
-        valIndex.insert(0,"Clusters",rowLabels)
+            GB.valPlotting(valIndex,mstOut,valMet = func)
 
-        #save to a csv file
-        mstOut.to_csv('MST_branches.csv',index=False)
+        elif func == 'Dunn':
+            logging.info(": Starting Dunn cluster validation!")
 
-        #save validation measure to csv file
-        valIndex.to_csv('valIndex.csv',index=False)
-        if func == "base":
-            #logging the completion of the Minimum spanning tree
-            logging.info(': Sucessfully completed MST and clustering validation!')
-            plt.plot(valOut[1,:],valOut[0,:])
-            plt.plot(minValIndex[0],minValIndex[1],'r*')
-            font = {'family': 'serif','color':  'black','weight': 'bold','size': 20}
-            plt.text(valIndex.shape[1]/2, 0.75, str(int(minValIndex[0]))+' - Clusters!!', fontdict=font)
-            plt.xlabel('Clusters')
-            plt.ylabel('Validation Index')
-            plt.title('Cluster Validation')
-            plt.show()
+            start = time.perf_counter()
+            valIndex = np.zeros((len(validationClusters),2))
 
-        return minValIndex[0]
+            argsMulti = []
+            if len(validationClusters) < 100:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            else:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-101:
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+
+            if __name__ == 'GUIUtils':
+                with Pool(config.numThreads) as p:
+                    valIndex = p.starmap(VM.dunnIndex,argsMulti)
+
+            
+            end = time.perf_counter()
+            valIndex = np.asarray(valIndex)
+
+            GB.valPlotting(valIndex,mstOut,valMet='Dunn')
+
+        elif func == 'PBM':
+            logging.info(": Starting PBM cluster validation!")
+
+            #find the center of all the data.
+            dataPatCenter = np.mean(data, axis=0)
+
+            #put the center at the top of the numpy array to find the sum of the distances
+            dataC = np.vstack([dataPatCenter,data])
+            
+            #find the distances and sum them
+            distances = pdist(dataC)
+            distances = squareform(distances)
+            Eo = np.sum(distances[0,:])
+
+            #start tracking the performance of the threaded PBM valdidation metric
+            start = time.perf_counter()
+            valIndex = np.zeros((len(validationClusters),2))
+
+            argsMulti = []
+
+            if len(validationClusters) < 100:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups,Eo))
+            else:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-101:
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups,Eo))
+
+            if __name__ == 'GUIUtils':
+                with Pool(config.numThreads) as p:
+                    valIndex = p.starmap(VM.PBM,argsMulti)
+
+            
+            end = time.perf_counter()
+            valIndex = np.asarray(valIndex)
+            GB.valPlotting(valIndex,mstOut,valMet='PBM')
+            
+        elif func == 'Silhouette':
+            logging.info(": Starting Silhouette cluster validation!")
+
+            #start tracking the performance of non-threaded DBI validation
+            start = time.perf_counter()
+            valIndex = np.zeros((len(validationClusters),2))
+
+            argsMulti = []
+            if len(validationClusters) < 100:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            else:
+                for i in range(len(validationClusters)):
+                    if i >= len(validationClusters)-101:
+                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+
+            if __name__ == 'GUIUtils':
+                with Pool(config.numThreads) as p:
+                    valIndex = p.starmap(VM.Silhouette,argsMulti)
+
+            end = time.perf_counter()
+            valIndex = np.asarray(valIndex)
+            GB.valPlotting(valIndex,mstOut,valMet="Silhouette")
+
 
     def peaksToPathways():
         '''
@@ -912,14 +991,8 @@ class GUIUtils:
         #change the current working directory to 
         os.chdir(direct)
 
-        files = glob.glob('*.csv')
+        files = glob.glob('*.xlsx')
 
-
-        #create string to check for csv files
-        #globCheck = direct + "/*.csv"
-        #files = glob.glob(globCheck)
-
-        #nameCheckStriper = direct +'\\'
 
         ensemFiles = []
         dirLog = os.getcwd()
@@ -942,7 +1015,7 @@ class GUIUtils:
             dataClust[:,1] = dataRaw["rtmed"]
             #start the process of reading in and creating the ensemble output files. 
             try:
-                dataCur = pd.read_csv(ensemFiles[i])
+                dataCur = pd.read_excel(ensemFiles[i])
             except:
                 logging.error(': Failed to read in the excel sheet, it is recommend to upload an excel workbook with a single sheet!')
                 messagebox.showerror(title='Error', message="Failed to read the excel sheet, it is recommended to upload an excel workbook with a single sheet!")
@@ -967,12 +1040,13 @@ class GUIUtils:
                     logging.warning(': Creation of peaks to pathway files halted due to non-matching values, please make sure you have selected appropriate reference file.')
                     return
             #create the files that can be submitted to the csv saving file. 
-            dataOut = np.zeros((dataRaw.shape[0],2))
+            dataOut = np.zeros((dataRaw.shape[0],3))
 
             dataOut[:,0] = dataClust[:,0]
             dataOut[:,1] = dataClust[:,2]
+            dataOut[:,2] = dataClust[:,1]
 
-            dataOut = pd.DataFrame(dataOut,columns=["m.z","p.value"])
+            dataOut = pd.DataFrame(dataOut,columns=["m.z","p.value",'r.t'])
             dataOut = dataOut.sort_values(by=["p.value"])
 
             p2pPre = 'PeaksToPathways'
@@ -1004,12 +1078,12 @@ class GUIUtils:
             logging.info(':Success!')
         logging.info(': Leaving the Peaks to Pathways Function!')
         os.chdir(curDir)
-        print(os.getcwd())
+        messagebox.showinfo(title="Success",message="Success Peaks to Pathway files have been generated!!")
         return
 
     def PDFGenerator():
         '''
-        Generates PDF of the MetaboAnalystR results. 
+        Generates image of the selected clusters from the Cluster selection tool. 
 
         Input:
 
@@ -1110,40 +1184,109 @@ class GUIUtils:
         logging.info(': Leaving the pdf PDF Generator Function!')
         return
 
+    def heatmapAnalysis(linkFunc,distMet,cmap, transform = 'None', scale ='None'):
+        '''
+        Allows users to input a subset of the original clutergram from heatmap analysis. 
 
-    def selectClusters(link,dist):
+        Input:
+        linkage function
+        distance metric
+        color map choice
+        transform
+        scale
+
+        Output:
+
+        Heatmap of the subset of metabolites given as input.
+
+        '''
+        try:
+            file = filedialog.askopenfilename()
+            data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
+            if data is None:
+                raise ValueError
+        except:
+            logging.error(': No file selected or issue with connecting to drive!')
+            messagebox.showerror(title='Error loading Data',message='File was not selected or trouble connecting to drive')
+            return
+
+        groupCluster = np.transpose(data)
+        groupLink = linkage(groupCluster,linkFunc,distMet)
+
+        linkFunc = linkage(data)
+
+        g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=True, row_cluster=False, col_linkage=groupLink, cmap=cmap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+        plt.savefig('HeatMap.png',dpi=600,transparent=True)
+        plt.show()
+        
+
+
+    def selectClusters(link,dist,transform = 'None', scale = 'None',cmap = 'viridis'):
         '''
         Function that pulls out the information from the plot and saves it until the user is ready to submit the clusters to the peaks to pathways function. 
+        
+        Input:
+        linkage function
+        distance metric
+        transform
+        scale
+        color map
+
+        Output:
+        dendrogram allowing users to select clusters of interest
+
         '''
 
         #log that the user called the Create Clustergram function
         logging.info(': User called the Create Clustergram Function.')
         #check that the file the user selects is appropriate
         global metab_data
-        metab_data = GB.fileCheck()
+        file = filedialog.askopenfilename()
+        metab_data = GB.fileCheck(file=file)
+        
         if metab_data is None:
             #log error message and return for soft exit.
             logging.error(': Error loading in the Excel sheet.')
             return  
 
+        #get columns for the usage later in the creation of a dataframe to save for    
+        columns = list(metab_data.columns)
         #read in data
         data = GB.readInColumns(metab_data)
         data_orig = metab_data.to_numpy()
         #Standardize the data before clustering the results
-        logging.info(': Standardizing the data.')
-        for i in range(metab_data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
-        del(metab_data)
+        logging.info(': Pre-processing the data.')
 
+        #send the data off to the readAndPreProcess functino for analysis. 
+        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
 
         #create messagebox explaining to users how they need to select clusters.
-        messagebox.showinfo(title='Cluster Selection Info.', message='Select clusters of interest, the files will be generated automatically after selection of the clusters from the clustergram.')
+        messagebox.showinfo(title='Cluster Selection Info.', message='Select clusters of interest, cluster and peak to pathway files will be automatically generated!')
 
         #Create the appropriate plt figure to allow for the comparison of linkage functions
         fig, axes = plt.subplots(1,1,figsize=(8,8))
 
         #find the linkages
         linkageOne = linkage(data,link,metric=dist)
+
+        if len(linkageOne[:,2]) == len(np.unique(linkageOne[:,2])):
+            logging.info('No need to jitter data!')
+
+        else:
+            logging.info(': Matching distance need to jitter distances')
+            values, counts = np.unique(linkageOne[:,2],return_counts=True)
+
+            #get the locations where the counts are greater than 1 (i.e., the distances are matching)
+            matchingDists = np.where(counts>1)
+
+            for j in range(len(matchingDists[0])):
+                #find the location of the values which have matching distances
+                curLinkListLoc = np.where(linkageOne[:,2]==values[matchingDists[0][j]])
+                curLinkListLoc = curLinkListLoc[0]
+                for k in range(len(curLinkListLoc)):
+                    if k > 0:
+                        linkageOne[curLinkListLoc[k],2] += (k*0.000001)+0.000001
+
         groupCluster = np.transpose(data)
         linkageG = linkage(groupCluster,link,metric=dist)
         #create the dendrogram
@@ -1165,11 +1308,20 @@ class GUIUtils:
                 #going through the metabolites
                 dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
 
+        columns.pop(0)
+        columns.pop(len(columns)-1)
+        columnsNew = []
+
+        for i in range(len(groupDendLeaves)):
+            columnsNew.append(columns[groupDendLeaves[i]])
+
+        dataFinalDF = pd.DataFrame(dataFinal,columns=columnsNew)
+        dataFinalDF.to_excel('Heatmap.xlsx',index=False)
         #create the axes in which the heatmap will be mapped upon
         plt.cla()
         heatmapAxes = [0.3, 0, 0.68, 1]
         heatmapAxes = fig.add_axes(heatmapAxes)
-        heatmapAxes.matshow(dataFinal,aspect ='auto',origin='upper')
+        heatmapAxes.matshow(dataFinal,aspect ='auto',origin='upper',cmap= cmap)
         
         maxList = np.zeros((1,2))
         maxList[0,0] = linkageOne[len(linkageOne)-1][0]
@@ -1198,7 +1350,136 @@ class GUIUtils:
         #number of linkages to color.
         linkDir = GB.linkDir(linkageOne,maxLeaf)
         linkageClusters = GB.clustConnectLink(linkageOne)
+
+        colSel = 0
+        open('ClustColor.txt','w').write(str(colSel))
+        open('ClusterReference.txt','w').write(str(time.strftime("%a_%b_%d_%Y_%H_%M_%S")))
+        open('ClusterReference.txt','a').write("\n"+str(len(dataFinalDF[columnsNew[0]])))
         #create an interactive cursor
         cursor = mplcursors.cursor(multiple=True)
+        cursor.visible =False
         cursor.connect("add", lambda sel: GB.select(sel.target,dend,linkageOne,linkDir,linkageClusters,data_orig))
         plt.show()
+
+
+    def localWeighted():
+        '''
+        This function performs locally-weighted ensemble clustering
+
+        Input: TBD
+
+        Output:
+        Recommended clusters
+        Ensemble Clustergram
+
+        '''
+
+        #optimum number of clusters from validation index.
+        sys.setrecursionlimit(10**8) 
+        metab_data = GB.fileCheck()
+
+        if metab_data is None:
+            logging.error(': File does not meet input requirements.')   
+            return
+       
+        #List for the use in creating and plotting the clustering results
+        linkageList = ['single','complete','average']
+        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean'] 
+        
+        #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
+        numClusterings = (len(linkageList)*len(distList))+1
+
+        #read in the data
+        data = GB.readInColumns(metab_data)
+        
+        #Standardize the data before clustering the results
+        logging.info(': Pre-processing data.')
+        for i in range(data.shape[0]):
+            data[i,:] = GB.standardize(data[i,:])
+
+        #creates empty dictionary for clusterings
+        clusters = {}
+
+        #performs first 12 base clusterings and populates clusters dictionary
+        for i in range(len(linkageList)):
+            for j in range(len(distList)):
+                linkCur = linkage(data,linkageList[i],distList[j])
+                valid = GB.clustConnectLink(linkCur)
+                index = str(linkageList[i] + '_' + distList[j])
+                clusters.update({index:valid})
+                logging.info(str(linkageList[i])+'-'+str(distList[j]) +' done!')
+
+        #performs 13th base clustering and populates clusters dictionary
+        linkCur = linkage(data, 'ward', 'euclidean')
+        valid = GB.clustConnectLink(linkCur)
+        logging.info(str('ward-euclidean done!'))
+        clusters.update({'ward_euclidean':valid})
+
+
+        optNum = 2
+        
+        refClust = LW.clustFinder(data=data,optNum=optNum,clusters=clusters)
+        
+        
+        ECI = LW.clustCompare(refClust)
+       
+        consensusMat = LW.consensus(ECI,refClust,data)
+        regionsOut = LW.regions(consensusMat)
+
+    def anovaHM(transform ='Log transformation',scale='Auto Scaling',cMap = 'viridis'):
+        '''
+        Allows users to plot the top ### of data objects from ANOVA analysis
+
+        Input:
+        transform
+        scale
+        color map
+
+        Output:
+        heatmap figure
+        Raw data for top features
+        '''
+        func = 'CC'
+        #ask the user for the input excel workbook needs to contain two sheets
+        file = filedialog.askopenfilename()
+
+        #open sheet 0 - containing the original data
+        #open sheet 1 - containing all ANOVA outcomes or the pre-truncated ANOVA results
+        try:
+            anovaRes = pd.read_excel(file,sheet_name=1)
+        except:
+            logging.error(': Unable to open file, may due to no input file')
+            messagebox.showerror(title="Error", message='Unable to open file!')
+            return
+
+
+
+        dataOrig = pd.read_excel(file,sheet_name=0)
+        dataOrig = dataOrig.iloc[1:,:]
+        colHeaders = list(dataOrig.columns)
+        colHeaders.pop(0)
+        colHeaders.pop(len(colHeaders)-1)
+        anovaResC = list(anovaRes.columns)
+
+
+        #get column names out
+        metabNames = list(dataOrig.columns)
+        metabNames = dataOrig[metabNames[0]]
+        del(dataOrig)
+        
+        #reads in all column headers and trims off first and last columns
+        dataOrig = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='ANHM')
+
+        dataUpdated = dataOrig[metabNames.isin(anovaRes[anovaResC[0]])]
+        del(dataOrig)
+
+        #send data to be transformed
+
+        dataUpdated = pd.DataFrame(dataUpdated,index = anovaRes[anovaResC[0]],columns=colHeaders)
+        dataUpdated.to_excel('RawTopANOVA.xlsx')
+
+        g=sns.clustermap(dataUpdated,cMap=cMap)
+        plt.show()
+
+
+        return
