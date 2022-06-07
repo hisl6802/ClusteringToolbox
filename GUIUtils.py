@@ -1,4 +1,5 @@
 #Creating a class containing functions that will be used in GUI
+import re
 from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
@@ -153,11 +154,12 @@ class GUIUtils:
         logging.info(logMessage)
         logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
         logging.info(logMessage)
-       
-        data, col_groups = GB.readAndPreProcess(file='',transform=transform,scale=scale,func="CC")
-        
-        if data is None:
-            messagebox.showerror(title='Error',message=': No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
+
+        try:
+            data, col_groups = GB.readAndPreProcess(file='',transform=transform,scale=scale,func="CC")
+        except TypeError:
+            logging.error(': No file selected!')
+            messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with creating a clustergram, click continue and submit!')
             return
 
         #create dendrogram and plot data        
@@ -598,7 +600,14 @@ class GUIUtils:
 
     def compoundList(tol):
         '''
-        What compounds belong to these 
+        Input a list of exact monoisotopic masses and determine the compounds associated with the masses
+
+        Input:
+        Excel sheet with exact masses. 
+
+        Output:
+        Updated excel sheet with Compound matches
+
         '''
         filename = filedialog.askopenfilename()
         glyList = pd.read_excel('C:/Users/Public/Documents/ClusteringGUI-develop/Glycans.xlsx')
@@ -736,19 +745,18 @@ class GUIUtils:
             logging.info(str(end-start))
         del(linkParams)
 
-        #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minMetabs,numClusts=numClusterings,link='ward',dist='euclidean',func="ensemble",colMap=colorMap)
-
-
         #make the coOccurence matrix a dataframe.
-        coOcc = pd.DataFrame(coOcc)
+        coOcc1 = pd.DataFrame(coOcc)
         try:
             #try to save the large .csv file of the CoOccurence matrix.
-            coOcc.to_csv('EnsembleCoOcc.csv',index=False)
+            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
         except:
             logging.error(': Failed to save the Ensemble CoOccurence matrix!!')
             messagebox.showerror(title='Error',message='Unable to save Ensemble CoOccurent matrix, please inform Brady!')
-            
+
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minMetabs,numClusts=numClusterings,link='ward',dist='euclidean',func="ensemble",colMap=colorMap)
+
         #Log the completgroupion of the ensemble clustering function
         logging.info(': Sucessfully completed Ensemble clustering!')
         
@@ -773,8 +781,13 @@ class GUIUtils:
         logging.info(': User called Cluster validation function.')
 
         filename = filedialog.askopenfilename()
+        try:
+            data = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='else')
+        except BaseException:
+            logging.error(': Unable to proceed, due to file error!')
+            messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
+            return
 
-        data = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='else')
         num_groups=data.shape[1]
 
         #find the distance matrix using the pairwise distance function, put into squareform, appropriate format for mst and submit. 
@@ -1172,8 +1185,30 @@ class GUIUtils:
         return
 
     def heatmapAnalysis(linkFunc,distMet,cmap, transform = 'None', scale ='None'):
+        '''
+        Allows users to input a subset of the original clutergram from heatmap analysis. 
 
-        data = GB.readAndPreProcess(file='',transform=transform,scale=scale)
+        Input:
+        linkage function
+        distance metric
+        color map choice
+        transform
+        scale
+
+        Output:
+
+        Heatmap of the subset of metabolites given as input.
+
+        '''
+        try:
+            file = filedialog.askopenfilename()
+            data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
+            if data is None:
+                raise ValueError
+        except:
+            logging.error(': No file selected or issue with connecting to drive!')
+            messagebox.showerror(title='Error loading Data',message='File was not selected or trouble connecting to drive')
+            return
 
         groupCluster = np.transpose(data)
         groupLink = linkage(groupCluster,linkFunc,distMet)
@@ -1189,6 +1224,17 @@ class GUIUtils:
     def selectClusters(link,dist,transform = 'None', scale = 'None',cmap = 'viridis'):
         '''
         Function that pulls out the information from the plot and saves it until the user is ready to submit the clusters to the peaks to pathways function. 
+        
+        Input:
+        linkage function
+        distance metric
+        transform
+        scale
+        color map
+
+        Output:
+        dendrogram allowing users to select clusters of interest
+
         '''
 
         #log that the user called the Create Clustergram function
@@ -1317,6 +1363,17 @@ class GUIUtils:
 
 
     def localWeighted():
+        '''
+        This function performs locally-weighted ensemble clustering
+
+        Input: TBD
+
+        Output:
+        Recommended clusters
+        Ensemble Clustergram
+
+        '''
+
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8) 
         metab_data = GB.fileCheck()
@@ -1368,3 +1425,61 @@ class GUIUtils:
        
         consensusMat = LW.consensus(ECI,refClust,data)
         regionsOut = LW.regions(consensusMat)
+
+    def anovaHM(transform ='Log transformation',scale='Auto Scaling',cMap = 'viridis'):
+        '''
+        Allows users to plot the top ### of data objects from ANOVA analysis
+
+        Input:
+        transform
+        scale
+        color map
+
+        Output:
+        heatmap figure
+        Raw data for top features
+        '''
+        func = 'CC'
+        #ask the user for the input excel workbook needs to contain two sheets
+        file = filedialog.askopenfilename()
+
+        #open sheet 0 - containing the original data
+        #open sheet 1 - containing all ANOVA outcomes or the pre-truncated ANOVA results
+        try:
+            anovaRes = pd.read_excel(file,sheet_name=1)
+        except:
+            logging.error(': Unable to open file, may due to no input file')
+            messagebox.showerror(title="Error", message='Unable to open file!')
+            return
+
+
+
+        dataOrig = pd.read_excel(file,sheet_name=0)
+        dataOrig = dataOrig.iloc[1:,:]
+        colHeaders = list(dataOrig.columns)
+        colHeaders.pop(0)
+        colHeaders.pop(len(colHeaders)-1)
+        anovaResC = list(anovaRes.columns)
+
+
+        #get column names out
+        metabNames = list(dataOrig.columns)
+        metabNames = dataOrig[metabNames[0]]
+        del(dataOrig)
+        
+        #reads in all column headers and trims off first and last columns
+        dataOrig = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='ANHM')
+
+        dataUpdated = dataOrig[metabNames.isin(anovaRes[anovaResC[0]])]
+        del(dataOrig)
+
+        #send data to be transformed
+
+        dataUpdated = pd.DataFrame(dataUpdated,index = anovaRes[anovaResC[0]],columns=colHeaders)
+        dataUpdated.to_excel('RawTopANOVA.xlsx')
+
+        g=sns.clustermap(dataUpdated,cMap=cMap)
+        plt.show()
+
+
+        return

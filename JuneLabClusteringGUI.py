@@ -1,27 +1,23 @@
-from audioop import mul
-from functools import total_ordering
-from msilib.schema import ListBox
+import logging
+import time
+import getpass
+import os
+
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
 from tkinter import filedialog
 import tkinter as tk
-from turtle import color
 import multiprocessing
-import config
 
-from matplotlib.pyplot import text
 from scipy.spatial import distance
-import GuiBackground as GB
-from GUIUtils import GUIUtils as GU 
-import logging
-import time
-import getpass
-import os
 import fpdf
 import webbrowser
 from Bio.KEGG import REST
 import ValidationMetric
+import GuiBackground as GB
+from GUIUtils import GUIUtils as GU
+import config
 
 
 class JuneLabClusteringGUI(ttk.Frame):
@@ -37,7 +33,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.rowconfigure(4, weight = 2)
 		self.columnconfigure(3, weight=2)
 		
-		# self.create_widgets()
+
 		self.startUpPage()
 
 	def startUpPage(self):
@@ -113,6 +109,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.localWeight = ttk.Button(self,text="Locally Weighted Ensemble",style="RW.TButton",command=self.localWeighted).grid(column=3, row=4,sticky=(N,S,E,W))
 		#Create a button for the users to submit requests. 
 		self.heatmap = ttk.Button(self, text="Heatmap Analyses", style = "RW.TButton", command=self.heatmapAnalyses).grid(column=2, row=4, sticky=(N,S,E,W))
+		#create a button for the users to bulid an anova-based heatmap
+		self.anHeatMap = ttk.Button(self,text="Build ANOVA Heatmap", style= "RW.TButton", command = self.anovaHeatMap).grid(column=1,row=5,sticky=(N,S,E,W))
+		self.enzymeLU = ttk.Button(self,text="Enzyme Look Up", style="RW.TButton", command=self.enzymeLookUp).grid(column=3,row=5,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -140,7 +139,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgets = self.winfo_children()
 
 		widgetDict = {}
-		for i in range(14):
+		for i in range(16):
 			#create a dictionary of the widgets from home window
 			widgetDict[i] = widgets[i]
 
@@ -158,12 +157,14 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[11].grid(column=1, row=4,sticky=(N,S,E,W))
 		widgetDict[12].grid(column=3, row=4, sticky=(N,S,E,W))
 		widgetDict[13].grid(column=2,row=4,sticky=(N,S,E,W))
+		widgetDict[14].grid(column=1,row=5,sticky=(N,S,E,W))
+		widgetDict[15].grid(column=3,row=5,sticky=(N,S,E,W))
 
 		count = -1
 		for child in self.winfo_children():
 			#add padding to the current widgets
 			count += 1
-			if count < 14:
+			if count < 16:
 				child.grid_configure(padx=5,pady=5)
 
 
@@ -394,6 +395,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 			self.scaleListBox = scaleListBox
 			self.scaleListBox.grid(column=2,row=4,columnspan=1)
+			self.submit.grid(column=2, row=5,sticky=(N),columnspan=1)
 			return selection3
 
 
@@ -406,7 +408,13 @@ class JuneLabClusteringGUI(ttk.Frame):
 			color = colorList[selection2[0]]
 			transform = transformList[selection3[0]]
 			scale = scaleList[selection4[0]]
+
+			#set the config colorNum to zero
+			config.colorNum = 0
+
 			GU.selectClusters(link,dist,transform=transform, scale=scale,cmap=color)
+
+
 
 		def cmapO(*args):
 			#send users to webpage of 
@@ -416,6 +424,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		for i in objects:
 			i.grid_forget()
 
+
+		
 		#create widgets for the clustergram function input. 
 		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
 		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
@@ -424,7 +434,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.Transform = ttk.Label(self,text="Transform", font=("TkHeadingFont",12)).grid(column=1,row=3,sticky=(N))
 		self.Scale = ttk.Label(self,text="Scale",font=('TkHeadingFont',12)).grid(column=2,row=3,sticky=(N))
 		self.homepage = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2, row=6,sticky=(N),columnspan=1)
-		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=2, row=5,sticky=(N),columnspan=1)
+		self.submit = ttk.Button(self,text="Submit", command=submit)
 		self.cmapW = ttk.Button(self,text="ColorMap Options", command=cmapO).grid(column=3,row=3,sticky=(N),columnspan=1)
 		distListBox = Listbox(self,height=8)
 		sampleListBox = Listbox(self,height=8)
@@ -623,7 +633,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 			else:
 				#append the selection to the linkage list
 				linkList.append(selection)
-			
+			lenList = len(transformListBox.get(0,tk.END))
+			if lenList > 0:
+				transformListBox.delete(0,lenList-1)
 			#send the parameters for linkage comparison 
 			for i in range(len(transformList)):
 				transformListBox.insert(i,transformList[i])	
@@ -634,6 +646,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 			global dataTrans
 			dataTrans = transformListBox.curselection()
 			dataTrans = transformList[dataTrans[0]]
+			lenList = len(scaleListBox.get(0,tk.END))
+			if lenList > 0:
+				scaleListBox.delete(0,lenList-1)
 
 			for i in range(len(scaleList)):
 				scaleListBox.insert(i,scaleList[i])
@@ -769,6 +784,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 			self.scaleListBox = scaleListBox
 			self.scaleListBox.grid(column=2,row=4,columnspan=1)
+			self.submit.grid(column=2, row=5,sticky=(N),columnspan=1)
 			return selection3
 
 
@@ -795,7 +811,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.Transform = ttk.Label(self,text="Transform", font=("TkHeadingFont",12)).grid(column=1,row=3,sticky=(N))
 		self.Scale = ttk.Label(self,text="Scale",font=('TkHeadingFont',12)).grid(column=2,row=3,sticky=(N))
 		self.homepage = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2, row=6,sticky=(N),columnspan=1)
-		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=2, row=5,sticky=(N),columnspan=1)
+		self.submit = ttk.Button(self,text="Submit", command=submit)
 		self.cmapW = ttk.Button(self,text="ColorMap Options", command=cmapO).grid(column=3,row=3,sticky=(N),columnspan=1)
 		distListBox = Listbox(self,height=8)
 		sampleListBox = Listbox(self,height=8)
@@ -1201,6 +1217,11 @@ class JuneLabClusteringGUI(ttk.Frame):
 			optClust = optClustBox.curselection()
 			optClust = int(optClust[0])+1
 			minMetab = tuple(range(0,101))
+
+			lenList = len(minNumMetabClust.get(0,tk.END))
+			if lenList > 0:
+				minNumMetabClust.delete(0,lenList-1)
+
 			for i in range(len(minMetab)):
 				minNumMetabClust.insert(i,minMetab[i])
 			self.submit = ttk.Button(self,text="Submit",command=ensembleGo).grid(column=1,row=8,sticky=(N))
@@ -1211,6 +1232,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 			scaleSel = scaleEnsem.curselection()
 			scaleSel = scaleList[scaleSel[0]]
 			optClusters = tuple(range(1,101))
+			lenList = len(optClustBox.get(0,tk.END))
+			if lenList > 0:
+				optClustBox.delete(0,lenList-1)
+
 			for i in range(len(optClusters)):
 				optClustBox.insert(i,optClusters[i])
 
@@ -1219,6 +1244,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 			global cMapSel
 			cMapSel = colorMapEnsem.curselection()
 			cMapSel = colorList[cMapSel[0]]
+			lenList = len(transformEnsem.get(0,tk.END))
+			if lenList > 0:
+				transformEnsem.delete(0,lenList-1)
+
 			for i in range(len(transformList)):
 				transformEnsem.insert(i,transformList[i])
 
@@ -1227,14 +1256,16 @@ class JuneLabClusteringGUI(ttk.Frame):
 			global transSel
 			transSel = transformEnsem.curselection()
 			transSel = transformList[transSel[0]]
+			lenList = len(scaleEnsem.get(0,tk.END))
+			if lenList > 0:
+				scaleEnsem.delete(0,lenList-1)
+
 			for i in range(len(scaleList)):
 				scaleEnsem.insert(i,scaleList[i])
 
 		def ensembleGo(*args):
 			minFeature = minNumMetabClust.curselection()
 			minFeature = int(minFeature[0])
-			
-			
 
 
 			#send to ensemble clustering algorithm
@@ -1358,6 +1389,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 			transform = transBox.curselection()
 			transform = transformList[transform[0]]
 		
+			lenList = len(scaleBox.get(0,tk.END))
+			if lenList > 0:
+				scaleBox.delete(0,lenList-1)
 
 			for i in range(len(scaleList)):
 				scaleBox.insert(i,scaleList[i])
@@ -1366,6 +1400,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 			global scale
 			scale = scaleBox.curselection()
 			scale = scaleList[scale[0]]
+
+			lenList = len(valTypeBox.get(0,tk.END))
+			if lenList > 0:
+				valTypeBox.delete(0,lenList-1)
 
 			for i in range(len(valList)):
 				valTypeBox.insert(i,valList[i])
@@ -1489,7 +1527,126 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.labelBody = ttk.Label(self, text='Description',font=("TkHeadingFont",20)).grid(row=3,column=1,sticky=(N))
 		self.home4 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=6, sticky=(N))
 		self.buttonSubmit = ttk.Button(self,text = 'Submit Request', command = generateRequest).grid(column=1,row=5)
+
+	def anovaHeatMap(self):
+		'''
+		'''
+
+		def buildAHM(*args):
+			scale = scaleAH.curselection()
+			scale = scaleList[scale[0]]
+			GU.anovaHM(transform =transform,scale=scale,cMap = cMap)
+			
+
+		def transformAH(*args):
+			global cMap
+			cMap = colorMapAH.curselection()
+			cMap = colorList[cMap[0]]
+			#create a list of the color map options
+			lenList = len(transformAHMP.get(0,tk.END))
+			if lenList > 0:
+				transformAHMP.delete(0,lenList-1)
+
+			for i in range(len(transformList)):
+				transformAHMP.insert(i,transformList[i])
+
+			#bind the output back to the GUI
+			self.transformAHMP = transformAHMP
+			self.transformAHMP.grid(column=2,row=2,columnspan=1)
+			return cMap
+
+		def scaleAHMP(*args):
+			global transform
+			transform = transformAHMP.curselection()
+			transform = transformList[transform[0]]
+			#create a list of the color map options
+			lenList = len(scaleAH.get(0,tk.END))
+			if lenList > 0:
+				scaleAH.delete(0,lenList-1)
+
+			for i in range(len(scaleList)):
+				scaleAH.insert(i,scaleList[i])
+
+			#bind the output back to the GUI
+			self.scaleAH = scaleAH
+			self.scaleAH.grid(column=3,row=2,columnspan=1)
+			self.buildHM.grid(column=2,row=3,sticky=(N))
+			return cMap
+
+
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+		self.AHMLab = ttk.Label(self,text="Submit Request",font=("TkHeadingFont",36)).grid(column=2,row=0,sticky=(N))
+		self.colMapAHM = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=1,row=1,sticky=(N))
+		self.transAHM = ttk.Label(self,text="Transform",font=("TkHeadingFont",18)).grid(column=2,row=1,sticky=(N))
+		self.scaleAHM = ttk.Label(self,text="Scale", font=("TkHeadingFont",18)).grid(column=3,row=1,sticky=(N))
+		self.buildHM = ttk.Button(self,text='Submit',command=buildAHM)
+		self.homepageAHM = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2, row=4,sticky=(N),columnspan=1)
+
+		colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+					'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+					'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+					'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+					'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
+					'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
 		
+		#create list box of the ensemble optimal clusters
+		colorMapAH = Listbox(self, height=5,width=35)
+		transformAHMP = Listbox(self, height=5,width=35)
+		scaleAH = Listbox(self, height=5,width=35)
+
+		transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
+		scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
+
+		for i in range(len(colorList)):
+			colorMapAH.insert(i,colorList[i])
+
+		colorMapAH.bind('<Double-1>',transformAH)
+		transformAHMP.bind('<Double-1>',scaleAHMP)
+
+		self.colorMapAH= colorMapAH
+		self.colorMapAH.grid(column=1,row=2,columnspan=1)
+		self.transformAHMP = transformAHMP
+		self.transformAHMP.grid(column=2,row=2,columnspan=1)
+		self.scaleAH = scaleAH
+		self.scaleAH.grid(column=3,row=2,columnspan=1)
+
+	def enzymeLookUp(self):
+		'''
+		'''
+
+		def submitELU(*args):
+			numHMSel = numHMList.curselection()
+			numHMSel = numHM[numHMSel[0]]	
+			GB.enzymeLookUp(numSheets=numHMSel)
+
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+
+		self.eLU = ttk.Label(self,text="Enzyme Loop Up", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N))
+		self.numHM = ttk.Label(self,text="Number of Heatmaps (i.e.,sheets)").grid(column=1,row=1,sticky=(N))
+		self.eLUHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=3,sticky=(N))
+
+
+		#Create the lists of available options for selection 
+		numHM = tuple(range(1,15))
+
+		numHMList = Listbox(self,height=5,width=35)
+
+		for i in range(len(numHM)):
+			numHMList.insert(i,numHM[i])
+
+		numHMList.bind('<Double-1>', submitELU)
+
+		self.numHMList = numHMList
+		self.numHMList.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
+
+
+
 
 curUser = getpass.getuser()
 curUser = GB.who(curUser)
@@ -1535,7 +1692,7 @@ if __name__ == '__main__':
 	height = app.master.winfo_screenheight() - 400
 	width = (app.master.winfo_screenwidth())*0.9
 	width = int(width)
-	app.master.maxsize(800,800)
+	app.master.maxsize(900,900)
 	width = str(width)
 	height = str(height)
 	screenSize = width +'x' + height + '+0+100'

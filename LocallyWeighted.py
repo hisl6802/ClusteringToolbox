@@ -31,7 +31,7 @@ class LocallyWeighted:
 
     def probClust(keys, key, localClust, refClust):
         '''
-        
+        This function is responsible for calculating the probability measure for a given clustering 
         '''
         #Brady 08/10/21
         keys.remove(key)

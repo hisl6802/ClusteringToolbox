@@ -16,6 +16,7 @@ import logging, time, glob,sys,os,ast
 from PIL import Image
 from seaborn.matrix import clustermap
 import math
+import config
 
 from fpdf import FPDF
 
@@ -293,7 +294,7 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, li
 
     Required:
 
-    data - standardized data
+    data - co-occurence matrix
     metab_data - original raw data
 
     Optional:
@@ -333,7 +334,9 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, li
         for j in range(data.shape[0]):
             #going through the metabolites
             dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
-    
+
+
+
     g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
     ax = g.ax_heatmap
     axD = g.ax_row_dendrogram
@@ -1195,6 +1198,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
         #look for the number of ones indicating the total number of 
         #metabolites in the current cluster.
         found = np.where(dataFinal[j,:]>(numClusts-1)/numClusts)
+        print(found[0])
 
         #determine the length of the array found
         if len(found[0])==1:
@@ -1247,7 +1251,6 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     csv files of the found metabolite clusters. 
     '''
 
-
     logging.info(': Creating ensemble clusters output files.')
     #take the found metabolites/biomarkers/etc. and grab the indicies which are matching in the Leaves of the dendrogram. 
     lenFound = len(found)
@@ -1264,6 +1267,7 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     #Get the raw data columns from the DataFrame
     columnsData = columnsData[1:len(columnsData)]#-1]
     rawData = metab_data[columnsData]
+
     rawData = rawData.to_numpy()
 
     #set prefix that will be used for all files
@@ -1275,20 +1279,20 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     except:
         logging.warning(': Deleting variable prior to its creation is not advised!!')
 
+
     if lenFound >= minMetabs:
         idents = []
         for i in range(lenFound):
-            #find where in the row of metabData I need to extract from by determining which metabolite was clustered where from the groupDendLeaves
-            curMetab = np.where(groupDendLeaves==found[i])
-            
-            foundMetabs[i,:] = rawData[curMetab[0][0],:]
+            #match the 
+            foundMetabs[i,:] = rawData[groupDendLeaves[found[i]],:]
 
             #save a list that contains identities for the study
-            idents.append(textList[curMetab[0][0]])
+            idents.append(textList[groupDendLeaves[found[i]]])
 
         #create column headers for the data frame
         columns = []
         for i in range(columnHeaders-1):
+            print
             columns.append("M"+str(i+1))
         columns.append("rt_med")
 
@@ -1354,20 +1358,34 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
     '''
     Function responsible for the coloring clustergram based upon users selection. This function is also responsible for saving the selected cluster
     
+
+    Input:
+    Index of dendrogram
+    dendrogram
+    linkage
+    linkage directory 
+    linkage clustering
+    original data
+
+    Output:
+    excel workbook with selected values
+
     '''
     
-    with open('ClustColor.txt') as f:
-        contents = f.read()
-        f.close()
-    colSel = int(contents)
+    #getting the current color number
+    colSel = config.colorNum
 
     if colSel == 0:
         colSel = 1
-        open('ClustColor.txt','w').write(str(colSel))
+        config.colorNum = 1
+
+    elif colSel == 1:
+        colSel = 2
+        config.colorNum = 2
 
     else:
         colSel = 0
-        open('ClustColor.txt','w').write(str(colSel))
+        config.colorNum = 0
 
 
     #grab the first value of the list. 
@@ -1387,7 +1405,7 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
 
         clustMetabs = linkClust[curSelection][0]
 
-        colors = ['steelblue','darkkhaki']
+        colors = ['steelblue','darkkhaki','darkorchid']
         lenColors = len(colors)
         if curSelection != -1:
             #if current selection is valid grab the curSelection list from the linkage directory
@@ -1521,6 +1539,16 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
 def linkDir(linkageOne,maxIndex):
     '''
     Creates dictionary containing all of the indicies and corresponding parameter which goes with the index.
+
+    Input:
+
+    linkage function output
+    maxIndex??
+
+    Output:
+
+    Dictionary containing all of the iterations of the creation of the clustering solution
+
     '''
     #initializing dictionary for storage of the linkage names.
     linkageDir = {}
@@ -1570,6 +1598,13 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
 
     This function is designed to remove the reading in and pre-processing of the data from the beginning of each function which needs to read-in and pre-process the data, saying large amounts of lines in this program.
 
+    Input:
+    transform
+    scale
+    func
+
+    Output:
+    Pre-processed data
 
     '''
 
@@ -1593,343 +1628,49 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
         #read in data
         data = dataCheck(metab_data)
 
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-        ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-        ### UPDATED THE RANGE FOR THE FOR LOOP TO DATA INSTEAD OF METAB_DATA
-        #Log transform no scaling
-        if transform == 'Log transformation' and scale == 'None':
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-        #Log transform, mean centering
-        elif transform == 'Log transformation' and scale == 'Mean centering':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #mean center
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-        
-        #log transform, auto scaling
-        elif transform == 'Log transformation' and scale == 'Auto Scaling':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #Auto scale
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        #log transform, pareto scaling
-        elif transform == 'Log transformation' and scale == 'Pareto Scaling':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #Pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        #log transform, range scaling
-        elif transform == 'Log transformation' and scale == 'Range Scaling':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #Range scale
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
-        #Square root transform, no scaling
-        elif transform == 'Square root transformation' and scale == 'None':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-        #square root transform, mean centering
-        elif transform == 'Square root transformation' and scale == 'Mean centering':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #mean center
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-
-        #square root transform, auto scaling
-        elif transform == 'Square root transformation' and scale == 'Auto Scaling':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #auto scale
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        #square root transform, pareto scaling
-        elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        #square root transform, range scaling
-        elif transform == 'Square root transformation' and scale == 'Range Scaling':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #range scale
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
-        #cube root transform, no scaling
-        elif transform == 'Cube root transformation' and scale == 'None':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-        #cube root transform, mean centering
-        elif transform == 'Cube root transformation' and scale == 'Mean centering':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-            #mean centering
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-        
-        #cube root transform, auto scale
-        elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-            #auto scale
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Range Scaling':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-            
-            #range scale
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Mean centering':
-            #mean centering
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-
-        elif transform == 'None' and scale == 'Auto Scaling':
-            #auto scaling
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        elif transform == 'None' and scale == 'Pareto Scaling':
-            #pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Range Scaling':
-            #range scale 
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
+        #put the data through the appropriate transformations. 
+        data = transformations(data,transform=transform,scale=scale)
 
         return data, col_groups
+
+    elif func == 'ANHM':
+        #remove the first row of data.
+        metab_data = metab_data.iloc[1:,:]
+
+        data = dataCheck(metab_data)
+
+        data = transformations(data,transform=transform,scale=scale)
+        return data
 
     else:
         #read in data
         data = dataCheck(metab_data)
-
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-        ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
-        ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-        ### UPDATED THE RANGE FOR THE FOR LOOP TO DATA INSTEAD OF METAB_DATA
-
-        #Log transform no scaling
-        if transform == 'Log transformation' and scale == 'None':
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-        #Log transform, mean centering
-        elif transform == 'Log transformation' and scale == 'Mean centering':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #mean center
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-        
-        #log transform, auto scaling
-        elif transform == 'Log transformation' and scale == 'Auto Scaling':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #Auto scale
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        #log transform, pareto scaling
-        elif transform == 'Log transformation' and scale == 'Pareto Scaling':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #Pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        #log transform, range scaling
-        elif transform == 'Log transformation' and scale == 'Range Scaling':
-            #log transform
-            for i in range(data.shape[0]):
-                data[i,:] = logTrans(data[i,:])
-
-            #Range scale
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
-        #Square root transform, no scaling
-        elif transform == 'Square root transformation' and scale == 'None':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-        #square root transform, mean centering
-        elif transform == 'Square root transformation' and scale == 'Mean centering':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #mean center
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-
-        #square root transform, auto scaling
-        elif transform == 'Square root transformation' and scale == 'Auto Scaling':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #auto scale
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        #square root transform, pareto scaling
-        elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        #square root transform, range scaling
-        elif transform == 'Square root transformation' and scale == 'Range Scaling':
-            #square root transform
-            for i in range(data.shape[0]):
-                data[i,:] = sqrtTrans(data[i,:])
-
-            #range scale
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
-        #cube root transform, no scaling
-        elif transform == 'Cube root transformation' and scale == 'None':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-        #cube root transform, mean centering
-        elif transform == 'Cube root transformation' and scale == 'Mean centering':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-            #mean centering
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-        
-        #cube root transform, auto scale
-        elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-            #auto scale
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-
-            #pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        elif transform == 'Cube root transformation' and scale == 'Range Scaling':
-            #cube root transform
-            for i in range(data.shape[0]):
-                data[i,:] = cubeRtTrans(data[i,:])
-            
-            #range scale
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Mean centering':
-            #mean centering
-            for i in range(data.shape[0]):
-                data[i,:] = meanCentering(data[i,:])
-
-        elif transform == 'None' and scale == 'Auto Scaling':
-            #auto scaling
-            for i in range(data.shape[0]):
-                data[i,:] = standardize(data[i,:])
-
-        elif transform == 'None' and scale == 'Pareto Scaling':
-            #pareto scale
-            for i in range(data.shape[0]):
-                data[i,:] = paretoScaling(data[i,:])
-
-        elif transform == 'None' and scale == 'Range Scaling':
-            #range scale 
-            for i in range(data.shape[0]):
-                data[i,:] = rangeScaling(data[i,:])
-
+        #transform the data
+        data = transformations(data,transform=transform,scale=scale)
         return data
 
 
     
 def createHeatmapFig(clMap):
     '''
+    This function is responsible for creating the heatmap that is submitted by the user. 
+
+    Input: 
+    clMap: choosen color map scheme
+
+    Output:
+    editable pdf that with each of the selected clusters.
     '''
+
     #read in excel sheet of Heatmap.xlsx
     fileName = filedialog.askopenfilename()
-    data = pd.read_excel(fileName)
+    try:
+        data = pd.read_excel(fileName)
+    except:
+        logging.error(': Likely that no file was selected, or there was an issue connecting to the drive!')
+        messagebox.showerror(title="Error",message="Could not find file or no file was selected!")
+        return
+            
     #input the dataframe into the heatmap function
     g = sns.heatmap(data,yticklabels=False,cmap=clMap)
 
@@ -2030,6 +1771,20 @@ def createHeatmapFig(clMap):
 
 def valPlotting(valIndex, mstOut, valMet = 'KMeansBased'):
 
+    '''
+    This function is responsible for plotting the validation outcome generated.
+
+    Input:
+    validation Index: containing the number of clusters and the validation metric values
+    mstOut: containing the generated MST
+    valMet: the validation metric run
+
+    Output:
+    Plot of the validation output
+    csv of the validation output
+    csv of the MST
+    '''
+
     #put the number of clusters in K and the validation metric in y
     if valMet == 'KMeansBased':
         K = valIndex[:,1]
@@ -2117,8 +1872,14 @@ def valPlotting(valIndex, mstOut, valMet = 'KMeansBased'):
 
 def dataCheck(data):
     '''
+    This function is responsible for checking for matching values within the input data, and reducing matching values down to a single value
+
+    Input:
+    original raw data
+
+    Output:
+    Corrected data.
     '''    
-    
     #read in the data from fileCheck and look for matching values
     data = readInColumns(data)
 
@@ -2168,8 +1929,269 @@ def dataCheck(data):
     return data
 
         
+def transformations(data, transform='None', scale='None'):
+    '''
+    This function is responsible for taking inputs from the broad range of functions needed data transformed or scaled and updating the data
+
+    Input:
+    data: raw data
+    transform: selected transformation
+    scale: selected data scaling
+
+    Output:
+    Pre-processed data
+
+    '''
+
+    ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+    ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
+    ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    ### UPDATED THE RANGE FOR THE FOR LOOP TO DATA INSTEAD OF METAB_DATA
+
+    #Log transform no scaling
+    if transform == 'Log transformation' and scale == 'None':
+        for i in range(data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+    #Log transform, mean centering
+    elif transform == 'Log transformation' and scale == 'Mean centering':
+        #log transform
+        for i in range(data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #mean center
+        for i in range(data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+    
+    #log transform, auto scaling
+    elif transform == 'Log transformation' and scale == 'Auto Scaling':
+        #log transform
+        for i in range(data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #Auto scale
+        for i in range(data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    #log transform, pareto scaling
+    elif transform == 'Log transformation' and scale == 'Pareto Scaling':
+        #log transform
+        for i in range(data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #Pareto scale
+        for i in range(data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    #log transform, range scaling
+    elif transform == 'Log transformation' and scale == 'Range Scaling':
+        #log transform
+        for i in range(data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+
+        #Range scale
+        for i in range(data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    #Square root transform, no scaling
+    elif transform == 'Square root transformation' and scale == 'None':
+        #square root transform
+        for i in range(data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+    #square root transform, mean centering
+    elif transform == 'Square root transformation' and scale == 'Mean centering':
+        #square root transform
+        for i in range(data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #mean center
+        for i in range(data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+
+    #square root transform, auto scaling
+    elif transform == 'Square root transformation' and scale == 'Auto Scaling':
+        #square root transform
+        for i in range(data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #auto scale
+        for i in range(data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    #square root transform, pareto scaling
+    elif transform == 'Square root transformation' and scale == 'Pareto Scaling':
+        #square root transform
+        for i in range(data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #pareto scale
+        for i in range(data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    #square root transform, range scaling
+    elif transform == 'Square root transformation' and scale == 'Range Scaling':
+        #square root transform
+        for i in range(data.shape[0]):
+            data[i,:] = sqrtTrans(data[i,:])
+
+        #range scale
+        for i in range(data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    #cube root transform, no scaling
+    elif transform == 'Cube root transformation' and scale == 'None':
+        #cube root transform
+        for i in range(data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+    #cube root transform, mean centering
+    elif transform == 'Cube root transformation' and scale == 'Mean centering':
+        #cube root transform
+        for i in range(data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+        #mean centering
+        for i in range(data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+    
+    #cube root transform, auto scale
+    elif transform == 'Cube root transformation' and scale == 'Auto Scaling':
+        #cube root transform
+        for i in range(data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+        #auto scale
+        for i in range(data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    elif transform == 'Cube root transformation' and scale == 'Pareto Scaling':
+        #cube root transform
+        for i in range(data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+
+        #pareto scale
+        for i in range(data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    elif transform == 'Cube root transformation' and scale == 'Range Scaling':
+        #cube root transform
+        for i in range(data.shape[0]):
+            data[i,:] = cubeRtTrans(data[i,:])
+        
+        #range scale
+        for i in range(data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    elif transform == 'None' and scale == 'Mean centering':
+        #mean centering
+        for i in range(data.shape[0]):
+            data[i,:] = meanCentering(data[i,:])
+
+    elif transform == 'None' and scale == 'Auto Scaling':
+        #auto scaling
+        for i in range(data.shape[0]):
+            data[i,:] = standardize(data[i,:])
+
+    elif transform == 'None' and scale == 'Pareto Scaling':
+        #pareto scale
+        for i in range(data.shape[0]):
+            data[i,:] = paretoScaling(data[i,:])
+
+    elif transform == 'None' and scale == 'Range Scaling':
+        #range scale 
+        for i in range(data.shape[0]):
+            data[i,:] = rangeScaling(data[i,:])
+
+    return data
 
 
 
+def enzymeLookUp(numSheets):
+    '''
+    '''
+
+    #have the user select the file they would like to have read in.
+    filename = filedialog.askopenfilename()
+    
+    #heatmapEnzyme Outputs
+    outFile = 'HeatmapEnzyme.xlsx'
+    writer = pd.ExcelWriter(outFile, engine='xlsxwriter')
+    for i in range(numSheets):
+        #read in each sheet
+        
+        dataCur = pd.read_excel(filename,sheet_name=i)
+
+        # except:
+        #     messagebox.showerror(title="Error opening file", message="Select file to continue!")
+        #     logging.error(': No file selected sending back to GUI!')
+        #     return
+
+        dFDict = {}
+        print("Starting sheet number: " + str(i+1))
+        #get the compounds and determine how many pathways hits there are.
+        for j in range(len(dataCur['Cpd.Hits'])):
+            #for the current compound hits find the length
+            CpdList = dataCur['Cpd.Hits'][j]
+
+            #split the current list by ;
+            CpdList = CpdList.split(';')
+            
+            for k in range(len(CpdList)):
+                #get the enzyme numbers from KEGG
+                try:
+                    request = REST.kegg_get(CpdList[k])
+
+                except:
+                    messagebox.showerror(title="Error",message="Cannot find compound, this should not happen")
+                    logging.error(': Compound not found this should not happen!')
+
+                txtFCur = CpdList[k] + '.txt'
+                open(txtFCur,'w').write(request.read())
+                
+                records = Compound.parse(open(txtFCur))
+                #os.remove(txtFCur)
+
+                #get the record of the compound currently being looked up.
+                try:
+                    record = list(records)[0]
+                except:
+                    logging.error(': Almost for sure a glycan was found.')
+
+                if k == 0 and j == 0:
+                    dict = {'Cluster #':[i+1],
+                            'Pathway':dataCur['Pathway'][0],
+                            'Pathway Total':dataCur['Pathway total'][0],
+                            'Hits.total':dataCur['Hits.total'][0],
+                            'Hits.sig':dataCur['Hits.sig'][0],
+                            'Gamma':dataCur['Gamma'][0],
+                            'Cpd.Hits':CpdList[0],
+                            'Enzyme #s':[0]
+                             }
+                    #create a spreadsheet for the current hits
+                    dFDict[i] = pd.DataFrame(dict)
+                    dFDict[i]['Enzyme #s'][0] = record.enzyme
+                
+                elif k == 0 and j !=0:
+                    #create a spreadsheet for the current hits
+                    dFDict[i].loc[len(dFDict[i].index)] = [i+1,dataCur['Pathway'][j],dataCur['Pathway total'][j],dataCur['Hits.total'][j],dataCur['Hits.sig'][j],dataCur['Gamma'][j],CpdList[0], record.enzyme]
+
+                else:
+                    dFDict[i].loc[len(dFDict[i].index)] = [None,None,None,None,None,None,CpdList[k],record.enzyme]
+    
+        dFDict[i].to_excel(writer,sheet_name=str(i+1))
+    try:
+        writer.save()
+
+    except:
+        messagebox.showerror(title='No worky',message='Need to investigate further')
+
+
+    messagebox.showinfo(title="Success", message="Successfully completed getting enzyme IDs for each compound!")
+
+
+
+                
 
 

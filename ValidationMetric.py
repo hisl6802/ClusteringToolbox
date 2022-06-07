@@ -145,7 +145,7 @@ class ValidationMetric:
     def dunnIndex(data,dists,num_groups):
         '''
 
-        Dunn Index (1974?)
+        Dunn Index (1974)
         Determine the appropriate number of clusters by threading through the data set one clustering at a time.
         
         Input:
