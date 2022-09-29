@@ -10,11 +10,16 @@ from scipy.spatial import distance_matrix
 from scipy.spatial.distance import pdist,squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
+from scipy.stats import t
+from scipy.stats import normaltest
+import scipy.stats as stats
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
 from multiprocessing import Pool
 import seaborn as sns
 import config
+import random
+import math
 
 from sklearn import cluster
 import GuiBackground as GB
@@ -510,50 +515,61 @@ class GUIUtils:
             lenCompounds = len(my_data['Matched.Compound'])
             for i in range(len(my_data["Matched.Compound"])):
                 if (i+1)%100 ==0:
-                    x = (i+1)/lenCompounds
+                    x = ((i+1)/lenCompounds)*100
                     x = float("{0:.2f}".format(x))
                     logging.info(': ' + str(x)+'%' + ' completed!')
 
                 #input the values into a request from KEGG API
-                try:
-                    request = REST.kegg_get(my_data['Matched.Compound'][i])
+                if my_data['Matched.Compound'][i][0] == 'G':
+                    my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                    my_final_data['Compound Name'][i] = 'GAG subunits'
 
-                except:
-                    logging.error(": No KEGG match found! Check KEGG Website!")
-                    messagebox.showerror(title="Error",message="ID not found in KEGG, as of 04.17.22, this is likely because it is a Glycan!!")
+                elif my_data['Matched.Compound'][i][0] == 'C':
+                    if my_data['Matched.Compound'][i][1] == 'E':
+                        my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                        my_final_data['Compound Name'][i] = 'Not in KEGG, will update soon!'
 
-                txtFCur = my_data['Matched.Compound'][i] + '.txt'
-                open(txtFCur,'w').write(request.read())
-                records = Compound.parse(open(txtFCur))
-                record = list(records)[0]
-                os.remove(txtFCur)
+                    else:
+                        try:
+                            request = REST.kegg_get(my_data['Matched.Compound'][i])
+                            txtFCur = my_data['Matched.Compound'][i] + '.txt'
+                            open(txtFCur,'w').write(request.read())
+                            records = Compound.parse(open(txtFCur))
+                            record = list(records)[0]
+                            os.remove(txtFCur)
+                            my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                            my_final_data['Compound Name'][i] = record.name
 
-                my_final_data['ID'][i] = my_data['Matched.Compound'][i]
-                my_final_data['Compound Name'][i] = record.name
+                        except:
+                            logging.error(": No KEGG match found! Check KEGG Website!")
+                            #messagebox.showerror(title="Error",message="ID not found in KEGG, as of 04.17.22, this is likely because it is a Glycan!!")
 
-            
+                            logString = my_data['Matched.Compound'][i]
+                            logString = ': Failed to find-' + logString
+                            logging.info(logString)
+                            my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                            my_final_data['Compound Name'][i] = 'No match in KEGG, investigate this compound further.'
+                            continue
+
+                else:
+                    my_final_data['ID'][i] = my_data['Matched.Compound'][i]
+                    my_final_data['Compound Name'][i] = 'Unknown'
             #save data frame as csv file for users
             my_final_data.to_csv(path_or_buf="CompoundMatchUps.csv", index=False)
-
-
+            messagebox.showinfo(title="Success", message="Successfully generaterd CompoundMatchUps file!!")
+            return
 
         elif typeFile == 'enrich':
             
             for i in range(len(my_data["Cpd.Hits"])):
                 curString = my_data["Cpd.Hits"][i]
-
-                #number of compounds in the current string
-                numCompounds = curString.count(';') + 1
-                curCpds = []
-                for j in range(numCompounds):
-                    curCpds.append(curString[j*7:(j*7)+6])
-
+                #print(type(curString))
+                curCpds = curString.split(';')
             
                 #loop through each curCpds list to find matching compounds
                 for j in range(len(curCpds)):
                     if curCpds[j][0] == 'G':
                         try:
-
                             curCpds[j] = 'GAG subunits'
                             my_data["Unnamed: 0"][i] = "GAG Metabolism"
                         except:
@@ -561,30 +577,31 @@ class GUIUtils:
                             messagebox.showerror(title="Error",message="Unable to update excel sheet let Brady know and send him input spreadsheet")
                             return
                         
-
                     elif curCpds[j][0] =='C':
 
-                        try:
-                            curHit = REST.kegg_get(curCpds[j])
-                        except:
-                            logString = curCpds[j]
-                            logString = ': Failed to find-' + logString
-                            logging.info(logString)
-                            messagebox.showerror(title='Error',message='Failed to get information from KEGG! Check KEGG to ensure ID is appropriate.')
-                            return
+                        if curCpds[j][1] != 'E':
+                            try:
+                                curHit = REST.kegg_get(curCpds[j])
+                            except:
+                                logString = curCpds[j]
+                                logString = ': Failed to find-' + logString
+                                logging.info(logString)
+                                curCpds[j] = curCpds
+                                continue
+
+                            try:
+                                open('Compound.txt','w').write(curHit.read())
+
+                            except:
+                                logging.error(': Failed to open text! Let Brady know, this should rarely if ever occur!')
+                                messagebox.showerror(title='Error',message='Failed to open text! Let Brady know, this should rarely if ever occur!')
+                                return
+
+                            records = Compound.parse(open('Compound.txt'))
+                            record = list(records)[0]
+                            curCpds[j] = record.name
 
 
-                        try:
-                            open('Compound.txt','w').write(curHit.read())
-
-                        except:
-                            logging.error(': Failed to open text! Let Brady know, this should rarely if ever occur!')
-                            messagebox.showerror(title='Error',message='Failed to open text! Let Brady know, this should rarely if ever occur!')
-                            return
-
-                        records = Compound.parse(open('Compound.txt'))
-                        record = list(records)[0]
-                        curCpds[j] = record.name
                 try:
                     my_data["Cpd.Hits"][i] = curCpds
                 except:
@@ -974,8 +991,10 @@ class GUIUtils:
 
         This function will output csv files containing the m/z value and p-values fo the matched metabolites (p-values =0.04), and the remaining the metabolites with p-values equal to 1. 
         '''
+        print(os.getcwd())
         logging.info(': Entering the Peaks to Pathways generator!')
         #ask user to input the file name of the original data
+        messagebox.showinfo(title='File selection', message="Please select the original data file submitted for clustering!!")
         filename = filedialog.askopenfilename()
 
         dataRaw = GB.fileCheck(file = filename)
@@ -985,14 +1004,16 @@ class GUIUtils:
             return
 
         #ask user to select the directory containing the csv files from ensemble clustering output (currently only method available)
+        messagebox.showinfo(title="Directory Selection",message="Please select the directory containing the ensemble clustering output files!")
         direct = filedialog.askdirectory()
         curDir = os.getcwd()
 
         #change the current working directory to 
         os.chdir(direct)
 
-        files = glob.glob('*.xlsx')
 
+
+        files = glob.glob('*.xlsx')
 
         ensemFiles = []
         dirLog = os.getcwd()
@@ -1052,6 +1073,14 @@ class GUIUtils:
             p2pPre = 'PeaksToPathways'
             p2pSuf = '.csv'
             firstCheck = p2pPre + '01' + p2pSuf
+
+            #create and/or navigate to P2PFiles folder to contain peaksToPathways output
+            if os.path.isdir('P2PFiles'):
+                os.chdir('P2PFiles')
+            else:
+                os.mkdir('P2PFiles')
+                os.chdir('P2PFiles')
+
             chkBuffer = glob.glob("*.csv")
             count = 1
             if firstCheck in chkBuffer:
@@ -1076,6 +1105,8 @@ class GUIUtils:
                 p2pFile = p2pPre + '0'+ str(count) + p2pSuf 
                 dataOut.to_csv(p2pFile, index=False)
             logging.info(':Success!')
+
+            os.chdir('..')
         logging.info(': Leaving the Peaks to Pathways Function!')
         os.chdir(curDir)
         messagebox.showinfo(title="Success",message="Success Peaks to Pathway files have been generated!!")
@@ -1202,7 +1233,7 @@ class GUIUtils:
         '''
         try:
             file = filedialog.askopenfilename()
-            data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
+            data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale, func="CC")
             if data is None:
                 raise ValueError
         except:
@@ -1210,12 +1241,23 @@ class GUIUtils:
             messagebox.showerror(title='Error loading Data',message='File was not selected or trouble connecting to drive')
             return
 
+        #set out color options and map to the groups. 
+        colorOpts = ('b','y','m','r','k','#929292')
+        
+        #find the unique groups
+        col_groupsUni = col_groups.unique()
+
+        #create a dictionary for mapping color options
+        colRefDict = {}
+        for i in range(len(col_groupsUni)):
+            colRefDict[col_groupsUni[i]] = colorOpts[i]
+
+        colSeries = col_groups.map(colRefDict)
+        col_groups = colSeries.to_list()
         groupCluster = np.transpose(data)
-        groupLink = linkage(groupCluster,linkFunc,distMet)
 
-        linkFunc = linkage(data)
-
-        g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=True, row_cluster=False, col_linkage=groupLink, cmap=cmap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+        g = sns.clustermap(data, method=linkFunc,metric=distMet, figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=cmap,yticklabels=False,xticklabels=True)
+        #g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=True, row_cluster=False, col_linkage=groupLink, col_colors=col_groups, cmap=cmap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
         plt.savefig('HeatMap.png',dpi=600,transparent=True)
         plt.show()
         
@@ -1426,6 +1468,87 @@ class GUIUtils:
         consensusMat = LW.consensus(ECI,refClust,data)
         regionsOut = LW.regions(consensusMat)
 
+    def enzymeLookUp(numSheets):
+        '''
+        '''
+
+        #have the user select the file they would like to have read in.
+        filename = filedialog.askopenfilename()
+        
+        #heatmapEnzyme Outputs
+        outFile = 'HeatmapEnzyme.xlsx'
+        writer = pd.ExcelWriter(outFile, engine='xlsxwriter')
+        for i in range(numSheets):
+            #read in each sheet
+            dataCur = pd.read_excel(filename,sheet_name=i)
+
+            # except:
+            #     messagebox.showerror(title="Error opening file", message="Select file to continue!")
+            #     logging.error(': No file selected sending back to GUI!')
+            #     return
+
+            dFDict = {}
+            print("Starting sheet number: " + str(i+1))
+            #get the compounds and determine how many pathways hits there are.
+            for j in range(len(dataCur['Cpd.Hits'])):
+                #for the current compound hits find the length
+                CpdList = dataCur['Cpd.Hits'][j]
+
+                #split the current list by ;
+                CpdList = CpdList.split(';')
+                
+                for k in range(len(CpdList)):
+                    #get the enzyme numbers from KEGG
+                    try:
+                        request = REST.kegg_get(CpdList[k])
+
+                    except:
+                        messagebox.showerror(title="Error",message="Cannot find compound, this should not happen")
+                        logging.error(': Compound not found this should not happen!')
+
+                    txtFCur = CpdList[k] + '.txt'
+                    open(txtFCur,'w').write(request.read())
+                    
+                    records = Compound.parse(open(txtFCur))
+                    #os.remove(txtFCur)
+
+                    #get the record of the compound currently being looked up.
+                    try:
+                        record = list(records)[0]
+                    except:
+                        logging.error(': Almost for sure a glycan was found.')
+
+                    if k == 0 and j == 0:
+                        dict = {'Cluster #':[i+1],
+                                'Pathway':dataCur['Pathway'][0],
+                                'Pathway Total':dataCur['Pathway total'][0],
+                                'Hits.total':dataCur['Hits.total'][0],
+                                'Hits.sig':dataCur['Hits.sig'][0],
+                                'Gamma':dataCur['Gamma'][0],
+                                'Cpd.Hits':CpdList[0],
+                                'Enzyme #s':[0]
+                                }
+                        #create a spreadsheet for the current hits
+                        dFDict[i] = pd.DataFrame(dict)
+                        dFDict[i]['Enzyme #s'][0] = record.enzyme
+                    
+                    elif k == 0 and j !=0:
+                        #create a spreadsheet for the current hits
+                        dFDict[i].loc[len(dFDict[i].index)] = [i+1,dataCur['Pathway'][j],dataCur['Pathway total'][j],dataCur['Hits.total'][j],dataCur['Hits.sig'][j],dataCur['Gamma'][j],CpdList[0], record.enzyme]
+
+                    else:
+                        dFDict[i].loc[len(dFDict[i].index)] = [None,None,None,None,None,None,CpdList[k],record.enzyme]
+        
+            dFDict[i].to_excel(writer,sheet_name=str(i+1))
+        try:
+            writer.save()
+
+        except:
+            messagebox.showerror(title='No worky',message='Need to investigate further')
+
+
+        messagebox.showinfo(title="Success", message="Successfully completed getting enzyme IDs for each compound!")
+
     def anovaHM(transform ='Log transformation',scale='Auto Scaling',cMap = 'viridis'):
         '''
         Allows users to plot the top ### of data objects from ANOVA analysis
@@ -1477,9 +1600,195 @@ class GUIUtils:
 
         dataUpdated = pd.DataFrame(dataUpdated,index = anovaRes[anovaResC[0]],columns=colHeaders)
         dataUpdated.to_excel('RawTopANOVA.xlsx')
-
+        print(cMap)
         g=sns.clustermap(dataUpdated,cMap=cMap)
         plt.show()
 
 
         return
+
+    def confidenceIntervals(sampSize, confidenceLevel = 95):
+        '''
+        '''
+        messagebox.showinfo(title="Input Order",message="Please first select a column oriented metabolomics files with the intensities between m/z (do not label this column) and rtmed columns. Next, select t_test.csv file from Metaboanalyst output.")
+        #get file name and read in the original data file
+        dataOrigLoc = filedialog.askopenfilename()
+        dataOrig = pd.read_excel(dataOrigLoc)
+
+        #put the original mz values into a list
+        mzOrig = dataOrig['Unnamed: 0'].tolist()
+
+        #get file name and read in the tTests for p-values <0.1
+        tTestsLoc = filedialog.askopenfilename()
+        tTests = pd.read_csv(tTestsLoc)
+
+
+        #put the tTestMzs into a list for searching
+        tTestMzs = tTests['Unnamed: 0'].tolist()
+
+        #have the user input the sample size and confidence level
+        sampleSize = sampSize
+        confLevel = confidenceLevel
+        sampleSize = float(sampleSize)
+        confLevel = float(confLevel)
+
+        #calculate the df and quantile, given the user inputs
+        df = (sampleSize*2)-2
+        q = 1- (1- ((confLevel)/100))/2
+
+        tCritical = t.ppf(q,df)
+
+        #search the values in the list against the original values to find the values of interest.
+        CIs = []
+        for i in range(len(tTestMzs)):
+            #determine if the current list item has one or two decimals.
+            if tTestMzs[i].count('.') > 1:
+                #enumerate the original mz values each time
+                mzNums = enumerate(mzOrig)
+                #find the locations in  the list containing the wanted m/z value
+
+                curList = [k for k, j in mzNums if j -float(tTestMzs[i][:tTestMzs[i].rfind('.')])<=0.0000001]
+
+                #convert to numpy array... and remove m/z and rtmed. 
+                ser = dataOrig.iloc[curList[int(tTestMzs[i][tTestMzs[i].rfind('.')+1:])]]
+                ser = ser.to_numpy()
+                ser = ser[1:-1]
+                #add small "jitter" so that log transform does not fail
+                ser = ser + 0.0000001
+                
+                #for now log-transform
+                ser = np.log10(ser)
+
+                #from the sample size pick out the two groups
+                g1 = ser[0:int(sampleSize)]
+                g2 = ser[int(sampleSize):]
+
+                ciUpper = (stat.mean(g1)-stat.mean(g2)) + (tCritical* (((stat.variance(g1)/sampleSize) + (stat.variance(g2)/sampleSize))**.5))
+                ciLower = (stat.mean(g1)-stat.mean(g2)) - (tCritical* (((stat.variance(g1)/sampleSize) + (stat.variance(g2)/sampleSize))**.5))
+
+                ciUpper = 10**ciUpper
+                ciLower = 10**ciLower
+                CIs.append((round(ciLower,2),round(ciUpper,2)))
+
+            else:
+                #enumerate the original mz values each time
+                mzNums = enumerate(mzOrig)
+                curList = [k for k, j in mzNums if float(tTestMzs[i])-j <= 0.0000001]
+
+                ser = dataOrig.iloc[curList[0]]
+                ser = ser.to_numpy()
+                ser = ser[1:-1]
+                #add small "jitter" so that log transform does not fail
+                ser = ser + 0.0000001
+                
+                #for now log-transform
+                ser = np.log10(ser)
+
+                #from the sample size pick out the two groups
+                g1 = ser[0:int(sampleSize)]
+                g2 = ser[int(sampleSize):]
+
+                ciUpper = (stat.mean(g1)-stat.mean(g2)) + (tCritical* (((stat.variance(g1)/sampleSize) + (stat.variance(g2)/sampleSize))**.5))
+                ciLower = (stat.mean(g1)-stat.mean(g2)) - (tCritical* (((stat.variance(g1)/sampleSize) + (stat.variance(g2)/sampleSize))**.5))
+                ciUpper = 10**ciUpper
+                ciLower = 10**ciLower
+                CIs.append((round(ciLower,2),round(ciUpper,2)))
+
+        tTests['CIs'] = CIs
+
+        tTests.to_excel('t_testWCIs.xlsx',index=False)
+        messagebox.showinfo(title="Success",message="A t_testWCIs.xlsx file has successfully been created!")
+        return
+
+    def bootstrapping(numReSamp,numPerSamp):
+        '''
+        Hello, there!!
+        '''
+
+        #log that user called MST
+        logging.info(': User called the bootstrapping function.')
+
+        #get the file of interest
+        filename = filedialog.askopenfilename()
+
+        try:
+            data = GB.readAndPreProcess(file=filename, func='else')
+        
+        except BaseException:
+            logging.error(': Unable to proceed, due to file error!')
+            messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
+            return
+
+
+        #determine the number of groups in the sample set.
+        num_groups=data.shape[1]
+        num_metabs = data.shape[0]
+
+
+        if num_groups >= int(numPerSamp):
+            bootCur = []
+            for i in range(int(numReSamp)):
+                bootCur.append(stat.mean(random.choices(data[1,:], k=int(numReSamp))))
+
+        #convert the current list to a numpy array for ease of using the sort function
+        bootCur = np.array(bootCur)
+
+        #sort the bootCur numpy array in descending order
+        bootCur = np.sort(bootCur)
+
+        #calculate LB and UB indicies for analysis
+        indLB = int(numReSamp)*0.025
+        indUB = int(numReSamp)*0.975
+
+        #linear interpolation of indLB and indUB to land at 95%CI
+        if math.floor(indLB) != math.ceil(indLB):
+            #calculate linear interpolated value
+            bootCILB = bootCur[int(math.floor(indLB))] + ((indLB-math.floor(indLB))(bootCur[int(math.ceil(indLB))] - bootCur[int(math.floor(indLB))]))
+        else:
+            bootCILB = bootCur[int(math.floor(indLB))]
+
+        if math.floor(indUB) != math.ceil(indUB):
+            #calculate linear interpolated value
+            bootCIUB = bootCur[int(math.floor(indUB))] + ((indUB-math.floor(indUB))(bootCur[int(math.ceil(indUB))] - bootCur[int(math.floor(indUB))]))
+
+        else:
+            bootCIUB = bootCur[int(math.ceil(indUB))]
+
+        bootCI = (bootCILB,bootCIUB)
+        
+
+        g = sns.kdeplot(bootCur,color='r',fill=True)
+        #plot vertical lines of upper and lower bounds
+        g.vlines(bootCI,0,g.get_ylim()[1],colors=['k'])
+
+        plt.show()
+
+
+
+    def normalityCheck(transform=config.curTrans,scale=config.curScale):
+        '''
+        '''
+
+        #have user input the wanted file
+        file =filedialog.askopenfilename()
+
+        #read in the metabolites file
+        print(transform,scale)
+        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
+        dataOrig = GB.readAndPreProcess(file)
+
+        #reformat both datasets to incorporate the appropriate data format for kdeplots
+        data = data.reshape(int(data.shape[0]*data.shape[1]),1)
+        data = pd.DataFrame(data,columns=['mz'])
+        dataOrig = dataOrig.reshape(int(dataOrig.shape[0]*dataOrig.shape[1]),1)
+        dataOrig = pd.DataFrame(dataOrig,columns=['mz'])
+
+        fig, axes = plt.subplots(1, 2, figsize=(10,5))
+        go = sns.kdeplot(data=dataOrig,x='mz',ax=axes[0])
+        axes[0].set_title("Raw Data")
+        g = sns.kdeplot(data=data,x='mz',ax=axes[1])
+        axes[1].set_title("Transform and/or Scaled")
+        plt.savefig("Normalized.png",dpi=600,transparent=True)
+        plt.show()
+
+

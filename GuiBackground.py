@@ -1198,7 +1198,6 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
         #look for the number of ones indicating the total number of 
         #metabolites in the current cluster.
         found = np.where(dataFinal[j,:]>(numClusts-1)/numClusts)
-        print(found[0])
 
         #determine the length of the array found
         if len(found[0])==1:
@@ -1280,6 +1279,13 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
         logging.warning(': Deleting variable prior to its creation is not advised!!')
 
 
+    #check for an EnsembleOutputFiles directory in the current directory
+    if os.path.isdir('EnsembleOutputFiles'):
+        os.chdir('EnsembleOutputFiles')
+    else:
+        os.mkdir('EnsembleOutputFiles')
+        os.chdir('EnsembleOutputFiles')
+
     if lenFound >= minMetabs:
         idents = []
         for i in range(lenFound):
@@ -1292,7 +1298,6 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
         #create column headers for the data frame
         columns = []
         for i in range(columnHeaders-1):
-            print
             columns.append("M"+str(i+1))
         columns.append("rt_med")
 
@@ -1323,7 +1328,11 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
         else:
             ensemFile = ensemPre + '0'+ str(count) + ensemSuf 
             foundMetabs.to_excel(ensemFile, index=False)
-        logging.info(':Success!')
+        
+
+    #change directory back to the original directory
+    os.chdir('..')
+    logging.info(':Success!')
 
 def readInColumns(metab_data):
     '''
@@ -1526,13 +1535,13 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
                     checkVal = True
                     clustFile = curFileCheck
         foundMetabs.to_excel(clustFile, index=False)
-        p2pF = "P2P_"+clustFile
-        p2pFile.to_excel(p2pF,index=False)
+        p2pF = "P2P_"+ clustFile.rstrip('.xlsx') + '.csv'
+        p2pFile.to_csv(p2pF,index=False)
     else:
         clustFile = clustPre + '0'+ str(count) + clustSuf 
         foundMetabs.to_excel(clustFile, index=False)
-        p2pF = "P2P_"+clustFile
-        p2pFile.to_excel(p2pF,index=False)
+        p2pF = "P2P_"+ clustFile.rstrip('.xlsx') +'.csv'
+        p2pFile.to_csv(p2pF,index=False)
     logging.info(':Success!')
 
 
@@ -1611,6 +1620,8 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
     #check that the file the user selects is appropriate
     ###Should only be used when reading in excel files.
     metab_data = fileCheck(file=file)
+    print(transform)
+    print(func)
     if metab_data is None:
         #log error message and return for soft exit.
         logging.error(': Error loading in the Excel sheet.')
@@ -2106,92 +2117,5 @@ def transformations(data, transform='None', scale='None'):
 
     return data
 
-
-
-def enzymeLookUp(numSheets):
-    '''
-    '''
-
-    #have the user select the file they would like to have read in.
-    filename = filedialog.askopenfilename()
-    
-    #heatmapEnzyme Outputs
-    outFile = 'HeatmapEnzyme.xlsx'
-    writer = pd.ExcelWriter(outFile, engine='xlsxwriter')
-    for i in range(numSheets):
-        #read in each sheet
-        
-        dataCur = pd.read_excel(filename,sheet_name=i)
-
-        # except:
-        #     messagebox.showerror(title="Error opening file", message="Select file to continue!")
-        #     logging.error(': No file selected sending back to GUI!')
-        #     return
-
-        dFDict = {}
-        print("Starting sheet number: " + str(i+1))
-        #get the compounds and determine how many pathways hits there are.
-        for j in range(len(dataCur['Cpd.Hits'])):
-            #for the current compound hits find the length
-            CpdList = dataCur['Cpd.Hits'][j]
-
-            #split the current list by ;
-            CpdList = CpdList.split(';')
-            
-            for k in range(len(CpdList)):
-                #get the enzyme numbers from KEGG
-                try:
-                    request = REST.kegg_get(CpdList[k])
-
-                except:
-                    messagebox.showerror(title="Error",message="Cannot find compound, this should not happen")
-                    logging.error(': Compound not found this should not happen!')
-
-                txtFCur = CpdList[k] + '.txt'
-                open(txtFCur,'w').write(request.read())
-                
-                records = Compound.parse(open(txtFCur))
-                #os.remove(txtFCur)
-
-                #get the record of the compound currently being looked up.
-                try:
-                    record = list(records)[0]
-                except:
-                    logging.error(': Almost for sure a glycan was found.')
-
-                if k == 0 and j == 0:
-                    dict = {'Cluster #':[i+1],
-                            'Pathway':dataCur['Pathway'][0],
-                            'Pathway Total':dataCur['Pathway total'][0],
-                            'Hits.total':dataCur['Hits.total'][0],
-                            'Hits.sig':dataCur['Hits.sig'][0],
-                            'Gamma':dataCur['Gamma'][0],
-                            'Cpd.Hits':CpdList[0],
-                            'Enzyme #s':[0]
-                             }
-                    #create a spreadsheet for the current hits
-                    dFDict[i] = pd.DataFrame(dict)
-                    dFDict[i]['Enzyme #s'][0] = record.enzyme
-                
-                elif k == 0 and j !=0:
-                    #create a spreadsheet for the current hits
-                    dFDict[i].loc[len(dFDict[i].index)] = [i+1,dataCur['Pathway'][j],dataCur['Pathway total'][j],dataCur['Hits.total'][j],dataCur['Hits.sig'][j],dataCur['Gamma'][j],CpdList[0], record.enzyme]
-
-                else:
-                    dFDict[i].loc[len(dFDict[i].index)] = [None,None,None,None,None,None,CpdList[k],record.enzyme]
-    
-        dFDict[i].to_excel(writer,sheet_name=str(i+1))
-    try:
-        writer.save()
-
-    except:
-        messagebox.showerror(title='No worky',message='Need to investigate further')
-
-
-    messagebox.showinfo(title="Success", message="Successfully completed getting enzyme IDs for each compound!")
-
-
-
-                
 
 
