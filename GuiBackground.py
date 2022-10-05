@@ -1620,8 +1620,7 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
     #check that the file the user selects is appropriate
     ###Should only be used when reading in excel files.
     metab_data = fileCheck(file=file)
-    print(transform)
-    print(func)
+
     if metab_data is None:
         #log error message and return for soft exit.
         logging.error(': Error loading in the Excel sheet.')
@@ -1652,6 +1651,13 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
 
         data = transformations(data,transform=transform,scale=scale)
         return data
+
+    elif func =='Raw':
+        print(metab_data)
+        metab_data = metab_data.drop(0,axis=0)
+        metab_data.reset_index(inplace=True,drop=True)
+        print(metab_data)
+        return metab_data
 
     else:
         #read in data

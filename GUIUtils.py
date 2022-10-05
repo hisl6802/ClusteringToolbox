@@ -326,8 +326,8 @@ class GUIUtils:
         logging.info(': User called the Linkage Comparison function.')
         #check that the file is appropriate for our data set
 
-        data = GB.readAndPreProcess(file =file,transform=transform,scale=scale)
-
+        data, col_groups = GB.readAndPreProcess(file =file,transform=transform,scale=scale,func="CC")
+        del(col_groups)
         #input the arguments to the log file so user has record of what was input.
         logging.info(':-------------------------------------------------------------')
         logMessage = file
@@ -395,6 +395,8 @@ class GUIUtils:
             dend3 = dendrogram(linkageThree,ax=axes[2],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
             del(linkageOne,linkageTwo,linkageThree,num_comps)
         elif num_comps == 4:
+            print(data)
+
             #Create the linkage matrix
             linkageOne = linkage(data,linkList[0],metric=distance)
             linkageTwo = linkage(data,linkList[1],metric=distance)
@@ -729,16 +731,16 @@ class GUIUtils:
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8)
         file = filedialog.askopenfilename()
-        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
-        
+        data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='CC')
+        del(col_groups)
+
         #determine whether data read in or not.
         if data is None:
             messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
             return
         
         #read in data as dataframe for ease of use in recClusters, and ensembleClustersOut
-        metab_data = GB.fileCheck(file=file)
-
+        metab_data = GB.readAndPreProcess(file=file, transform='None', scale='None', func='Raw')
         #List for the use in creating and plotting the clustering results
         # linkParams = [['ward','euclidean'],['single','euclidean'],['single','sqeuclidean'],['single','seuclidean'],['single','chebyshev'],['complete','euclidean'],['complete','sqeuclidean'],['complete','seuclidean'],['complete','chebyshev'],['average','euclidean'],['average','sqeuclidean'],['average','seuclidean'],['average','chebyshev']]
 
@@ -799,7 +801,7 @@ class GUIUtils:
 
         filename = filedialog.askopenfilename()
         try:
-            data = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='else')
+            data, col_groups = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='CC')
         except BaseException:
             logging.error(': Unable to proceed, due to file error!')
             messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
@@ -1284,7 +1286,7 @@ class GUIUtils:
         #check that the file the user selects is appropriate
         global metab_data
         file = filedialog.askopenfilename()
-        metab_data = GB.fileCheck(file=file)
+        metab_data = GB.readAndPreProcess(file=file,transform='None',scale='None',func='Raw')
         
         if metab_data is None:
             #log error message and return for soft exit.
@@ -1299,9 +1301,9 @@ class GUIUtils:
         #Standardize the data before clustering the results
         logging.info(': Pre-processing the data.')
 
-        #send the data off to the readAndPreProcess functino for analysis. 
-        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
-
+        #send the data off to the readAndPreProcess function for analysis. 
+        data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func="CC")
+        del(col_groups)
         #create messagebox explaining to users how they need to select clusters.
         messagebox.showinfo(title='Cluster Selection Info.', message='Select clusters of interest, cluster and peak to pathway files will be automatically generated!')
 
