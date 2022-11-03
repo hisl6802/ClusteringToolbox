@@ -14,6 +14,7 @@
 - [fpdf](https://pyfpdf.readthedocs.io/en/latest/#:~:text=%20FPDF%20for%20Python%20%201%20Main%20features.,priority%20technical%20support%2C%20you%20can%20contact...%20More%20)
 - [xlrd](https://pypi.org/project/xlrd/)
 - [seaborn](https://seaborn.pydata.org/index.html)
+- [mplcursors](https://mplcursors.readthedocs.io/en/stable/)
 
 
 ## After downloading the requisite libaries needed. Open a shell and run the following program:
