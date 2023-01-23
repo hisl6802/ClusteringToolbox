@@ -9,12 +9,12 @@ colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purple
                       'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
                       'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
                       'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
-#transform list, scale list, linkage list, distance metric list
+#transform list, scale list, linkage list, distance metric list, normarilization list
 transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
 scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
 linkageList = ('single','ward','complete','average')
 distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
-
+normList = ('Normalize','Do not')
 
 
 #parameters for bootstrapping
@@ -24,3 +24,4 @@ numPerSamp = 0
 #current parameters for function being called
 curTrans = 'None'
 curScale = 'None'
+
