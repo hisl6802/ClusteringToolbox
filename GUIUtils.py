@@ -1,18 +1,16 @@
 #Creating a class containing functions that will be used in GUI
-import re
 from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
+import pingouin as pg
 from matplotlib import cm, pyplot as plt
 from scipy.cluster.hierarchy import dendrogram
 from scipy.cluster.hierarchy import linkage
-from scipy.spatial import distance_matrix
 from scipy.spatial.distance import pdist,squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import t
-from scipy.stats import normaltest
-import scipy.stats as stats
+
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
 from multiprocessing import Pool
@@ -21,13 +19,10 @@ import config
 import random
 import math
 
-from sklearn import cluster
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
-from scipy.signal import argrelextrema,argrelmin, argrelmax
 import mplcursors
 from LocallyWeighted import LocallyWeighted as LW 
-import ValidationMetric
 
 from Bio.KEGG import REST
 from Bio.KEGG import Compound
@@ -131,7 +126,7 @@ class GUIUtils:
         messagebox.showinfo(title="Success",message="Removed data integrity issues!!")
         return
 
-    def createClustergram(norm,linkFunc,distMet,cmap, transform = 'None', scale ='None'):
+    def createClustergram(norm,linkFunc,distMet,cmap,colOrder=[], transform = 'None', scale ='None'):
         '''
         The function is responsible for generating the clustergrams for multivariate data. This function is capable of
         using all the linkage functions and distance measures currently implemented to the scipy.hierarchy method. OF
@@ -160,15 +155,22 @@ class GUIUtils:
         logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
         logging.info(logMessage)
 
+        fileI = filedialog.askopenfilename()
+        
         try:
-            data, col_groups = GB.readAndPreProcess(file='',transform=transform,scale=scale,func="CC")
+            if norm == 0 or norm == 2:
+                
+                data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC")
+
+            elif norm == 1:
+                data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC",first=colOrder[0]) 
         except TypeError:
             logging.error(': No file selected!')
-            messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with creating a clustergram, click continue and submit!')
+            messagebox.showerror(title='Error',message='Error loading in the data, normilizing it or something else. Contact Brady if cannot figure out.')
             return
 
         #create dendrogram and plot data        
-        GB.create_dendrogram(data,col_groups, norm, link=linkFunc, dist=distMet,color = cmap)
+        GB.create_dendrogram(data,col_groups, norm, link=linkFunc, dist=distMet,color = cmap,colOrder=colOrder)
 
         del(data,norm,linkFunc,distMet)
 
@@ -326,8 +328,8 @@ class GUIUtils:
         logging.info(': User called the Linkage Comparison function.')
         #check that the file is appropriate for our data set
 
-        data = GB.readAndPreProcess(file =file,transform=transform,scale=scale)
-
+        data, col_groups = GB.readAndPreProcess(file =file,transform=transform,scale=scale,func="CC")
+        del(col_groups)
         #input the arguments to the log file so user has record of what was input.
         logging.info(':-------------------------------------------------------------')
         logMessage = file
@@ -395,6 +397,7 @@ class GUIUtils:
             dend3 = dendrogram(linkageThree,ax=axes[2],above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
             del(linkageOne,linkageTwo,linkageThree,num_comps)
         elif num_comps == 4:
+
             #Create the linkage matrix
             linkageOne = linkage(data,linkList[0],metric=distance)
             linkageTwo = linkage(data,linkList[1],metric=distance)
@@ -563,7 +566,6 @@ class GUIUtils:
             
             for i in range(len(my_data["Cpd.Hits"])):
                 curString = my_data["Cpd.Hits"][i]
-                #print(type(curString))
                 curCpds = curString.split(';')
             
                 #loop through each curCpds list to find matching compounds
@@ -611,7 +613,7 @@ class GUIUtils:
 
             #save the updated DataFrame as a EnrichmentIdentifications.csv
             my_data.to_csv(path_or_buf="EnrichmentIdentifications.csv",index=False)
-            messagebox.showinfo(title="Sucess",message="EnrichmentIdentifications.csv has been been successfully created!!")
+            messagebox.showinfo(title="Success",message="EnrichmentIdentifications.csv has been been successfully created!!")
 
         return
 
@@ -626,81 +628,105 @@ class GUIUtils:
         Updated excel sheet with Compound matches
 
         '''
+        logging.info(': Starting exact mass comparison against KEGG compounds, and glycans!')
         filename = filedialog.askopenfilename()
-        glyList = pd.read_excel('C:/Users/Public/Documents/ClusteringGUI-develop/Glycans.xlsx')
-        glyList = glyList.to_numpy()
-        glyListMasses = glyList[:,1]
-        glyListGID = glyList[:,0]
+        data = pd.read_excel(filename)
+        lookUpList = pd.read_excel('C:/Users/Public/Documents/ClusteringGUI-develop/KEGG_Compound_Glycans.xlsx')
 
+        #create a numpy array of just the masses
+        lookUpMasses = lookUpList['Masses']
+        lookUpMasses=lookUpMasses.to_numpy()
+        lookUpMasses = lookUpMasses.reshape(np.shape(lookUpMasses)[0],1)
 
+        #convert the look-up data to a numpy array
+        cmdLU = data.to_numpy()
 
-        #read in the data as a dataframe and convert to 
-        data = GB.fileCheck(file=filename)
-        compoundLookUp = data.to_numpy()
+        #allowable tolerance as an vector of tolerances
+        tol = (10/(10**6))*np.ones((np.shape(cmdLU)[0],1))
 
-        tol = int(tol)/(10**6)
-        
+        #calculate the tolerances for each compound
+        cmdTols = np.matmul(np.diagflat(cmdLU), tol)
 
-        compoundMatches = []
-        for i in range(compoundLookUp.shape[0]):
-            low = compoundLookUp[i] - (compoundLookUp[i]*tol)
-            high = compoundLookUp[i] + (compoundLookUp[i]*tol)
-            inputEM = str(low[0]) +'-'+ str(high[0])
+        #creating matricies of the appropriate size for comparison with lookUpMasses List
+        M_plus1     = np.matmul(np.ones((np.shape(lookUpMasses)[0],1)),np.transpose(cmdLU))
+        M_plusNa    = np.matmul(np.ones((np.shape(lookUpMasses)[0],1)),np.transpose(cmdLU)) - (22.989769*np.ones((np.shape(lookUpMasses)[0],np.shape(cmdLU)[0])))
+        M_plusH     = np.matmul(np.ones((np.shape(lookUpMasses)[0],1)),np.transpose(cmdLU)) - (1.00784*np.ones((np.shape(lookUpMasses)[0],np.shape(cmdLU)[0])))
+        M_plusNaH   = np.matmul(np.ones((np.shape(lookUpMasses)[0],1)),np.transpose(cmdLU)) - ((22.989769+1.00784)*np.ones((np.shape(lookUpMasses)[0],np.shape(cmdLU)[0])))
+
+        #Create a look up table for given number of compounds, and glycans
+        lookUpMat = np.matmul(lookUpMasses,np.ones((1,np.shape(cmdLU)[0])))
+
+        #compare all four compound Look Ups
+        M_plus1_c = M_plus1 - lookUpMat
+        M_plusNa_c = M_plusNa - lookUpMat
+        M_plusH_c = M_plusH - lookUpMat
+        M_plusNaH_c = M_plusNaH - lookUpMat
+
+        #loop over the matricies to determine the most likely compound matches
+        cID = []
+        cIDM = []
+        adduct = []
+        for i in range(np.shape(M_plus1_c)[1]):
+            #get current checking value for each array 
+            curCheck_mp1  = np.min(abs(M_plus1_c[:,i]))
+            curCheck_mpNa = np.min(abs(M_plusNa_c[:,i]))
+            curCheck_mpH = np.min(abs(M_plusH_c[:,i]))
+            curCheck_mpNaH = np.min(abs(M_plusNaH_c[:,i]))
             
-
-            #input exact masses to kegg_find to determine the compound IDs on KEGG
-            try:
-                request = REST.kegg_find('compound',inputEM,"exact_mass")
-
-            except:
-                logging.error(': No matches found!')
-                request = ['No matches']
-
-            if isinstance(request,list):
-                compoundMatches.append(request)
-            else:
-                
-                try:
-                    open('CompoundMatches.txt','w').write(request.read())
-
-                except:
-                    logging.error(': Failed to open text file! Let Brady know, this should rarely if ever happen!!')
-                    messagebox.showerror(title='Error',message='Failed to open text file! Let Brady know, this should rarely if ever happen!')
-                    return
-                
-
-                #open found compoundMatches file and put compound matches into a list. 
-                lines = []
-                with open('CompoundMatches.txt') as f:
-                    line = f.readline()
-                    while line:
-                        line = f.readline()
-                        lines.append(line)
-
-                if len(lines) > 1:
-                    for j in range(len(lines)):
-                        if len(lines[j])>0:
-                            #reformat string
-                            curLine = lines[j].strip()
-                            curLine = curLine.lstrip('cpd:')
-                            curLine = curLine.split("\t")
-                            lines[j] = curLine[0]
-
-                        lookUpMasses = glyListGID[(np.where((glyListMasses >= low) & (glyListMasses <= high)))]
-                    
-                    if len(lookUpMasses) > 0:
-                        lines.append(lookUpMasses)
-                    compoundMatches.append(lines)
-
-                else:
-                    lookUpMasses = glyListGID[(np.where((glyListMasses >= low) & (glyListMasses <= high)))]
-                    if len(lookUpMasses) == 0:
-                        compoundMatches.append('No Matches')
+            #compare the minimums of each to the appropriate tolerance
+            curCheck_mp1_tf = curCheck_mp1 < cmdTols[i]
+            curCheck_mpNa_tf = curCheck_mpNa < cmdTols[i]
+            curCheck_mpH_tf = curCheck_mpH < cmdTols[i]
+            curCheck_mpNaH_tf = curCheck_mpNaH < cmdTols[i]
+            
+            #number of potential matches given ppm
+            tol_check = [curCheck_mp1_tf, curCheck_mpNa_tf, curCheck_mpH_tf, curCheck_mpNaH_tf]
+            minDiffCheck = [curCheck_mp1, curCheck_mpNa, curCheck_mpH, curCheck_mpNaH]
+            possibleCount = tol_check.count(True)
+            
+            compoundList = []
+            if possibleCount > 0:
+                #append all matches
+                for j in range(len(tol_check)):
+                    if tol_check[j] == True:
+                        compoundList.append(minDiffCheck[j])
                     else:
-                        lookUpMasses = lookUpMasses.tolist()
-                        compoundMatches.append(lookUpMasses)
+                        compoundList.append(1000)
+                        
+                #calculate and location minimum of the list
+                indexOfInterest = compoundList.index(min(compoundList))
                 
+                if indexOfInterest == 0:
+                    cID.append(lookUpList['KEGG ID'][np.where(abs(M_plus1_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    cIDM.append(lookUpList['Masses'][np.where(abs(M_plus1_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    adduct.append('M[1+]')
+                elif indexOfInterest == 1:
+                    cID.append(lookUpList['KEGG ID'][np.where(abs(M_plusNa_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    cIDM.append(lookUpList['Masses'][np.where(abs(M_plusNa_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    adduct.append('M+Na[1+]')
+                elif indexOfInterest == 2:
+                    cID.append(lookUpList['KEGG ID'][np.where(abs(M_plusH_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    cIDM.append(lookUpList['Masses'][np.where(abs(M_plusH_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    adduct.append('M+H[1+]')
+                elif indexOfInterest == 3:
+                    cID.append(lookUpList['KEGG ID'][np.where(abs(M_plusNaH_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    cIDM.append(lookUpList['Masses'][np.where(abs(M_plusNaH_c[:,i])==compoundList[indexOfInterest])[0][0]])
+                    adduct.append('M+Na+H[1+]')
+                
+            else:
+                cID.append('No matches')
+                cIDM.append(0)
+                adduct.append('No adduct found')
 
+        dataCID = data.assign(CompoundID = cID)
+        dataFinal = dataCID.assign(CompoundMass = cIDM)
+        dataFinal = dataFinal.assign(Adduct = adduct)
+
+        dataFinal.to_excel('CompoundMatches.xlsx',index=False)
+        logging.info(': Completed!')
+        messagebox.showinfo(title="Success", message="Compound Matches has been generated!")
+        return
+                
 
     def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', type='base'):
         '''
@@ -729,16 +755,16 @@ class GUIUtils:
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8)
         file = filedialog.askopenfilename()
-        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
-        
+        data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='CC')
+        del(col_groups)
+
         #determine whether data read in or not.
         if data is None:
             messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
             return
         
         #read in data as dataframe for ease of use in recClusters, and ensembleClustersOut
-        metab_data = GB.fileCheck(file=file)
-
+        metab_data = GB.readAndPreProcess(file=file, transform='None', scale='None', func='Raw')
         #List for the use in creating and plotting the clustering results
         # linkParams = [['ward','euclidean'],['single','euclidean'],['single','sqeuclidean'],['single','seuclidean'],['single','chebyshev'],['complete','euclidean'],['complete','sqeuclidean'],['complete','seuclidean'],['complete','chebyshev'],['average','euclidean'],['average','sqeuclidean'],['average','seuclidean'],['average','chebyshev']]
 
@@ -751,13 +777,15 @@ class GUIUtils:
 
         #create co-occurrence matrix.
         coOcc = GB.cooccurrence(data)
-
+        print("Starting Ensem")
         for i in range(len(linkParams)):
+            print(i)
             start = time.perf_counter()
             linkCur = linkage(data,linkParams[i][0],linkParams[i][1])
             valid = GB.clustConnectLink(linkCur)
             coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
             end = time.perf_counter()
+            print(end-start)
             logging.info(': ' +str(linkParams[i][0])+'-'+str(linkParams[i][1]) +' done!')
             logging.info(str(end-start))
         del(linkParams)
@@ -799,7 +827,7 @@ class GUIUtils:
 
         filename = filedialog.askopenfilename()
         try:
-            data = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='else')
+            data, col_groups = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='CC')
         except BaseException:
             logging.error(': Unable to proceed, due to file error!')
             messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
@@ -812,10 +840,8 @@ class GUIUtils:
         pairWise = squareform(pairWise)
         mstInput = csr_matrix(pairWise)
         mstOut = minimum_spanning_tree(mstInput)
-
         #get out the non-zero indicies. 
         mstOutInd = mstOut.nonzero()
-
         #create the matrix containing the various connections of the mst
         mstOutMat = mstOut.todense()
         dataMST = np.zeros([data.shape[0]-1,3])
@@ -824,7 +850,7 @@ class GUIUtils:
             #input the values of each matrix element to the numpy array for saving to csv file.
             dataMST[i,0] = mstOutInd[0][i]
             dataMST[i,1] = mstOutInd[1][i]
-            dataMST[i,2] = mstOut[dataMST[i,0],dataMST[i,1]]
+            dataMST[i,2] = mstOut[int(dataMST[i,0]),int(dataMST[i,1])]
 
         #Input the dataMST into the dataframe to save the results of the MST for future use if needed
         mstOut = pd.DataFrame(dataMST, columns=['index1','index2','dist'])
@@ -991,7 +1017,6 @@ class GUIUtils:
 
         This function will output csv files containing the m/z value and p-values fo the matched metabolites (p-values =0.04), and the remaining the metabolites with p-values equal to 1. 
         '''
-        print(os.getcwd())
         logging.info(': Entering the Peaks to Pathways generator!')
         #ask user to input the file name of the original data
         messagebox.showinfo(title='File selection', message="Please select the original data file submitted for clustering!!")
@@ -1010,8 +1035,6 @@ class GUIUtils:
 
         #change the current working directory to 
         os.chdir(direct)
-
-
 
         files = glob.glob('*.xlsx')
 
@@ -1215,7 +1238,7 @@ class GUIUtils:
         logging.info(': Leaving the pdf PDF Generator Function!')
         return
 
-    def heatmapAnalysis(linkFunc,distMet,cmap, transform = 'None', scale ='None'):
+    def heatmapAnalysis(linkFunc,distMet,cmap,norm, colOrder = [], transform = 'None', scale ='None'):
         '''
         Allows users to input a subset of the original clutergram from heatmap analysis. 
 
@@ -1231,11 +1254,14 @@ class GUIUtils:
         Heatmap of the subset of metabolites given as input.
 
         '''
+        fileI = filedialog.askopenfilename()
+        
         try:
-            file = filedialog.askopenfilename()
-            data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale, func="CC")
-            if data is None:
-                raise ValueError
+            if norm == 0:
+                data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC")
+
+            elif norm == 1:
+               data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC",first=colOrder[0])
         except:
             logging.error(': No file selected or issue with connecting to drive!')
             messagebox.showerror(title='Error loading Data',message='File was not selected or trouble connecting to drive')
@@ -1256,14 +1282,22 @@ class GUIUtils:
         col_groups = colSeries.to_list()
         groupCluster = np.transpose(data)
 
-        g = sns.clustermap(data, method=linkFunc,metric=distMet, figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=cmap,yticklabels=False,xticklabels=True)
-        #g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=True, row_cluster=False, col_linkage=groupLink, col_colors=col_groups, cmap=cmap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+        if norm == 0:
+            g = sns.clustermap(data, method=linkFunc,metric=distMet, figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=cmap,yticklabels=False,xticklabels=True)
+        elif norm == 1:
+            colOrder = [int(i) for i in colOrder]
+            colOrder = [i-1 for i in colOrder]
+            col_groups = [col_groups[i] for i in colOrder]
+
+            data[:,:] = data[:,colOrder]
+            g = sns.clustermap(data, method=linkFunc,metric=distMet, figsize=(7, 5), col_cluster=False,col_colors=col_groups,cmap=cmap,yticklabels=False,xticklabels=True)
+        
         plt.savefig('HeatMap.png',dpi=600,transparent=True)
         plt.show()
         
 
 
-    def selectClusters(link,dist,transform = 'None', scale = 'None',cmap = 'viridis'):
+    def selectClusters(link,dist,norm=0, colOrder=[], transform = 'None', scale = 'None',cmap = 'viridis'):
         '''
         Function that pulls out the information from the plot and saves it until the user is ready to submit the clusters to the peaks to pathways function. 
         
@@ -1284,7 +1318,7 @@ class GUIUtils:
         #check that the file the user selects is appropriate
         global metab_data
         file = filedialog.askopenfilename()
-        metab_data = GB.fileCheck(file=file)
+        metab_data = GB.readAndPreProcess(file=file,transform='None',scale='None',func='Raw')
         
         if metab_data is None:
             #log error message and return for soft exit.
@@ -1299,9 +1333,13 @@ class GUIUtils:
         #Standardize the data before clustering the results
         logging.info(': Pre-processing the data.')
 
-        #send the data off to the readAndPreProcess functino for analysis. 
-        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
+        #send the data off to the readAndPreProcess function for analysis. 
+        if norm == 0:
+            data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func="CC")
+        elif norm == 1:
+            data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func="CC",first =colOrder[0])
 
+        del(col_groups)
         #create messagebox explaining to users how they need to select clusters.
         messagebox.showinfo(title='Cluster Selection Info.', message='Select clusters of interest, cluster and peak to pathway files will be automatically generated!')
 
@@ -1344,11 +1382,22 @@ class GUIUtils:
         fig, axes = plt.subplots(1,1,figsize=(8,8))
         dataFinal = np.zeros((data.shape[0],data.shape[1]))
 
-        for i in range(data.shape[1]):
-            #rearranging the data for heatmap
-            for j in range(data.shape[0]):
-                #going through the metabolites
-                dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
+        if norm == 0:
+            for i in range(data.shape[1]):
+                #rearranging the data for heatmap
+                for j in range(data.shape[0]):
+                    #going through the metabolites
+                    dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
+
+        else:
+            colOrder = [int(i) for i in colOrder]
+            colOrder = [i-1 for i in colOrder]
+            for i in range(data.shape[1]):
+                #rearranging the data for heatmap
+                for j in range(data.shape[0]):
+                    #going through the metabolites
+                    dataFinal[j,i] = data[metaboliteDendLeaves[j],colOrder[i]]
+
 
         columns.pop(0)
         columns.pop(len(columns)-1)
@@ -1478,17 +1527,12 @@ class GUIUtils:
         #heatmapEnzyme Outputs
         outFile = 'HeatmapEnzyme.xlsx'
         writer = pd.ExcelWriter(outFile, engine='xlsxwriter')
+
+        messagebox.showinfo(title="Starting Enzyme Look-Up", message="Please click ok to start function, this will take some time please be patient.")
         for i in range(numSheets):
             #read in each sheet
             dataCur = pd.read_excel(filename,sheet_name=i)
-
-            # except:
-            #     messagebox.showerror(title="Error opening file", message="Select file to continue!")
-            #     logging.error(': No file selected sending back to GUI!')
-            #     return
-
             dFDict = {}
-            print("Starting sheet number: " + str(i+1))
             #get the compounds and determine how many pathways hits there are.
             for j in range(len(dataCur['Cpd.Hits'])):
                 #for the current compound hits find the length
@@ -1510,7 +1554,6 @@ class GUIUtils:
                     open(txtFCur,'w').write(request.read())
                     
                     records = Compound.parse(open(txtFCur))
-                    #os.remove(txtFCur)
 
                     #get the record of the compound currently being looked up.
                     try:
@@ -1542,7 +1585,6 @@ class GUIUtils:
             dFDict[i].to_excel(writer,sheet_name=str(i+1))
         try:
             writer.save()
-
         except:
             messagebox.showerror(title='No worky',message='Need to investigate further')
 
@@ -1600,7 +1642,6 @@ class GUIUtils:
 
         dataUpdated = pd.DataFrame(dataUpdated,index = anovaRes[anovaResC[0]],columns=colHeaders)
         dataUpdated.to_excel('RawTopANOVA.xlsx')
-        print(cMap)
         g=sns.clustermap(dataUpdated,cMap=cMap)
         plt.show()
 
@@ -1773,7 +1814,6 @@ class GUIUtils:
         file =filedialog.askopenfilename()
 
         #read in the metabolites file
-        print(transform,scale)
         data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
         dataOrig = GB.readAndPreProcess(file)
 
@@ -1784,11 +1824,276 @@ class GUIUtils:
         dataOrig = pd.DataFrame(dataOrig,columns=['mz'])
 
         fig, axes = plt.subplots(1, 2, figsize=(10,5))
-        go = sns.kdeplot(data=dataOrig,x='mz',ax=axes[0])
+        go = sns.kdeplot(data=dataOrig,x='Intensity',ax=axes[0])
         axes[0].set_title("Raw Data")
-        g = sns.kdeplot(data=data,x='mz',ax=axes[1])
+        g = sns.kdeplot(data=data,x='Intensity',ax=axes[1])
         axes[1].set_title("Transform and/or Scaled")
         plt.savefig("Normalized.png",dpi=600,transparent=True)
         plt.show()
 
+    def mzrt():
+        '''
+        '''
+
+
+        #show messagebox telling user which files to select first
+        messagebox.showinfo(title="File selection order",message="Please select the XCMS file, then select file made for peaks to pathways that does not contain retention times.")
+
+        #get the file name for the XCMS workbook, and the file name for the peaks to pathway files
+        xcmsFile = filedialog.askopenfilename()
+        p2pFile = filedialog.askopenfilename()
+
+        #read in the data
+        data = pd.read_excel(xcmsFile)
+        #reading in the p2pfile
+        dataP2P = pd.read_csv(p2pFile)
+
+        # new dataframe containing the rtmed and corresponding retention times
+        mzRT = data[['mzmed', 'rtmed']]
+
+        # numpy array of mzmed and rtmed for ease of comparison
+        mzRT = mzRT.to_numpy()
+
+        # data frame containing just the mzmed, converted to numpy, and to numpy astype str.
+        mzSearch = data[['mzmed']]
+        mzSearch = mzSearch.to_numpy()
+
+        #converting immediately to a numpy array
+        dataP2P = dataP2P.to_numpy()
+
+        #get the number of mz values given in the p2p file and add a column of zeros
+        shapeA = np.shape(dataP2P)
+        shapeA = shapeA[0]
+        rtColumn = np.zeros((shapeA,1))
+        #adding the retention time column to the peaks to pathways file
+        dataP2P = np.append(dataP2P,rtColumn, axis=1)
+
+
+        ######### Matching mz values to the associated retention times
+        for i in range(shapeA):
+            #first get the mz of interest
+            curMZ = dataP2P[i,0]
+            
+            #check the data type of numpy array, if not a string just compare, otherwise
+            #check for double decimals
+            if isinstance(curMZ,str):
+                #count the number of decimals
+                decimalCount = curMZ.count('.')
+                
+                #check # of decimals
+                if decimalCount > 1:
+                    # check the value after the 6th entry of the string
+                    ddLoc = curMZ.rindex('.')
+                    
+                    # truncate intial string and convert to float
+                    origMZ = curMZ
+                    curMZ = curMZ[0:ddLoc]
+            
+                    # correct mz... value 
+                    correctMZ = int(origMZ[ddLoc+1:len(origMZ)])
+                    curMZ = float(curMZ)
+                    
+                    # create a current numpy array in which you subtract the current mz value from the value
+                    curDiff = np.subtract(mzSearch,curMZ);curDiff = np.absolute(curDiff)
+                    
+                    # find the minimum value in the numpy array
+                    minDiff = np.amin(curDiff)
+                    
+                    #find the number of locations from minDiff that have the minValue
+                    locMins = np.where(curDiff==minDiff)
+                    
+                    #determine the number of values in which match with the intended output
+                    if len(locMins[0]) > 1:
+                        #Use the index from the after decimal to identify the correct rt value
+                        dataP2P[i,2] = mzRT[locMins[0][correctMZ],1]
+                        dataP2P[i,0] = curMZ
+                        
+                        
+                else:
+                    #create a numpy array in which you subtract the current mz value from the value
+                    curMZ = float(curMZ)
+                    
+                    # create a current numpy array in which you subtract the current mz value from the value
+                    curDiff = np.subtract(mzSearch,curMZ);curDiff = np.absolute(curDiff)
+                    
+                    # find the minimum value in the numpy array
+                    minDiff = np.amin(curDiff)
+                    
+                    #find the number of locations from minDiff that have the minValue
+                    locMins = np.where(curDiff==minDiff)
+
+                    #determine the number of values in which match with the intended output
+                    
+                    #Use the index from the after decimal to identify the correct rt value
+                    dataP2P[i,2] = mzRT[locMins[0][0],1]
+                    dataP2P[i,0] = curMZ
+                    
+                        
+            else:
+                #create a numpy array in which you subtract the current mz value from the value
+                print('work in progress')
+            
+        dataP2P = pd.DataFrame(dataP2P,columns=["m.z","p.value","r.t"])
+
+        dataP2P.to_csv('Update_p2pFile.csv',index=False)
+
+
+    def N_way_ANOVA(features,num_features=1):
+
+        #ask the user for the input file
+        filename = filedialog.askopenfilename()
+
+        #read in the data
+        data = pd.read_excel(filename)
+
+        #transpose the data such that the codes are in the columns
+        data_ = data.T
+
+        #get the name of the columns of the transposed matrix
+        columns = list(data_.columns)
+
+        #save the mz values in an array for usage later
+        mz_df = data_.iloc[0]
+
+        #removing the first and last row as they are not the raw data
+        row_names = list(data_.index)
+        data_ = data_.drop(row_names[0])
+
+        rtmed_df = data['rtmed']
+        data_ = data_.drop(row_names[len(row_names)-1])
+
+        #renaming the columns such that they can be called in the model
+        for i in range(num_features):
+            data_ = data_.rename(columns={columns[i]:features[i]})
+        
+        #dropping the names from the cols matrix such that we can make the raw data numeric
+        cols = data_.columns.drop(features)
+
+        #updating the raw data to be numeric
+        data_[cols] = data_[cols].apply(pd.to_numeric, errors='coerce')
+        data_[cols] += 0.001
+        data_[cols] = data_[cols].apply(np.log10,errors='coerce')
+
+        for i in range(len(cols)):
+            data_[cols[i]] = (data_[cols[i]] - data_[cols[i]].mean()) / data_[cols[i]].std()
+
+        if num_features == 1:
+            factors = np.zeros((len(cols),num_features))
+
+            #running the ANOVA of interest
+            for i in range(num_features, len(cols)+num_features):
+                aov = pg.anova(data=data_, dv=i, between=features, detailed=True)
+                factors[i-num_features] = aov['p-unc'][0]
+
+            #convert the raw p-values to -log10(raw-pvalues)
+            factors = -np.log10(factors)
+
+            plt.plot(factors,'k.',markersize=8,mouseover=True)
+            plt.show()
+
+        elif num_features == 2:
+            factors = np.zeros((len(cols),num_features))
+            interaction = np.zeros((len(cols),1))
+
+            for i in range(num_features, len(cols)+num_features):
+                aov = pg.anova(data=data_, dv=i, between=features, detailed=True)
+                factors[i-num_features,0], factors[i-num_features,1], interaction[i-num_features] = aov['p-unc'][0], aov['p-unc'][1], aov['p-unc'][2]
+
+
+            #update the mz_df and rtmed to be numpy arrays without the 
+            mz_df = mz_df.drop(0,axis=0)
+            mz_df = mz_df.drop(1,axis=0)
+            mz_df = pd.to_numeric(mz_df)
+            mz_df = mz_df.to_numpy()
+
+            rtmed_df = rtmed_df.drop(0,axis=0)
+            rtmed_df = rtmed_df.drop(1,axis=0)
+            rtmed_df = pd.to_numeric(rtmed_df)
+            rtmed_df = rtmed_df.to_numpy()
+
+            #concatenate the numpy arrays into a single array, convert the factors and interaction to -log10(p-value) for plotting
+            data_out =  np.c_[mz_df, factors, interaction, rtmed_df]
+            factors, interaction = -np.log10(factors), -np.log(interaction)
+
+            #add Interaction and m/z to features list for the data frame, create data frame and three copies of the data frames
+            features.append('Interaction')
+            features.append('rt_med')
+            features.insert(0,'m/z')
+            data_out = pd.DataFrame(data_out,columns=features)
+
+            #getting the features
+            interactions = data_out.copy()
+            factor1 = data_out.copy()
+            factor2 = data_out.copy()
+
+            #determine the interactions which have p-values less than 0.05
+            interactions = interactions.where(interactions['Interaction']<=0.05).dropna()
+            inter_indicies = list(interactions.index)
+
+            #drop the indicies in which the interaction was significant
+            factor1 = factor1.drop(inter_indicies)
+            factor2 = factor2.drop(inter_indicies)
+
+            factor1 = factor1.where(factor1[features[1]]<=0.05).dropna()
+            factor2 = factor2.where(factor2[features[2]]<=0.05).dropna()
+
+            #save each of the files for peaks to pathways.
+            inter_file_name = features[1] +'X' + features[2] +'_interaction.csv'
+            interactions.to_csv(inter_file_name,index=False)
+            factor1_file_name = features[1] + '_effect.csv'
+            factor2_file_name = features[2] + '_effect.csv'
+            factor1.to_csv(factor1_file_name,index=False)
+            factor2.to_csv(factor2_file_name,index=False)
+            #save all the results to a csv file, after dropping retention times
+            data_out.drop('rt_med', axis=1)
+            data_out.to_csv('ANOVA_results.csv',index=False)
+            
+            fig, (ax1,ax2,ax3) = plt.subplots(3,1,figsize=(7,9))
+            fig.tight_layout(pad=2)
+            ax1.scatter(list(range(len(cols))),factors[:,0],color= (40/255,51/255,80/255),edgecolors=(0,0,0))
+            ax1.set_title(str(features[0]))
+            ax1.hlines(-np.log10(0.05),0,len(cols),linestyles='dashed',colors='grey')
+            ax1.set_xlabel('Order')
+            ax1.tick_params(
+                        axis='x',          # changes apply to the x-axis
+                        which='both',      # both major and minor ticks are affected
+                        bottom=False,      # ticks along the bottom edge are off
+                        top=False,         # ticks along the top edge are off
+                        labelbottom=False)
+
+            ax2.scatter(list(range(len(cols))), factors[:,1],color= (249/255,56/255,0/255),edgecolors=(0,0,0))
+            ax2.set_title(str(features[1]))
+            ax2.hlines(-np.log10(0.05),0,len(cols),linestyles='dashed',colors='grey')
+            ax2.set_xlabel('Order')
+            ax2.tick_params(
+                        axis='x',          # changes apply to the x-axis
+                        which='both',      # both major and minor ticks are affected
+                        bottom=False,      # ticks along the bottom edge are off
+                        top=False,         # ticks along the top edge are off
+                        labelbottom=False)
+
+            ax3.scatter(list(range(len(cols))),interaction, color= (255/255,181/255,0/255), edgecolors=(0,0,0))
+            ax3.set_title("Interactive Effect")
+            ax3.hlines(-np.log10(0.05),0,len(cols),linestyles='dashed',colors='grey')
+            ax3.set_xlabel('Order')
+            ax3.tick_params(
+                        axis='x',          # changes apply to the x-axis
+                        which='both',      # both major and minor ticks are affected
+                        bottom=False,      # ticks along the bottom edge are off
+                        top=False,         # ticks along the top edge are off
+                        labelbottom=False)
+
+            plt.show()
+            plt.savefig('ANOVA_results.png',dpi=600,transparent=True)
+
+    def mummichog(ppm=5,ion='negative', organism='Mouse'):
+        #ask for the file name the user wishes to analyze
+        filename = filedialog.askopenfilename()
+
+
+        args = "Rscript C:/Users/Public/Documents/ClusteringGUI-develop/PeaksToPathways.R "  
+        args += filename
+        args = args + " " + ion + " " + str(ppm) + " " + organism
+        print(args)
+        os.system(args)
 

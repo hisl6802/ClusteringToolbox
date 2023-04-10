@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 import statistics as stat
 from scipy.cluster.hierarchy import dendrogram
 from scipy.cluster.hierarchy import linkage
@@ -23,6 +24,7 @@ from fpdf import FPDF
 from Bio.KEGG import REST
 from Bio.KEGG import Compound
 from Bio.KEGG import Enzyme
+from tqdm import tqdm
 
 
 def fileCheck(file=''):
@@ -102,7 +104,7 @@ def standardize(data):
     return dataCur
 
 #standardizing data after it has been normalized to a specific biological profile
-def normStandardize(data,leaves):
+def normStandardize(data,first):
     '''
     Normalize input data that has been standardized for normalized clustergrams.
 
@@ -118,21 +120,27 @@ def normStandardize(data,leaves):
     Normlized standardardized data. 
 
     '''
+
+    first = int(first)-1
+    first = int(first)
+
     logging.info(': Normalizing strandardized data.')
     #The mean for a normalized data set should always be 1 for all of the metabolites.
-    mean = data[leaves[0]]
+    mean = data[first]
 
     #initialize the needed arrays
     dataCur = np.zeros(data.shape[0])
-
     #Calculate the residuals of the data
     residuals = 0
-    for j in leaves:
+    for j in range(data.shape[0]):
         residuals += (data[j]-mean)**2
+
     #calculate the standard deviation
-    std_data = (residuals/(data.shape[0]-1))**0.5
+    std_data = (residuals/(data.shape[0]-1))**0.5 
+    #add jitter to the standard deviation of the data to ensure it does not get inf in result
+    std_data += 0.001
     #standardize each row of data
-    for i in leaves:
+    for i in range(data.shape[0]):
         #Input the data into an array of standardized (auto-scaling in metaboanalyst) values
         dataCur[i] = (data[i]-mean)/std_data
 
@@ -347,7 +355,7 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, li
     plt.show()
 
 #dendrogram function
-def create_dendrogram(data, col_groups, norm=1,link='ward',dist='euclidean', color='viridis'):
+def create_dendrogram(data, col_groups, norm=1,colOrder =[], link='ward',dist='euclidean', color='viridis'):
     '''
     Create dendrogram for either the ensemble or clustergram functions
 
@@ -384,9 +392,8 @@ def create_dendrogram(data, col_groups, norm=1,link='ward',dist='euclidean', col
 
     colSeries = col_groups.map(colRefDict)
     col_groups = colSeries.to_list()
+    
 
-
-    # col_groups = ['#929292','y','r','r','b','b','m','k']
     #Create the linkage matrix
     linkageMetabOut = linkage(data,link,dist)
 
@@ -401,30 +408,36 @@ def create_dendrogram(data, col_groups, norm=1,link='ward',dist='euclidean', col
     #Create a linkage matrix for the data
     linkageGroupOut = linkage(groupCluster,link,dist)
 
+    
     if norm == 0:
         #g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=color, cbar_pos=(0.01, 0.8, 0.025, 0.175))
-        g = sns.clustermap(data, method='ward',metric='euclidean', figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=color,yticklabels=False,xticklabels=True)
+        g = sns.clustermap(data, method=link,metric=dist, figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=color,yticklabels=False,xticklabels=True)
         plt.savefig('Clustergram.png',dpi=600,transparent=True)
         plt.show()
 
     elif norm == 1:
-        for i in range(dataFinal.shape[0]):
-            data[i,:] = normStandardize(data[i,:],groupDendLeaves)
-        #create array that will store final version of reorganized data.
-        dataFinalNorm = np.zeros((data.shape[0],data.shape[1]))
+        #reordering data for users based upon preference
+        colOrder = [int(i) for i in colOrder]
+        colOrder = [i-1 for i in colOrder]
+        col_groups = [col_groups[i] for i in colOrder]
 
-        for i in range(data.shape[1]):
-            #rearranging the data for heatmap
-            for j in range(data.shape[0]):
-                #going through the metabolites
-                dataFinalNorm[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
-         
-        #create the axes in which the heatmap will be mapped upon
-        heatmapAxes = [0.15, 0.05, 0.8, 0.8]
-        heatmapAxes = fig.add_axes(heatmapAxes)  
-        #output the normalized heatmap 
-        heatmapAxes.matshow(dataFinalNorm,aspect='auto',origin='upper',cmap="hot")
-        plotting(link=link,dist=dist)
+        data[:,:] = data[:,colOrder]
+        g = sns.clustermap(data,method=link,metric=dist,figsize=(7,5), col_cluster=False,cmap=color,col_colors=col_groups,yticklabels=False,xticklabels=False)
+        plt.savefig('Clustergram.png',dpi=600,transparent=True)
+        plt.show()
+
+    elif norm == 2:
+        #reordering the data for user based upon preference
+        colOrder = [int(i) for i in colOrder]
+        colOrder = [i-1 for i in colOrder]
+        col_groups = [col_groups[i] for i in colOrder]
+
+        data[:,:] = data[:,colOrder]
+        g = sns.clustermap(data,method=link,metric=dist,figsize=(7,5), col_cluster=False,cmap=color,col_colors=col_groups,yticklabels=False,xticklabels=False)
+        plt.savefig('Clustergram.png',dpi=600,transparent=True)
+        plt.show()
+
+        
 
 def cooccurrence(data):
     '''
@@ -828,7 +841,7 @@ def clustConnect(dataMST,mstOutNp):
                     elif curCon1Check == False and curCon2Check == False:
                         unchanged.append(k)
                     elif curCon1Check == True and curCon2Check == True:
-                        loggging.warning(': Issue clustering the data a duplication has been discovered.')
+                        logging.warning(': Issue clustering the data a duplication has been discovered.')
 
 
                 else:
@@ -1601,7 +1614,7 @@ def linkDir(linkageOne,maxIndex):
     return linkageDir
 
 
-def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
+def readAndPreProcess(file='',transform = 'None', scale ='None',func='else',first ='1'):
     '''
     readAndPreProcess
 
@@ -1620,8 +1633,7 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
     #check that the file the user selects is appropriate
     ###Should only be used when reading in excel files.
     metab_data = fileCheck(file=file)
-    print(transform)
-    print(func)
+
     if metab_data is None:
         #log error message and return for soft exit.
         logging.error(': Error loading in the Excel sheet.')
@@ -1637,27 +1649,33 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else'):
         col_groups = pd.Series(col_groups,copy=False)
         metab_data = metab_data.drop(0,axis=0)
         #read in data
-        data = dataCheck(metab_data)
-
+        # data = readInColumns(metab_data)
+        data = readInColumns(metab_data)
         #put the data through the appropriate transformations. 
-        data = transformations(data,transform=transform,scale=scale)
+        data = transformations(data,transform=transform,scale=scale, first=first)
 
         return data, col_groups
 
     elif func == 'ANHM':
         #remove the first row of data.
         metab_data = metab_data.iloc[1:,:]
+        # data = readInColumns(metab_data)
+        data = readInColumns(metab_data)
 
-        data = dataCheck(metab_data)
-
-        data = transformations(data,transform=transform,scale=scale)
+        data = transformations(data,transform=transform,scale=scale,first=first)
         return data
+
+    elif func =='Raw':
+        metab_data = metab_data.drop(0,axis=0)
+        metab_data.reset_index(inplace=True,drop=True)
+        return metab_data
 
     else:
         #read in data
-        data = dataCheck(metab_data)
+        # data = readInColumns(metab_data)
+        data = readInColumns(metab_data)
         #transform the data
-        data = transformations(data,transform=transform,scale=scale)
+        data = transformations(data,transform=transform,scale=scale,first=first)
         return data
 
 
@@ -1890,26 +1908,55 @@ def dataCheck(data):
 
     Output:
     Corrected data.
-    '''    
+    '''   
+ 
     #read in the data from fileCheck and look for matching values
-    data = readInColumns(data)
+    # data = readInColumns(data)
 
     dataMatches = {}
     toDelete = []
+    dists = pdist(data)
+    zerosL = dists==0
 
-    for i in range(data.shape[0]):
+    indicies =list(itertools.combinations(range(data.shape[0]),2))
+    #zeros checking
+    zeros = ()
+
+    zerosL = np.where(zerosL==True)[0].tolist()
+    print('Starting...')
+    # create reporting interval 
+    report = np.linspace(0, len(zerosL),num=200,dtype=int)
+    for i in range(len(zerosL)):
+        if len(np.where(report==i)[0])>0:
+            print((i/len(zerosL))*100)
+        zeros += indicies[zerosL[i]]
+
+    # create a numpy array of zeros
+    zeros = np.array(zeros)
+    # get the unique values of the array
+    zeros = np.unique(zeros)
+
+    #indicies of function, remove indicies if they do not match up with the unique values of the zeros 
+    ind = list(range(data.shape[0]))
+    
+    for i in range(zeros.shape[0]):
+        ind.remove(zeros[i])
+
+    dataZeros = np.delete(data,ind,axis=0)
+
+    for i in range(dataZeros.shape[0]):
         curMatch = []
         #skip the iteration if the value is already flagged to be deleted due to matching.
         if i in toDelete:
             continue
 
-        for j in range(i+1,data.shape[0]):
+        for j in range(i+1,dataZeros.shape[0]):
             #skip the iteration if the value is already flagged to be deleted due to matching. 
             if j in toDelete:
                 continue
 
             #check the current array v. the other arrays
-            curCheck = data[i,:] == data[j,:]
+            curCheck = dataZeros[i,:] == dataZeros[j,:]
 
             if np.all(curCheck):
                 if len(curMatch) == 0:
@@ -1929,6 +1976,12 @@ def dataCheck(data):
             #if this gives trouble automatically update the dictionary with each found match for each i
             dataMatches[dictLen] = curMatch
     
+    #map to the appropriate indicies of the zeros then delete these indicies
+    for i in range(len(toDelete)):
+        toDelete[i] = zeros[toDelete[i]]
+
+
+    print(toDelete)
     #delete the extraneous matching rows.
     data = np.delete(data,toDelete,axis=0)
     
@@ -1937,10 +1990,10 @@ def dataCheck(data):
     removedIndicies.to_excel('RemovedIndicies.xlsx',index=False)
     messagebox.showwarning(title="Matching Values removed",message=dataMessage + " matching values found and removed")
 
-    return data
+    return data, toDelete
 
         
-def transformations(data, transform='None', scale='None'):
+def transformations(data, transform='None', scale='None',first='1'):
     '''
     This function is responsible for taking inputs from the broad range of functions needed data transformed or scaled and updating the data
 
@@ -2004,6 +2057,14 @@ def transformations(data, transform='None', scale='None'):
         #Range scale
         for i in range(data.shape[0]):
             data[i,:] = rangeScaling(data[i,:])
+
+    elif transform == 'Log transformation' and scale =='NormStand':
+        #log transform
+        for i in range(data.shape[0]):
+            data[i,:] = logTrans(data[i,:])
+        
+        for i in range(data.shape[0]):
+            data[i,:] = normStandardize(data[i,:],first)
 
     #Square root transform, no scaling
     elif transform == 'Square root transformation' and scale == 'None':
