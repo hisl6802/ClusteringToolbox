@@ -2091,9 +2091,9 @@ class GUIUtils:
         filename = filedialog.askopenfilename()
 
 
-        args = "Rscript C:/Users/Public/Documents/ClusteringGUI-develop/PeaksToPathways.R "  
-        args += filename
-        args = args + " " + ion + " " + str(ppm) + " " + organism
-        print(args)
-        os.system(args)
+        # args = "Rscript C:/Users/Public/Documents/ClusteringGUI-develop/PeaksToPathways.R "  
+        # args += filename
+        # args = args + " " + ion + " " + str(ppm) + " " + organism
+        # print(args)
+        # os.system(args)
 
