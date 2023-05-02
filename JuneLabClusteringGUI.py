@@ -42,7 +42,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.style.configure("RW.TLabel", foreground="#f03d33",font=("TkHeadingFont",30))
 		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="gray", background="#000000",font=("Arial",14))
 
-		numThreads = int(multiprocessing.cpu_count()/2)
+		numThreads = multiprocessing.cpu_count()
 		#set up the start up page.
 		self.JuneLab = ttk.Label(self, text="GUI Set-Up",style="RW.TLabel").grid(column=0,row=0,columnspan=4)
 		self.NameLab = ttk.Label(self, text="Please input your name or a Project name:",font=("TkHeadingFont",16)).grid(column=2,row=1,sticky=(N,S,E,W),pady=10)
@@ -130,6 +130,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.anova = ttk.Button(self, text="ANOVA", style="RW.TButton",command=self.anyANOVA).grid(column=3,row=7,sticky=(N,S,E,W))
 		#create a button that allows the user to run the results through mummichog from the UI
 		self.mummichog = ttk.Button(self,text="mummichog",style="RW.TButton",command=self.pathways).grid(column=2,row=8,sticky=(N,S,E,W))
+		#create a button that allows the user to run the MetaboAnalyst Bot
+		self.metaboAnalyst = ttk.Button(self,text="MetaboAnalyst Bot",style="RW.TButton",command=self.MA).grid(column=1,row=8,sticky=(N,S,E,W))
 		
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
@@ -156,7 +158,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_remove()
 		widgets = self.winfo_children()
 
-		n = 23
+		n = 24
 		widgetDict = {}
 		for i in range(n):
 			#create a dictionary of the widgets from home window
@@ -185,6 +187,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[20].grid(column=1,row=7,sticky=(N,S,E,W))
 		widgetDict[21].grid(column=3,row=7,sticky=(N,S,E,W))
 		widgetDict[22].grid(column=2,row=8,sticky=(N,S,E,W))
+		widgetDict[23].grid(column=1,row=8,sticky=(N,S,E,W))
 
 		count = -1
 		for child in self.winfo_children():
@@ -1484,7 +1487,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 			minFeature = minNumMetabClust.curselection()
 			minFeature = int(minFeature[0])
 
-			print(linkParams	)
 			#send to ensemble clustering algorithm
 			GU.ensembleClustering(optNum= optClust, minMetabs= minFeature, colorMap = cMapSel,linkParams=linkParams,transform=transSel,scale=scaleSel)
 
@@ -1497,6 +1499,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		def scaleOpts(*args):
 			webbrowser.open('https://github.com/hisl6802/Transformation-and-Scaling/wiki/Scaling')
+
+		def allAgglo(*args):
+			GU.allAgglomerative(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', types='base')
+
 
 		def standardEnsemble(*args):
 			objects = self.grid_slaves()
@@ -1518,6 +1524,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			self.ButtonTransforms = ttk.Button(self,text="Transform Options",command=transOpts).grid(column=1,row=3,sticky=(N))
 			self.ButtonScale = ttk.Button(self,text="Scale Options", command=scaleOpts).grid(column=2,row=3,sticky=(N))
 			self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2,row=8, sticky=(N))
+			
 			
 			global colorList
 			colorList = config.colorList 
@@ -1578,6 +1585,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=7, sticky=(N),columnspan=2)
 		self.FirstNext = ttk.Button(self,text="Next->",command=firstNext).grid(column=0,row=6,sticky=(N))
 		self.standardEnsemble = ttk.Button(self, text="Pre-set Ensemble",command=standardEnsemble).grid(column=0,row=8)
+		self.allAgglo = ttk.Button(self,text="All Agglo.",command=allAgglo).grid(column=0,row=9)
 		singleBox = tk.StringVar()
 		completeBox = tk.StringVar()
 		averageBox = tk.StringVar()
@@ -2020,6 +2028,27 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.submitNormC = ttk.Button(self,text="N-way ANOVA", command=nWayANOVA).grid(column=1,row=1,sticky=(N),columnspan=2)
 		self.normHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=2)
 
+	def MA(self):
+		'''
+		'''
+		def MABotUni(*args):
+			GU.MetaboBot(type='uni')
+
+		def MABotMulti(*args):
+			GU.MetaboBot(type='multi')
+
+		
+
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+
+			#create a label for MetaboAnalyst Bot button
+			self.style = ttk.Style()
+			self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="gray", background="#000000",font=("Arial",14))
+			self.MBot = ttk.Label(self, text="MetaboAnalyst Bot's", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
+			self.button = ttk.Button(self,text="Univariate Analysis",style="RW.TButton",command=MABotUni).grid(column=1,row=1,sticky=(N))
 
 
 if __name__ == '__main__':

@@ -728,7 +728,7 @@ class GUIUtils:
         return
                 
 
-    def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', type='base'):
+    def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', types='base'):
         '''
         The distance measures and linkage functions should be consistent but we could also develop
         a GUI that allows for the users to select various distance measures. The linkage functions 
@@ -765,8 +765,6 @@ class GUIUtils:
         
         #read in data as dataframe for ease of use in recClusters, and ensembleClustersOut
         metab_data = GB.readAndPreProcess(file=file, transform='None', scale='None', func='Raw')
-        #List for the use in creating and plotting the clustering results
-        # linkParams = [['ward','euclidean'],['single','euclidean'],['single','sqeuclidean'],['single','seuclidean'],['single','chebyshev'],['complete','euclidean'],['complete','sqeuclidean'],['complete','seuclidean'],['complete','chebyshev'],['average','euclidean'],['average','sqeuclidean'],['average','seuclidean'],['average','chebyshev']]
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
         numClusterings = (len(linkParams))
@@ -777,18 +775,27 @@ class GUIUtils:
 
         #create co-occurrence matrix.
         coOcc = GB.cooccurrence(data)
-        print("Starting Ensem")
+
+        #create the argsMulti lists for the starmap call. 
+        argsMulti = []
+        #loop through and append each of the requesite items to the list
         for i in range(len(linkParams)):
-            print(i)
-            start = time.perf_counter()
-            linkCur = linkage(data,linkParams[i][0],linkParams[i][1])
-            valid = GB.clustConnectLink(linkCur)
-            coOcc = GB.popCooccurrence(valid[dictLoc],coOcc,numClusterings)
-            end = time.perf_counter()
-            print(end-start)
-            logging.info(': ' +str(linkParams[i][0])+'-'+str(linkParams[i][1]) +' done!')
-            logging.info(str(end-start))
-        del(linkParams)
+            argsMulti.append((data,linkParams[i][0],linkParams[i][1]))
+            logging.info(': ' +str(linkParams[i][0])+'-'+str(linkParams[i][1]) +' being performed.')
+
+        if __name__ == 'GUIUtils':
+            with Pool(config.numThreads) as p:
+                clustSol = p.starmap(linkage,argsMulti)
+
+        if __name__ == 'GUIUtils':
+            with Pool(config.numThreads) as p:
+                valid = p.map(GB.clustConnectLink,clustSol)
+        print(valid)
+        for i in range(len(valid)):
+            coOcc = GB.popCooccurrence(valid[i][dictLoc],coOcc,numClusterings)
+
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        logging.info(': Completed ensemble clustering!')
 
         #make the coOccurence matrix a dataframe.
         coOcc1 = pd.DataFrame(coOcc)
@@ -994,6 +1001,7 @@ class GUIUtils:
                 for i in range(len(validationClusters)):
                     if i >= len(validationClusters)-101:
                         argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            print(argsMulti[0])
 
             if __name__ == 'GUIUtils':
                 with Pool(config.numThreads) as p:
@@ -1508,14 +1516,16 @@ class GUIUtils:
 
 
         optNum = 2
+        ####################################################################################################
+        ############## commented out to help run code without the need for this currently ##################
+        ####################################################################################################
+        # refClust = LW.clustFinder(data=data,optNum=optNum,clusters=clusters)
         
-        refClust = LW.clustFinder(data=data,optNum=optNum,clusters=clusters)
         
-        
-        ECI = LW.clustCompare(refClust)
+        # ECI = LW.clustCompare(refClust)
        
-        consensusMat = LW.consensus(ECI,refClust,data)
-        regionsOut = LW.regions(consensusMat)
+        # consensusMat = LW.consensus(ECI,refClust,data)
+        # regionsOut = LW.regions(consensusMat)
 
     def enzymeLookUp(numSheets):
         '''
@@ -2097,3 +2107,111 @@ class GUIUtils:
         # print(args)
         # os.system(args)
 
+    def MetaboBot(analysis = 'uni'):
+        '''
+        '''
+        filename = filedialog.askopenfilename()
+        print('Work in progress')
+
+    def allAgglomerative(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', types='base'):
+        '''
+        '''
+        start = time.perf_counter()
+        #log that user called MST
+        logging.info(': User called the all agglomerative function.')
+
+        filename = filedialog.askopenfilename()
+        try:
+            data, col_groups = GB.readAndPreProcess(file=filename, transform = 'Log transformation', scale = 'Auto Scaling', func='CC')
+        except BaseException:
+            logging.error(': Unable to proceed, due to file error!')
+            messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
+            return
+        
+        #read in data as dataframe for ease of use in recClusters, and ensembleClustersOut
+        metab_data = GB.readAndPreProcess(file=filename, transform='None', scale='None', func='Raw')
+
+        num_groups=data.shape[1]
+        linkParams = [['ward','euclidean'],['single','euclidean'],['single','sqeuclidean'],['single','seuclidean'],['single','chebyshev'],['complete','euclidean'],['complete','sqeuclidean'],['complete','seuclidean'],['complete','chebyshev'],['average','euclidean'],['average','sqeuclidean'],['average','seuclidean'],['average','chebyshev']]
+        #create the argsMulti lists for the starmap call. 
+        argsMulti = []
+        #loop through and append each of the requesite items to the list
+        for i in range(len(linkParams)):
+            argsMulti.append((data,linkParams[i][0],linkParams[i][1]))
+            logging.info(': ' +str(linkParams[i][0])+'-'+str(linkParams[i][1]) +' being performed.')
+
+        if __name__ == 'GUIUtils':
+            with Pool(config.numThreads) as p:
+                clustSol = p.starmap(linkage,argsMulti)
+
+        if __name__ == 'GUIUtils':
+            with Pool(config.numThreads) as p:
+                valid = p.map(GB.clustConnectLink,clustSol)
+
+        #remove any cluster solutions that have more clusters than N-(N/2)-1, and have more than 100 clusters for 200 or more features
+        if data.shape[0] > 201:
+            for i in range(len(valid)):
+                for j in range(data.shape[0]-101):
+                    #pop all the dictionary keys within the range of 1-data.shape[0]-1 for each clustering solution
+                    valid[i].pop(j)
+
+        else: 
+            for i in range(len(valid)):
+                for j in range(data.shape[0]-int(data.shape[0]/2 -1)):
+                    #pop all the dictionary keys within the range of 1-data.shape[0]-1 for each clustering solution
+                    valid[i].pop(j)
+
+
+        #Run silhouette cluster optimization 
+
+        valOuts = []
+        for i in range(len(valid)):
+            argsMulti = []
+            for key in valid[i]:
+                argsMulti.append(({0:valid[i][key]},data,num_groups))
+
+            if __name__ == 'GUIUtils':
+                with Pool(config.numThreads) as p:
+                    valOutcomes = p.starmap(VM.Silhouette,argsMulti)
+
+            valOuts.append(valOutcomes)
+        logging.info(msg=': Silhouette validation has finished for all clustering')
+
+        ## Loop through the valOuts to determine the values that are the best for each clustering solution
+        optClusts = []
+        for i in range(len(valOuts)):
+            #find the maximum value of the silhouette measures, get the location and use that location to get the 
+            optClusts.append(np.asarray(valOuts[i])[:,0][np.where(np.asarray(valOuts[i])[:,0][:,0]==np.max(np.asarray(valOuts[i])[:,0][:,0]))[0],1])
+            optClusts[i] = int(optClusts[i][0])    
+
+        #save the optimum number of clusters to a csv file for reference.       
+        optOut = pd.DataFrame(optClusts).to_csv('optimalClusters.csv',index=False)
+
+        #get the number of clusterings performed
+        numClusterings = (len(linkParams))
+        #create co-occurrence matrix.
+        coOcc = GB.cooccurrence(data)
+        for i in range(len(valid)):
+            dictLoc = data.shape[0]-optClusts[i]-1
+            coOcc = GB.popCooccurrence(valid[i][dictLoc],coOcc, numClusterings)
+
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        logging.info(': Completed ensemble clustering!')
+
+        #make the coOccurence matrix a dataframe.
+        coOcc1 = pd.DataFrame(coOcc)
+        try:
+            #try to save the large .csv file of the CoOccurence matrix.
+            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
+        except:
+            logging.error(': Failed to save the Ensemble CoOccurence matrix!!')
+            messagebox.showerror(title='Error',message='Unable to save Ensemble CoOccurent matrix, please inform Brady!')
+        end = time.perf_counter()
+        print(end-start)
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minMetabs,numClusts=numClusterings,link='ward',dist='euclidean',func="ensemble",colMap=colorMap)
+
+        #Log the completgroupion of the ensemble clustering function
+        logging.info(': Sucessfully completed Ensemble clustering!')
+        
+        return
