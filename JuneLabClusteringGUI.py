@@ -1644,7 +1644,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		#validation index list (MST-based, DBI, Dunn)
 		transformList = config.transformList
 		scaleList = config.scaleList
-		valList = ('k-means based','DBI','Dunn','PBM','Silhouette')
+		valList = ('k-means based','DBI','Dunn','PBM','Silhouette','CH')
 		valTypeBox = Listbox(self,height=5,width=30)
 		transBox = Listbox(self,height=5,width=30)
 		scaleBox = Listbox(self,height=5,width=30)

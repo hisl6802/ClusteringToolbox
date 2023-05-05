@@ -10,6 +10,8 @@ from scipy.spatial.distance import pdist,squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import t
+from sklearn.cluster import AgglomerativeClustering as AC
+from sklearn import metrics
 
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
@@ -898,28 +900,18 @@ class GUIUtils:
             logging.info(": Starting Davies-Bouldin cluster validation!")
 
             #start tracking the performance of non-threaded DBI validation
-            start = time.perf_counter()
-            valIndex = np.zeros((len(validationClusters),2))
+            #metric out
+            metric = np.zeros((99,2))
+            for i in range(metric.shape[0]):
+                agglo = AC(n_clusters=i+2).fit(data)
+                metric[i,0],metric[i,1] = i+2, metrics.davies_bouldin_score(data, agglo.labels_)
 
-            argsMulti = []
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+            plt.plot(metric[:,0],metric[:,1])
 
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(VM.daviesBouldin,argsMulti)
-
-            
-            end = time.perf_counter()
-            valIndex = np.asarray(valIndex)
-
-            GB.valPlotting(valIndex,mstOut,valMet = func)
+            plt.title('Davies-Bouldin')
+            plt.xlabel('Clusters')
+            plt.ylabel('Metric Score')
+            plt.show()
 
         elif func == 'Dunn':
             logging.info(": Starting Dunn cluster validation!")
@@ -980,7 +972,6 @@ class GUIUtils:
                 with Pool(config.numThreads) as p:
                     valIndex = p.starmap(VM.PBM,argsMulti)
 
-            
             end = time.perf_counter()
             valIndex = np.asarray(valIndex)
             GB.valPlotting(valIndex,mstOut,valMet='PBM')
@@ -989,27 +980,34 @@ class GUIUtils:
             logging.info(": Starting Silhouette cluster validation!")
 
             #start tracking the performance of non-threaded DBI validation
-            start = time.perf_counter()
-            valIndex = np.zeros((len(validationClusters),2))
+            #metric out
+            metric = np.zeros((99,2))
+            for i in range(metric.shape[0]):
+                agglo = AC(n_clusters=i+2).fit(data)
+                metric[i,0],metric[i,1] = i+2, metrics.silhouette_score(data, agglo.labels_)
 
-            argsMulti = []
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            print(argsMulti[0])
+            plt.plot(metric[:,0],metric[:,1])
 
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(VM.Silhouette,argsMulti)
+            plt.title('Silhouette')
+            plt.xlabel('Clusters')
+            plt.ylabel('Metric Score')
+            plt.show()
 
-            end = time.perf_counter()
-            valIndex = np.asarray(valIndex)
-            GB.valPlotting(valIndex,mstOut,valMet="Silhouette")
+        elif func == 'CH':
+            logging.info(": Starting Calinski-Harabasz cluster validation!")
+            
+            #metric out
+            metric = np.zeros((99,2))
+            for i in range(metric.shape[0]):
+                agglo = AC(n_clusters=i+2).fit(data)
+                metric[i,0],metric[i,1] = i+2, metrics.calinski_harabasz_score(data, agglo.labels_)
+
+            plt.plot(metric[:,0],metric[:,1])
+
+            plt.title('Calinski-Harabasz')
+            plt.xlabel('Clusters')
+            plt.ylabel('Metric Score')
+            plt.show()
 
 
     def peaksToPathways():
@@ -2161,9 +2159,7 @@ class GUIUtils:
                     #pop all the dictionary keys within the range of 1-data.shape[0]-1 for each clustering solution
                     valid[i].pop(j)
 
-
         #Run silhouette cluster optimization 
-
         valOuts = []
         for i in range(len(valid)):
             argsMulti = []

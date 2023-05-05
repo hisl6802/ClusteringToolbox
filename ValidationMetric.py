@@ -4,6 +4,9 @@ import statistics as stat
 from scipy.spatial.distance import pdist,squareform
 import logging
 
+from sklearn import metrics
+from sklearn.metrics import pairwise_distances
+
 class ValidationMetric:
 
     def daviesBouldin(data,dists,num_groups):
@@ -493,3 +496,10 @@ class ValidationMetric:
             val_index[0,1]=K
 
         return val_index
+    
+
+    def CH(data,dists,num_groups):
+        '''
+        Working the sklearn metrics for Calinski-Harabasz metric
+        '''
+
