@@ -2032,10 +2032,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 		'''
 		'''
 		def MABotUni(*args):
-			GU.MetaboBot(type='uni')
+			GU.MetaboBot(analysis='uni')
 
 		def MABotMulti(*args):
-			GU.MetaboBot(type='multi')
+			GU.MetaboBot(analysis='multi')
 
 		
 
@@ -2044,11 +2044,14 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_forget()
 
 
-			#create a label for MetaboAnalyst Bot button
-			self.style = ttk.Style()
-			self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="gray", background="#000000",font=("Arial",14))
-			self.MBot = ttk.Label(self, text="MetaboAnalyst Bot's", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
-			self.button = ttk.Button(self,text="Univariate Analysis",style="RW.TButton",command=MABotUni).grid(column=1,row=1,sticky=(N))
+		#create a label for MetaboAnalyst Bot button
+		self.style = ttk.Style()
+		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="gray", background="#000000",font=("Arial",14))
+		self.MBot = ttk.Label(self, text="MetaboAnalyst Bot's", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=2)
+		self.button = ttk.Button(self,text="Univariate Analysis",style="RW.TButton",command=MABotUni).grid(column=1,row=1,sticky=(N))
+		self.button = ttk.Button(self,text="Multi-variate Analysis",style="RW.TButton",command=MABotMulti).grid(column=1,row=2,sticky=(N))
+		self.botHome =ttk.Button(self,text='Return to Home',style="RW.TButton",command=self.home).grid(column=1,row=3,sticky=(N))
+
 
 
 if __name__ == '__main__':

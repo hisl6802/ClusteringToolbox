@@ -1,5 +1,14 @@
 #Creating a class containing functions that will be used in GUI
 from numpy.lib.arraysetops import isin
+from selenium import webdriver
+import time
+import platform
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from tkinter import filedialog as fd
+import os
+import zipfile
+import glob
 import pandas as pd
 import numpy as np
 import pingouin as pg
@@ -2108,8 +2117,169 @@ class GUIUtils:
     def MetaboBot(analysis = 'uni'):
         '''
         '''
-        filename = filedialog.askopenfilename()
-        print('Work in progress')
+        #set up the browser runner, update the directory, get all the csv files within the folder of interest
+        directory = fd.askdirectory()
+
+        curDir = os.getcwd()
+        os.chdir(directory)
+        files = glob.glob( '*.csv')
+        browser = webdriver.Chrome()
+
+        for i in range(len(files)):
+            #get file of interest and 
+            file = files[i]
+            # loc, name = os.path.split(file)
+            name = file.strip('.csv')
+            file = directory+'/'+file
+
+            # analysis = 'uni'
+            # #analysis = 'multi'
+
+            ## Navigate to the MetaboAnalyst Website for the one-factor stats analysis
+            browser.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/StatUploadView.xhtml')
+            time.sleep(2)
+
+            #click on the peak intensities radio button
+            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt19"]/tbody/tr/td[3]/div/div[2]/span').click()
+            time.sleep(3)
+
+            #send the file to the website
+            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt25_input"]').send_keys(file)
+
+            time.sleep(3)
+            #submit
+            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt26"]').click()
+            time.sleep(4)
+
+            #proceed after data check
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt17"]/span[1]').click()
+            time.sleep(3)
+
+            #Standard Deviation Filtering
+            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt24"]/tbody/tr[2]/td/div/div[2]/span').click()
+
+            #Submit Filtering Selection
+            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt36"]').click()
+            time.sleep(2)
+
+            #Proceed to data pre-processing
+            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt37"]').click()
+            time.sleep(3)
+
+            #select the wanted pre-processing, normalize and proceed.
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt73"]/div[2]/span').click()
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt93"]/div[2]/span').click()
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt103"]').click()
+            time.sleep(4)
+            browser.find_element(By.XPATH,'//*[@id="form1:nextBn"]').click()
+            time.sleep(5)
+
+            if analysis == 'uni':
+                #select fold-change analysis
+                browser.find_element(By.XPATH,'//*[@id="j_idt11"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a').click()
+                time.sleep(2)
+
+                #select t-test analysis
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt60:3_1"]/div').click()
+                time.sleep(2)
+
+                #select volcano plot analysis
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt75:3_2"]/div').click()
+                time.sleep(2)
+
+                #update the p-value threshold of the FDR correction volcano plot
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt50"]').clear()
+                time.sleep(5)
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt50"]').send_keys(0.05)
+                time.sleep(4)
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt51"]/tbody/tr/td[2]/div/div[2]/span').click()
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt58"]').click()
+                time.sleep(5)
+                #PCA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt94:3_7"]/div').click()
+                time.sleep(5)
+
+                #2D scores PCA
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
+                time.sleep(5)
+
+                #PLS-DA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt144:3_8"]/div').click()
+                time.sleep(5)
+
+                #PLS-DA 2D scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
+                time.sleep(5)
+
+                #PLS-DA VIP Scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
+                time.sleep(5)
+
+                #Dendrogram
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt197:3_13"]/div').click()
+                time.sleep(5)
+
+                #Heatmap
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt33:3_14"]/div').click()
+                time.sleep(3)
+
+            elif analysis == 'multi':
+                #ANOVA
+                browser.find_element(By.XPATH,'//*[@id="j_idt11"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a').click()
+                time.sleep(3)
+                
+                #PCA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt74:3_7"]/div').click()
+                time.sleep(5)
+
+                #2D scores PCA
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
+                time.sleep(5)
+
+                #PLS-DA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt144:3_8"]/div').click()
+                time.sleep(5)
+
+                #PLS-DA 2D scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
+                time.sleep(5)
+
+                #PLS-DA VIP Scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
+                time.sleep(5)
+
+                #Dendrogram
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt197:3_13"]/div').click()
+                time.sleep(5)
+
+                #Heatmap
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt33:3_14"]/div').click()
+                time.sleep(3)
+
+
+            #download
+            browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt95:4"]/div').click()
+            time.sleep(4)
+
+            #download the zip file
+            browser.find_element(By.XPATH,'//*[@id="ac:form1:j_idt18_data"]/tr[1]/td[1]/a').click()
+            time.sleep(5)
+
+            rename = name+'.zip'
+            #get the user information, and give the appropriate extensions to the Download folder
+            basepath = os.path.expanduser('~')
+            if platform.system() == 'Darwin':
+                basepath +='/Downloads/Download.zip'
+                os.rename(basepath,rename)
+            elif platform.system() == 'Windows':
+                basepath +='\\Downloads\\Download.zip'
+                os.rename(basepath,rename)
+
+            zip_dir = directory + '/'+ name
+            with zipfile.ZipFile(rename,'r') as zip_ref:
+                zip_ref.extractall(zip_dir)
+
+            os.remove(rename)
 
     def allAgglomerative(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', types='base'):
         '''
