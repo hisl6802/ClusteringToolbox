@@ -126,11 +126,12 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(column=2,row=7,sticky=(N,S,E,W))
 		#create a button for the user to match the mz to rt for "improved" mummichog results
 		self.mzToRT = ttk.Button(self,text="MZ to RT", style="RW.TButton",command=self.MZ_RT).grid(column=1,row=7,sticky=(N,S,E,W))
-		
+		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(column=3,row=7,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
 	def home(self):
+		
 		#start listing out the global variables that need to be removed for each function upon returning home
 		if 'ensemble' in globals():
 			try:
@@ -152,7 +153,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_remove()
 		widgets = self.winfo_children()
 
-		n = 21
+		n = 22
 		widgetDict = {}
 		for i in range(n):
 			#create a dictionary of the widgets from home window
@@ -179,6 +180,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[18].grid(column=3,row=6,sticky=(N,S,E,W))
 		widgetDict[19].grid(column=2,row=7,sticky=(N,S,E,W))
 		widgetDict[20].grid(column=1,row=7,sticky=(N,S,E,W))
+		widgetDict[21].grid(column=3,row=7,sticky=(N,S,E,W))
 
 		count = -1
 		for child in self.winfo_children():
@@ -1912,6 +1914,56 @@ class JuneLabClusteringGUI(ttk.Frame):
 		GU.mzrt()
 
 
+
+	def mfg(self):
+		'''
+		'''
+
+		print("Work in progress")
+		def submitMFG(*args):
+			'''
+			'''
+
+			selected = optionsList.curselection()
+
+			# if the user selected something
+			if selected:
+				selected = options[selected[0]]
+				print(selected)
+				file = filedialog.askopenfilename()
+				GU.mfgUtil(fileName=file,variant=selected)
+			else:
+				print("Nothing Selected")
+			
+		#eliminating the objects from home page.
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+
+		self.header = ttk.Label(self,text="Metabobot File Gen", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N))
+		self.goHomePlease = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=1)
+		self.submitNormC = ttk.Button(self,text="Submit", command=submitMFG).grid(column=2,row=4,sticky=(N))
+
+		#Create the lists of available options for selection 
+		options = list(["Multi","Uni","All"])
+
+		optionsList = Listbox(self,height=5,width=35)
+
+		for i in range(len(options)):
+			optionsList.insert(i,options[i])
+
+	
+		self.optionsList = optionsList
+		self.optionsList.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
+		# GU.mfgUtil()
+		# ask for file
+		# multi or uni or all listbox
+		# send argument to gui util  GU.myfunc(MYARGS)
+
+
+
+		
 if __name__ == '__main__':
 	#launch application
 	root = tk.Tk()

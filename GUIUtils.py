@@ -17,6 +17,7 @@ import seaborn as sns
 import config
 import random
 import math
+from itertools import combinations
 
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
@@ -1939,3 +1940,238 @@ class GUIUtils:
         dataP2P = pd.DataFrame(dataP2P,columns=["m.z","p.value","r.t"])
 
         dataP2P.to_csv('Update_p2pFile.csv',index=False)
+    
+    def mfgUtil(fileName,variant):
+        '''
+        '''
+        logging.info(":called Metaboamalyst File generation functions,")
+        logging.info(":User selected INPUT SELECTION")
+
+
+
+
+        dir = os.getcwd()
+
+        excelFile = fileName
+        data = pd.read_excel(excelFile)
+        df = pd.DataFrame(data)
+        df = df.drop("rtmed",axis=1)
+        dfOld = df
+
+        numCols = sum(data["rtmed"].isna())
+
+        # DO THIS FOR EACH ROW TO GET ALL UNIQUE IDENTIFIERS
+        identifierDict = {}
+
+        for i in range(0,numCols):
+            uni=pd.unique(df.loc[i,:])
+            title = uni[0]
+            levels = uni[1:len(uni)]
+            
+            identifierDict[title] = list(levels)
+            
+
+
+        comparisons = list(identifierDict.values())
+        print("Comparing: " + str(comparisons))
+        uni_F1 = []*len(comparisons)
+        for k in range(0,len(comparisons)):
+            temp = []
+            
+            # get all unique combinations
+            for i in range(2,len(comparisons[k])+1):
+                    temp.extend(combinations(comparisons[k],i))
+
+            uni_F1.append(temp)
+            # display combinations
+
+        print((uni_F1))
+        # combine everything we need to compare
+        comparitors = sum(comparisons,[])
+
+        tempDict = {}
+        myDict = {}
+        lookupTable = {}
+        iter = 0
+        # for all comparitors
+        for i in range(0,len(comparisons)):
+            # print()
+            # print(comparisons[i])
+
+            # for each level
+            for j in range(0,len(comparisons[i])):
+                # print("Comparing " + str(comparisons[i][j]))
+                
+                # for each level, look at the comparison list
+                for m in range(0,len(comparisons)):
+                    
+                    # skip the comparison list that includes the selected level
+                    if m==i:
+                        pass
+                    else:
+                        tempDict = {}
+                        currentIndex = 0
+
+                        # run through each comparison and level 
+                        for k in range(0,len(uni_F1[m])):
+
+                            if variant == "All":
+                                # print(str(comparisons[i][j]) + ":" + str(uni_F1[m][k]))
+                                tempDict[currentIndex] = uni_F1[m][k]
+                                currentIndex += 1
+                            elif variant == "Multi" and len(uni_F1[m][k]) > 2:
+                                # print(str(comparisons[i][j]) + ":" + str(uni_F1[m][k]))
+                                
+                                tempDict[currentIndex] = uni_F1[m][k]
+                                currentIndex += 1
+                            elif variant == "Uni" and len(uni_F1[m][k]) == 2:
+                                # print(str(comparisons[i][j]) + ":" + str(uni_F1[m][k]))
+                                
+                                tempDict[currentIndex] = uni_F1[m][k]
+                                currentIndex += 1
+                            pass
+                # look where the level were lookin at shows up in the comparitors list
+                tempIndex = comparitors.index(comparisons[i][j])
+                # then save the temp dictionary
+                myDict[tempIndex] = tempDict
+
+                # save this index in the lookup table
+                lookupTable[tempIndex] = comparisons[i][j]
+                
+        print("Dictionary")
+        for i in range(0,len(myDict)):
+            print(str(i) + ":" + str(myDict[i]))
+        # print()
+        # print("Lookup table: " + str(lookupTable))
+
+
+
+        # for each comparitor
+        for j in range(0,len(myDict)):
+            # for each comparitor's variate sets
+            # print(len(myDict[j]))
+            # print(myDict[j])
+            # print(j)
+            if not len(myDict[j]) == 0:
+                # if the current index is not empty 
+                for k in range(0,len(myDict[j])):
+                    # print(k)
+                    os.chdir(dir)
+            
+                    data = pd.read_excel(excelFile)
+                    df = pd.DataFrame(data)
+                    df = df.drop("rtmed",axis=1)
+                    # the variate combination were looking at
+                    variateCombo = myDict[j][k]
+            
+                        
+                    variateList = []
+                    fileName = lookupTable[j] + "_"
+                    # creates the csv file name using the variates in the file
+                    for i in range(0,len(variateCombo)):
+                        fileName += variateCombo[i]
+                        if i+1 != len(variateCombo):
+                            fileName += "_"
+                    print(fileName)
+                    
+                    variateList.append(lookupTable[j])
+                    variateList.extend(list(variateCombo))
+                    # print(variateList)
+            
+            
+                    
+                    tempArray = variateList
+                    # tempArray = ["Inj","Young","Aging"]
+                    # Injury or Age
+                    selected = tempArray[0]
+                    
+                    # get the number of rows with factors
+                    numCols = sum(data["rtmed"].isna())
+                    
+                    
+                    data_a = data
+                    
+                    myKeys = list(identifierDict.keys())
+                    # print(myKeys)
+                    index = -1
+                    
+                    # finds the index where the selected variant is
+                    for i in range(0,len(myKeys)):
+                        for strings in identifierDict[myKeys[i]]:
+                            if strings == selected:
+                                index = i
+                                break
+                    
+                    myIndex = myKeys.index(myKeys[index]);
+                    df = df[list(df.iloc[myIndex].dropna().index)] # removes any NA
+                    rowNumber = df.loc[df['mz'] == myKeys[index]].index # gets the row number of the selected header
+                    
+                    # print(rowNumber)
+                    
+                    
+                    notNeeded = []
+                    for k in range(0,len(myKeys)):
+                        rowVals = df.iloc[k] # gets the values in row k
+                        
+                        # checks to see if we care about this data based on the varaint selection above
+                        temp = []
+                        # print(tempArray)
+                        for i in range(0,len(rowVals)):
+                            if rowVals[i] in tempArray:
+                                # print("found " + rowVals[i])
+                                
+                                temp.extend([True])
+                            else:
+                                temp.extend([False])
+                        # temp
+                        temp = np.array(temp)
+                        a = np.where(temp != True)[0]
+                        
+                        notNeeded.extend(list(a))
+                        
+                    # print(notNeeded)
+                    df = df.drop([index]) # drops the row of data we dont care about
+                    data_a = df.drop(columns=data_a.columns[notNeeded]) # removes the columns with data we dont care about
+            
+            
+                    # print(selected + " removed from dataset")
+                    
+                    
+                    fileName = ""
+                    # creates the csv file name using the variates in the file
+                    for i in range(0,len(tempArray)):
+                        fileName += tempArray[i]
+                        if i+1 != len(tempArray):
+                            fileName += "_"
+                    
+                    # print(fileName)
+                    # print(len(tempArray))
+                    # create new folder
+            
+                    # current directory is the directory where i want the folder to be placed in
+                    newpath = 'CSV_Files' # name of new folder
+                    if not os.path.exists(newpath): # check to see if folder exists
+                        os.makedirs(newpath) # if it does not, create a new folder
+                    os.chdir(newpath) # move to the new folder
+                    # print(newpath)
+            
+                    # determines whether the chosen comparison is uni or multi variate 
+                    if len(tempArray) == 3:
+                        newFolderName = "Uni"
+                    else:
+                        newFolderName = "Multi"
+            
+                    # creates the directory
+                    if not os.path.exists(newFolderName):
+                        os.makedirs(newFolderName)
+                    os.chdir(newFolderName)
+                    # saves the file to that directory
+                    data_a = data_a.T
+                    data_a.to_csv(fileName + ".csv",header=False)
+                    
+                    # goes back out to the "CSV_Files" directory
+                    os.chdir("..")
+        os.chdir(dir)
+        print("Done")
+        logging.info(":Completed")
+        
