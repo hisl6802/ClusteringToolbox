@@ -67,7 +67,15 @@ def fileCheck(file=''):
     # data = dataCheck(data)
     return data
 
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+###--------------------------------------------------------------Sample Normalization--------------------------------------------------------------------------------------------------
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def sampNormSum(data):
+    '''
+    normalize the columns by the sum of the columns
+    '''
 
+    print(data)
 
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###-------------------------------------------------------------- DATA SCALING---------------------------------------------------------------------------------------------------------
@@ -474,7 +482,7 @@ def popCooccurrence(clusters,coOcc,numClusterings):
 
     clusters - dictionary containing the clusters from clustering (link-dist)
     coOcc - pass the current version of the cooccurence matrix. 
-    numClusterings - pass integer of the optimal number clusters. 
+    numClusterings - pass integer of the number of clustering solutions considered  
 
     Output:
     
@@ -1201,7 +1209,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
     Output:
     sends data to the ensembleClustersOut function to export ensemble clusters. 
     '''
-
+    print(numClusts)
     #determine the appropriate number ensemble clusters and there location
     ensemMetabs = dataFinal.shape[0]
 
@@ -1210,7 +1218,7 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
     while j < ensemMetabs:
         #look for the number of ones indicating the total number of 
         #metabolites in the current cluster.
-        found = np.where(dataFinal[j,:]>(numClusts-1)/numClusts)
+        found = np.where(dataFinal[j,:]>((numClusts-0.9)/numClusts))
 
         #determine the length of the array found
         if len(found[0])==1:
@@ -1981,7 +1989,6 @@ def dataCheck(data):
         toDelete[i] = zeros[toDelete[i]]
 
 
-    print(toDelete)
     #delete the extraneous matching rows.
     data = np.delete(data,toDelete,axis=0)
     
@@ -2175,6 +2182,14 @@ def transformations(data, transform='None', scale='None',first='1'):
         #range scale 
         for i in range(data.shape[0]):
             data[i,:] = rangeScaling(data[i,:])
+
+    elif scale == 'Normalization by sum (sample)':
+        #sum normalization on samples
+        data /= data.sum(axis=1)
+
+    elif scale == 'Normalization by median (sample)':
+        #median normalization on samples
+        data /= np.median(data,axis=0)
 
     return data
 

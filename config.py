@@ -11,11 +11,13 @@ colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purple
                       'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
 #transform list, scale list, linkage list, distance metric list, normarilization list
 transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
-scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
+scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling', 'Normalization by sum (sample)','Normalization by median (sample)')
 linkageList = ('single','ward','complete','average')
 distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
 normList = ('Normalize','Do not')
 
+db = ('Mouse_KEGG','Human_BioCyc','Human_KEGG','Mouse_BioCyc','Rat_KEGG','Cow_KEGG')
+lcMode = ('Negative', 'Positive')
 
 #parameters for bootstrapping
 numReSamp = 0

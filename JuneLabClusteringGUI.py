@@ -20,6 +20,10 @@ import config
 
 class JuneLabClusteringGUI(ttk.Frame):
 	def __init__(self, master=None):
+
+		'''
+		Construct the parent elements of the GUI.
+		'''
 		super().__init__(master)
 		self.grid(column=0, row=0, sticky=(N, W, E, S))
 		self.rowconfigure(0, weight =2)
@@ -30,8 +34,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.rowconfigure(3, weight = 2)
 		self.rowconfigure(4, weight = 2)
 		self.columnconfigure(3, weight=2)
-		
-
+		#send the GUI to make the start up page
 		self.startUpPage()
 
 	def startUpPage(self):
@@ -58,6 +61,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 	def create_widgets(self):
 		'''
+		Creates all of the widgets after the initial start-up of the program. Allowing for all of the functionalities to be accessed. 
 		'''
 
 		#get the project name
@@ -1098,7 +1102,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 						typeLookUp.append(lookType[i])
 
 				try:
-
 					request = REST.kegg_find('compound',curInput,typeLookUp[0])
 
 				except:
@@ -1304,20 +1307,22 @@ class JuneLabClusteringGUI(ttk.Frame):
 			cityblockBox = tk.StringVar()
 
 			#create widgets
-			self.EnsemSecondWindow = ttk.Label(self,text="EnsembleClustring").grid(column=1,row=0,columnspan=3,sticky=(N))
-			self.DistMetInterest = ttk.Label(self,text="Which distance metrics would you like to use?").grid(column=1,row=1,columnspan=3,sticky=(N))
-			self.euclideanCheck = ttk.Checkbutton(self,text="Euclidean",variable=euclideanBox,onvalue='euclidean',offvalue='Not').grid(column=1,row=2,sticky=(N,W))
-			self.seuclideanCheck = ttk.Checkbutton(self,text="Standardized Euclidean",variable=seuclideanBox,onvalue='seuclidean',offvalue='Not').grid(column=2,row=2,sticky=(N,W))
-			self.sqeuclideanCheck = ttk.Checkbutton(self,text="Square Root-Euclidean",variable=sqeuclideanBox,onvalue='sqeuclidean',offvalue='Not').grid(column=3,row=2,sticky=(N,W))
-			self.cosineCheck = ttk.Checkbutton(self,text="Cosine",variable=cosineBox,onvalue='cosine',offvalue='Not').grid(column=1,row=3,sticky=(N,W))
-			self.chebyshevCheck = ttk.Checkbutton(self,text="Chebyshev",variable=chebyshevBox,onvalue='chebyshev',offvalue='Not').grid(column=2,row=3,sticky=(N,W))
-			self.correlationCheck = ttk.Checkbutton(self,text="Correlation",variable=correlationBox,onvalue='correlation',offvalue='Not').grid(column=3,row=3,sticky=(N,W))
-			self.canberraCheck = ttk.Checkbutton(self,text="Canberra",variable=canberraBox,onvalue='canberra',offvalue='Not').grid(column=1,row=4,sticky=(N,W))
-			self.braycurtisCheck = ttk.Checkbutton(self,text="Bray-Curtis",variable=braycurtisBox,onvalue='braycurtis',offvalue='Not').grid(column=2,row=4,sticky=(N,W))
-			self.minkowskiCheck = ttk.Checkbutton(self,text="Minkowski",variable=minkowskiBox,onvalue='minkowski',offvalue='Not').grid(column=3,row=4,sticky=(N,W))
-			self.cityblockCheck = ttk.Checkbutton(self,text="City Block",variable=cityblockBox,onvalue='cityblock',offvalue='Not').grid(column=1,row=5,sticky=(N,W))
-			self.SecondNextButton = ttk.Button(self, text="Next->", command = secondNext).grid(column=2,row=6,sticky=(N))
-			self.home1 = ttk.Button(self, text="Return to Home",command=self.home).grid(column=2,row=7,sticky=(N))
+			self.style = ttk.Style()
+			self.style.configure("RW.TLabel", foreground="#000000",font=("TkHeadingFont",30))
+			self.EnsemSecondWindow = ttk.Label(self,text="Ensemble Clusturing",style="RW.TLabel").grid(column=1,row=0,columnspan=3,sticky=(N))
+			self.DistMetInterest = ttk.Label(self,text="Which distance metrics would you like to use?",font=("TkHeadingFont",20)).grid(column=1,row=1,columnspan=3,sticky=(N))
+			self.euclideanCheck = ttk.Checkbutton(self,text="Euclidean",variable=euclideanBox,onvalue='euclidean',offvalue='Not').grid(column=1,row=2,sticky=(N,W),padx=5,pady=5)
+			self.seuclideanCheck = ttk.Checkbutton(self,text="Standardized Euclidean",variable=seuclideanBox,onvalue='seuclidean',offvalue='Not').grid(column=2,row=2,sticky=(N,W),padx=5,pady=5)
+			self.sqeuclideanCheck = ttk.Checkbutton(self,text="Square Root-Euclidean",variable=sqeuclideanBox,onvalue='sqeuclidean',offvalue='Not').grid(column=3,row=2,sticky=(N,W),padx=5,pady=5)
+			self.cosineCheck = ttk.Checkbutton(self,text="Cosine",variable=cosineBox,onvalue='cosine',offvalue='Not').grid(column=1,row=3,sticky=(N,W),padx=5,pady=5)
+			self.chebyshevCheck = ttk.Checkbutton(self,text="Chebyshev",variable=chebyshevBox,onvalue='chebyshev',offvalue='Not').grid(column=2,row=3,sticky=(N,W),padx=5,pady=5)
+			self.correlationCheck = ttk.Checkbutton(self,text="Correlation",variable=correlationBox,onvalue='correlation',offvalue='Not').grid(column=3,row=3,sticky=(N,W),padx=5,pady=5)
+			self.canberraCheck = ttk.Checkbutton(self,text="Canberra",variable=canberraBox,onvalue='canberra',offvalue='Not').grid(column=1,row=4,sticky=(N,W),padx=5,pady=5)
+			self.braycurtisCheck = ttk.Checkbutton(self,text="Bray-Curtis",variable=braycurtisBox,onvalue='braycurtis',offvalue='Not').grid(column=2,row=4,sticky=(N,W),padx=5,pady=5)
+			self.minkowskiCheck = ttk.Checkbutton(self,text="Minkowski",variable=minkowskiBox,onvalue='minkowski',offvalue='Not').grid(column=3,row=4,sticky=(N,W),padx=5,pady=5)
+			self.cityblockCheck = ttk.Checkbutton(self,text="City Block",variable=cityblockBox,onvalue='cityblock',offvalue='Not').grid(column=1,row=5,sticky=(N,W),padx=5,pady=5)
+			self.SecondNextButton = ttk.Button(self, text="Next->", command = secondNext).grid(column=2,row=6,sticky=(N),padx=5,pady=5)
+			self.home1 = ttk.Button(self, text="Return to Home",command=self.home).grid(column=1,row=6,sticky=(N),padx=5,pady=5)
 
 		def secondNext(*args):
 			global distanceMetList
@@ -1369,17 +1374,17 @@ class JuneLabClusteringGUI(ttk.Frame):
 				i.grid_forget()
 			
 			#create widgets for the clustergram function input. 
-			self.EnsembleLabel = ttk.Label(self, text="Ensemble Clustering",font=("TkHeadingFont",24)).grid(column=0,row=0,sticky=(N),columnspan=3)
-			self.JuneLab = ttk.Label(self, text="# of Clusters",font=("TkHeadingFont",18)).grid(column=0,row=4,sticky=(N))
-			self.MetabNumPClustL = ttk.Label(self, text="Min. # of features?", font=("TkHeadingFont",18)).grid(column=1,row=4,sticky=(N))
-			self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=1,sticky=(N))
-			self.trans = ttk.Label(self,text="Transform",font=("TkHeadingFont",18)).grid(column=1,row=1,sticky=(N))
-			self.scale = ttk.Label(self,text="Scale", font=("TkHeadingFont",18)).grid(column=2,row=1,sticky=(N))
-			self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=8,sticky=(N))
-			self.ButtonColormaps = ttk.Button(self,text="ColorMap Options",command=cMapOpt).grid(column=0,row=3,sticky=(N))
-			self.ButtonTransforms = ttk.Button(self,text="Transform Opttions",command=transOpts).grid(column=1,row=3,sticky=(N))
-			self.ButtonScale = ttk.Button(self,text="Scale Options", command=scaleOpts).grid(column=2,row=3,sticky=(N))
-			self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2,row=8, sticky=(N))
+			self.EnsembleLabel = ttk.Label(self, text="Ensemble Clustering",font=("TkHeadingFont",30)).grid(column=0,row=0,sticky=(N),columnspan=3)
+			self.JuneLab = ttk.Label(self, text="# of Clusters",font=("TkHeadingFont",18)).grid(column=0,row=4,sticky=(N),padx=5,pady=5)
+			self.MetabNumPClustL = ttk.Label(self, text="Min. # of features?", font=("TkHeadingFont",18)).grid(column=1,row=4,sticky=(N),padx=5,pady=5)
+			self.colMap = ttk.Label(self, text="ColorMap", font=("TkHeadingFont",18)).grid(column=0,row=1,sticky=(N),padx=5,pady=5)
+			self.trans = ttk.Label(self,text="Transform",font=("TkHeadingFont",18)).grid(column=1,row=1,sticky=(N),padx=5,pady=5)
+			self.scale = ttk.Label(self,text="Scale", font=("TkHeadingFont",18)).grid(column=2,row=1,sticky=(N),padx=5,pady=5)
+			self.mstF1 = ttk.Button(self,text="Run MST",command=self.mstF).grid(column=0,row=8,sticky=(N),padx=5,pady=5)
+			self.ButtonColormaps = ttk.Button(self,text="ColorMap Options",command=cMapOpt).grid(column=0,row=3,sticky=(N),padx=5,pady=5)
+			self.ButtonTransforms = ttk.Button(self,text="Transform Opttions",command=transOpts).grid(column=1,row=3,sticky=(N),padx=5,pady=5)
+			self.ButtonScale = ttk.Button(self,text="Scale Options", command=scaleOpts).grid(column=2,row=3,sticky=(N),padx=5,pady=5)
+			self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2,row=8, sticky=(N),padx=5,pady=5)
 			
 			global colorList
 			colorList = config.colorList
@@ -1390,11 +1395,11 @@ class JuneLabClusteringGUI(ttk.Frame):
 			global colorMapEnsem
 			global transformEnsem
 			global scaleEnsem
-			optClustBox = Listbox(self,height=5,width=35)
-			minNumMetabClust = Listbox(self, height=5,width=35)
-			colorMapEnsem = Listbox(self, height=5,width=35)
-			transformEnsem = Listbox(self, height=5,width=35)
-			scaleEnsem = Listbox(self, height=5,width=35)
+			optClustBox = Listbox(self,height=5,width=30)
+			minNumMetabClust = Listbox(self, height=5,width=30)
+			colorMapEnsem = Listbox(self, height=5,width=30)
+			transformEnsem = Listbox(self, height=5,width=30)
+			scaleEnsem = Listbox(self, height=5,width=30)
 
 			global transformList
 			global scaleList
@@ -1420,15 +1425,15 @@ class JuneLabClusteringGUI(ttk.Frame):
 			colorMapEnsem.bind('<Double-1>',ensembleCMap)
 			transformEnsem.bind('<Double-1>',ensembleTransform)
 			self.optClustBox = optClustBox
-			self.optClustBox.grid(column=0,row=5,columnspan=1)
+			self.optClustBox.grid(column=0,row=5,columnspan=1,padx=5,pady=5)
 			self.minNumMetabClust = minNumMetabClust
-			self.minNumMetabClust.grid(column=1,row=5,columnspan=1)
+			self.minNumMetabClust.grid(column=1,row=5,columnspan=1,padx=5,pady=5)
 			self.colorMapEnsem = colorMapEnsem
-			self.colorMapEnsem.grid(column=0,row=2,columnspan=1)
+			self.colorMapEnsem.grid(column=0,row=2,columnspan=1,padx=5,pady=5)
 			self.transformEnsem = transformEnsem
-			self.transformEnsem.grid(column=1,row=2,columnspan=1)
+			self.transformEnsem.grid(column=1,row=2,columnspan=1,padx=5,pady=5)
 			self.scaleEnsem = scaleEnsem
-			self.scaleEnsem.grid(column=2,row=2,columnspan=1)
+			self.scaleEnsem.grid(column=2,row=2,columnspan=1,padx=5,pady=5)
 
 			
 		def ensembleOptClust(*args):
@@ -1579,22 +1584,27 @@ class JuneLabClusteringGUI(ttk.Frame):
 		for i in objects:
 			i.grid_forget()
 
-		#create first window
-		self.EnsembleLabel = ttk.Label(self,text="Ensemble Clustering",font=("TkHeadingFont",18)).grid(column=0,row=0,sticky=(N))
-		self.Win1Q = ttk.Label(self,text="Which linkage functions would you like to include?",font=("TkHeadingFont",16)).grid(column=0,row=1,sticky=(N))
-		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=0,row=7, sticky=(N),columnspan=2)
-		self.FirstNext = ttk.Button(self,text="Next->",command=firstNext).grid(column=0,row=6,sticky=(N))
-		self.standardEnsemble = ttk.Button(self, text="Pre-set Ensemble",command=standardEnsemble).grid(column=0,row=8)
-		self.allAgglo = ttk.Button(self,text="All Agglo.",command=allAgglo).grid(column=0,row=9)
+		#create first window and provide the details the users needs. 
+		self.style = ttk.Style()
+		self.style.configure("RW.TLabel", foreground="#000000",font=("TkHeadingFont",30))
+		self.EnsembleLabel = ttk.Label(self,text="Ensemble Clustering",style="RW.TLabel").grid(column=1,row=0,columnspan=2,sticky=(N))
+		self.Win1Q = ttk.Label(self,text="Which linkage functions would you like to include?",font=("TkHeadingFont",16)).grid(column=1,row=1,columnspan=2,sticky=(N,S,E,W))
+
+		#Checkboxes for the linkage parameters
 		singleBox = tk.StringVar()
 		completeBox = tk.StringVar()
 		averageBox = tk.StringVar()
 		wardBox = tk.StringVar()
-		self.SingleCheck = ttk.Checkbutton(self,text="Single",variable=singleBox,onvalue='single',offvalue='Not').grid(column=0,row=2,sticky=(N))
-		self.CompleteCheck = ttk.Checkbutton(self,text="Complete",variable=completeBox,onvalue='complete',offvalue='Not').grid(column=0,row=3,sticky=(N))
-		self.AverageCheck = ttk.Checkbutton(self,text="Average",variable=averageBox,onvalue='average',offvalue='Not').grid(column=0,row=4,sticky=(N))
-		self.WardCheck = ttk.Checkbutton(self,text="Ward",variable=wardBox,onvalue='ward',offvalue='Not').grid(column=0,row=5,sticky=(N))
+		self.SingleCheck = ttk.Checkbutton(self,text="Single",variable=singleBox,onvalue='single',offvalue='Not').grid(column=1,row=2,sticky=(N,W),padx=5,pady=5)
+		self.CompleteCheck = ttk.Checkbutton(self,text="Complete",variable=completeBox,onvalue='complete',offvalue='Not').grid(column=2,row=2,sticky=(N,W),padx=5,pady=5)
+		self.AverageCheck = ttk.Checkbutton(self,text="Average",variable=averageBox,onvalue='average',offvalue='Not').grid(column=1,row=3,sticky=(N,W),padx=5,pady=5)
+		self.WardCheck = ttk.Checkbutton(self,text="Ward",variable=wardBox,onvalue='ward',offvalue='Not').grid(column=2,row=3,sticky=(N,W),padx=5,pady=5)
 
+		#Buttons for the first window
+		self.home1 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2,row=6, sticky=(N,S,E,W),columnspan=2,padx=5,pady=5)
+		self.FirstNext = ttk.Button(self,text="Next->",command=firstNext).grid(column=1,row=6,sticky=(N,S,E,W),padx=5,pady=5)
+		self.standardEnsemble = ttk.Button(self, text="Pre-set Ensemble",command=standardEnsemble).grid(column=2,row=8,sticky=(N,S,E,W),padx=5,pady=5)
+		self.allAgglo = ttk.Button(self,text="All Agglo.",command=allAgglo).grid(column=1,row=8,sticky=(N,S,E,W),padx=5,pady=5)
 
 	def mst(self):
 		def valType(*args):

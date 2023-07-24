@@ -760,6 +760,8 @@ class GUIUtils:
         be out as csv files, along with a csv file of the CoOccurence matrix. 
 
         '''
+
+        print(linkParams)
         #log that the user called ensemble clustering function
         logging.info(': User called Ensemble Clustering function.')
 
@@ -779,6 +781,7 @@ class GUIUtils:
 
         #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
         numClusterings = (len(linkParams))
+        print(numClusterings)
 
         #determine the the number of clusters and the dictionary location that needs to be called. 
         numMetabs = data.shape[0]
@@ -801,7 +804,7 @@ class GUIUtils:
         if __name__ == 'GUIUtils':
             with Pool(config.numThreads) as p:
                 valid = p.map(GB.clustConnectLink,clustSol)
-        print(valid)
+
         for i in range(len(valid)):
             coOcc = GB.popCooccurrence(valid[i][dictLoc],coOcc,numClusterings)
 
