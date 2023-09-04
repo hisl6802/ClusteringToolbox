@@ -126,7 +126,10 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(column=2,row=7,sticky=(N,S,E,W))
 		#create a button for the user to match the mz to rt for "improved" mummichog results
 		self.mzToRT = ttk.Button(self,text="MZ to RT", style="RW.TButton",command=self.MZ_RT).grid(column=1,row=7,sticky=(N,S,E,W))
+		#create a button for metaboanalyst file generation
 		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(column=3,row=7,sticky=(N,S,E,W))
+		#create a button for clustering the co-occurrence matrix.
+		self.coOccClust = ttk.Button(self,text="Cluster Ensemble Results",style="RW.TButton",command=self.coClust).grid(column=1,row=8,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -153,7 +156,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_remove()
 		widgets = self.winfo_children()
 
-		n = 22
+		n = 23
 		widgetDict = {}
 		for i in range(n):
 			#create a dictionary of the widgets from home window
@@ -181,6 +184,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[19].grid(column=2,row=7,sticky=(N,S,E,W))
 		widgetDict[20].grid(column=1,row=7,sticky=(N,S,E,W))
 		widgetDict[21].grid(column=3,row=7,sticky=(N,S,E,W))
+		widgetDict[22].grid(column=1,row=8,sticky=(N,S,E,W))
 
 		count = -1
 		for child in self.winfo_children():
@@ -1913,7 +1917,12 @@ class JuneLabClusteringGUI(ttk.Frame):
 		#send straight to the function
 		GU.mzrt()
 
-
+	def coClust(self):
+		'''
+		'''
+		
+		#sent to the coOccClust function
+		GU.coOccClust()
 
 	def mfg(self):
 		'''

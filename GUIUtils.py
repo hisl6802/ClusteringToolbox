@@ -2174,4 +2174,46 @@ class GUIUtils:
         os.chdir(dir)
         print("Done")
         logging.info(":Completed")
+
+    def coOccClust():
+        '''
+        '''
+
+        #get the directory from the user
+        directory = filedialog.askdirectory()
+
+        #change to the directory, after getting current directory
+        curDir = os.getcwd()
+        os.chdir(directory)
+
+        #read in the csv file: EnsembleCoOcc
+        coOcc = pd.read_csv('EnsembleCoOcc.csv')
+        #get the original file and read it in
+        origFile = glob.glob('*.xlsx')
+        orig = pd.read_excel(origFile[0])
+
+        #find the best set of parameters
+        bestScore = 0
+        optClust = [None]*2
+        for j in range(10):
+            #calculate the clustering solutions
+            agglo = AC(n_clusters=j+2,linkage='average',metric='euclidean').fit(coOcc)
+
+            #update the best clustering solutions
+            score = metrics.silhouette_score(coOcc, agglo.labels_)
+            if score > bestScore:
+                optClust[0],optClust[1] = j+2, agglo.labels_
+                bestScore = score
+
+                
+        #loop over the results getting the indicies for a specific cluster and export to an excel workbook
+        for i in np.unique(optClust[1]):
+            #find where the indicies are in optClust[1]
+            orig.loc[list(np.where(optClust[1]==i)[0])].to_excel('EnsembleOut_'+str(i+1)+'.xlsx',index=False)
+
+
+
+        #go back into the original directory
+        os.chdir(curDir)
+        messagebox.showinfo(title="Success",message="Ensemble output files generated from optimization of final results!")
         
