@@ -1208,7 +1208,8 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
     while j < ensemMetabs:
         #look for the number of ones indicating the total number of 
         #metabolites in the current cluster.
-        found = np.where(dataFinal[j,:]>(numClusts-1)/numClusts)
+        print(numClusts-1.1)
+        found = np.where(dataFinal[j,:]>((numClusts-0.9)/numClusts))
 
         #determine the length of the array found
         if len(found[0])==1:

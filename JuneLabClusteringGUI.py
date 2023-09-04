@@ -18,6 +18,7 @@ from GUIUtils import GUIUtils as GU
 import config
 
 
+
 class JuneLabClusteringGUI(ttk.Frame):
 	def __init__(self, master=None):
 		super().__init__(master)
@@ -130,6 +131,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(column=3,row=7,sticky=(N,S,E,W))
 		#create a button for clustering the co-occurrence matrix.
 		self.coOccClust = ttk.Button(self,text="Cluster Ensemble Results",style="RW.TButton",command=self.coClust).grid(column=1,row=8,sticky=(N,S,E,W))
+		#create a button for all agglomerative clustering, where users can input the wanted clustering
+		self.allAgglo = ttk.Button(self,text="Novel Ensemble Creation",style="RW.TButton",command=self.newEnsemble).grid(column=2,row=8,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -155,8 +158,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 		for i in objects:
 			i.grid_remove()
 		widgets = self.winfo_children()
+		print(len(widgets))
 
-		n = 23
+		n = 24
 		widgetDict = {}
 		for i in range(n):
 			#create a dictionary of the widgets from home window
@@ -185,8 +189,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[20].grid(column=1,row=7,sticky=(N,S,E,W))
 		widgetDict[21].grid(column=3,row=7,sticky=(N,S,E,W))
 		widgetDict[22].grid(column=1,row=8,sticky=(N,S,E,W))
-
+		widgetDict[23].grid(column=2,row=8,sticky=(N,S,E,W))
 		count = -1
+
 		for child in self.winfo_children():
 			#add padding to the current widgets
 			count += 1
@@ -1432,6 +1437,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 		def scaleOpts(*args):
 			webbrowser.open('https://github.com/hisl6802/Transformation-and-Scaling/wiki/Scaling')
 
+
+
+
 		def standardEnsemble(*args):
 			objects = self.grid_slaves()
 			for i in objects:
@@ -1923,6 +1931,67 @@ class JuneLabClusteringGUI(ttk.Frame):
 		
 		#sent to the coOccClust function
 		GU.coOccClust()
+	
+	def newEnsemble(self):
+		'''
+		'''
+		def submitAllAgglo(*args):
+			'''
+			'''
+			scale = scaleBox.curselection()
+			scale = scaleList[scale[0]]
+			GU.allAgglo(transform,scale)
+
+		def transType(*args):
+			global transform
+			transform = transBox.curselection()
+			transform = transformList[transform[0]]
+		
+			lenList = len(scaleBox.get(0,tk.END))
+			if lenList > 0:
+				scaleBox.delete(0,lenList-1)
+
+			for i in range(len(scaleList)):
+				scaleBox.insert(i,scaleList[i])
+
+
+		#delete previous objects on the GUI
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+		#creating a header, and buttons to advance to the function or return to UI homepage placeholder as of 09/04/23
+		self.header = ttk.Label(self,text="Novel Ensemble", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N))
+		self.transLab =ttk.Label(self,text="Transform",font=("TkHeadingFont",16)).grid(column=0,row=1,sticky=(N))
+		self.scaleLab =ttk.Label(self,text="Scale",font=("TkHeadingFont",16)).grid(column=1,row=1,sticky=(N))
+		#submit all agglomerative solution optimization
+		self.submitAllAgglo = ttk.Button(self,text="Submit", command=submitAllAgglo).grid(column=2,row=4,sticky=(N))
+		#return home
+		self.aggloGoHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=1)
+
+		#create objects that will store information on transformations and scaling
+		transformList = config.transformList
+		scaleList = config.scaleList
+		transBox = Listbox(self,height=5,width=30)
+		scaleBox = Listbox(self,height=5,width=30)
+
+		#defining string variables for each listbox
+		transName = StringVar(value=transformList)
+		scaleName = StringVar(value=scaleList)
+
+		for i in range(len(transformList)):
+			transBox.insert(i, transformList[i])
+
+		#create a binding event
+		transBox.bind('<Double-1>',transType)
+		self.transBox = transBox
+		self.transBox.grid(column=0,row=2,sticky=(N),padx=5,pady=5)
+		self.scaleBox =scaleBox
+		self.scaleBox.grid(column=1,row=2,sticky=(N),pady=5)
+
+
+
+
 
 	def mfg(self):
 		'''

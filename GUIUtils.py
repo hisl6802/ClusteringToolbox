@@ -9,6 +9,8 @@ from scipy.spatial.distance import pdist,squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import t
+from sklearn.cluster import AgglomerativeClustering as AC
+from sklearn import metrics
 
 import glob,sys,logging,time,getpass,fpdf,os
 import statistics as stat
@@ -2217,3 +2219,69 @@ class GUIUtils:
         os.chdir(curDir)
         messagebox.showinfo(title="Success",message="Ensemble output files generated from optimization of final results!")
         
+
+    def allAgglo(transform, scale):
+        '''
+        '''
+        print(transform,scale)
+        messagebox.showinfo(title='Input file',message='Please select excel file of data you want to cluster.')
+        dataF = filedialog.askopenfilename()
+        messagebox.showinfo(title='Input file',message='Please select .csv file of wanted ensemble, and input metrics.')
+        #ask for ensemble input file containing the parameters of interest
+        file = filedialog.askopenfilename()
+        #read in the ensemble parameter information
+        ensemble = pd.read_csv(file)
+
+        ############### All agglomerative ensemble ############################
+
+        #read in the data dataset of interest
+        data, col_groups = GB.readAndPreProcess(file=dataF,transform=transform,scale=scale,func="CC")
+        metab_data = GB.readAndPreProcess(file=dataF,transform='None',func='Raw')
+        
+    
+        #setting up the storage for the outputs
+        optClust= [None]*2
+        best_labels = [None]*ensemble.shape[0]
+        bestScore = 0
+        labels=[]
+
+        #create a function dictionary of the metrics that are available to the user at the moment
+        valIndex = {
+            'CH':metrics.calinski_harabasz_score,
+            'SIL':metrics.silhouette_score,
+            'DBI':metrics.davies_bouldin_score
+        }
+
+        #create co-occurrence matrix.
+        coOcc = GB.cooccurrence(data)
+        for i in range(ensemble.shape[0]):
+            bestScore = 0
+            optClust = [None]*2
+            for j in range(10):
+                #calculate the clustering solutions
+                agglo = AC(n_clusters=j+2,linkage=ensemble['Linkage'][i],metric=ensemble['Distance'][i]).fit(data)
+                
+                #update the best clustering solutions
+                score = valIndex[ensemble['Optimizer'][0]](data,agglo.labels_)
+                if score > bestScore:
+                    optClust[0],optClust[1] = j+2, agglo.labels_
+                    bestScore = score
+            best_labels[i]= optClust[1]    
+            optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
+            
+
+            labels.append(optClust[1])
+            for k in optClusters:
+                optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
+            
+            coOcc = GB.popCooccurrence(optClusters,coOcc,ensemble.shape[0])
+        #make the coOccurence matrix a dataframe.
+        coOcc1 = pd.DataFrame(coOcc)
+        try:
+            #try to save the large .csv file of the CoOccurence matrix.
+            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
+        except:
+            messagebox.showerror(title="Co-occurence matrix didn't save!", message="Co-occurence matrix did not save, may need to install openpyxl or xlsxwriter.")
+
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=0,numClusts=ensemble.shape[0],link='ward',dist='euclidean',func="ensemble",colMap='viridis');
