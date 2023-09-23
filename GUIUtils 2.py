@@ -2220,10 +2220,10 @@ class GUIUtils:
         messagebox.showinfo(title="Success",message="Ensemble output files generated from optimization of final results!")
         
 
-    def allAgglo(transform, scale,cmap,optClust,minFeature):
+    def allAgglo(transform, scale):
         '''
         '''
-        print(transform,scale,cmap,optClust,minFeature)
+        print(transform,scale)
         messagebox.showinfo(title='Input file',message='Please select excel file of data you want to cluster.')
         dataF = filedialog.askopenfilename()
         messagebox.showinfo(title='Input file',message='Please select .csv file of wanted ensemble, and input metrics.')
@@ -2284,4 +2284,4 @@ class GUIUtils:
             messagebox.showerror(title="Co-occurence matrix didn't save!", message="Co-occurence matrix did not save, may need to install openpyxl or xlsxwriter.")
 
         #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minFeature,numClusts=ensemble.shape[0],link='ward',dist='euclidean',func="ensemble",colMap=cmap);
+        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=0,numClusts=ensemble.shape[0],link='ward',dist='euclidean',func="ensemble",colMap='viridis');
