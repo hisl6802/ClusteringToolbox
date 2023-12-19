@@ -2,9 +2,15 @@
 from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
-from matplotlib import cm, pyplot as plt
+from selenium import webdriver
+import time
+import platform
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from matplotlib import pyplot as plt
+import matplotlib as mpl
 from scipy.cluster.hierarchy import dendrogram
-from scipy.cluster.hierarchy import linkage
+from scipy.cluster.hierarchy import linkage,ward,fcluster
 from scipy.spatial.distance import pdist,squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
@@ -20,6 +26,8 @@ import config
 import random
 import math
 from itertools import combinations
+import zipfile
+import os
 
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
@@ -729,7 +737,139 @@ class GUIUtils:
         logging.info(': Completed!')
         messagebox.showinfo(title="Success", message="Compound Matches has been generated!")
         return
+    
+    def ensembleClusteringFullOpt(parameters, transform='None',scale='None'):
+        '''
+        '''
+
+        #log that the user called ensemble clustering function
+        logging.info(': User called Ensemble Clustering function.')
+
+        #optimum number of clusters from validation index.
+        sys.setrecursionlimit(10**8)
+        file = filedialog.askopenfilename()
+        data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='CC')
+        metab_data = GB.readAndPreProcess(file=file,transform='None',scale='None',func='Raw')
+        del(col_groups)
+
+        #determine whether data read in or not.
+        if data is None:
+            messagebox.showerror(title='Error',message='No file selected, returning to GUI. If you wish to continue with ensemble clustering, click continue and then select file!')
+            return
+        
+        # create labels
+        best_labels = [None]*parameters.shape[0]
+
+
+        #setting the functions into a validation, and distance metrics. 
+        valIndex = {
+            'CH':GB.calinskiHarabasz_correlation,
+            'SIL':metrics.silhouette_score,
+            'DBI':GB.daviesBouldinScore_correlation
+        }
+
+        distance = {
+            'CNS': GB.correlationNosqrt,
+            'CS': GB.correlationSqrt
+        }
+
+
+        #create co-occurrence matrix.
+        coOcc = GB.cooccurrence(data)
+        for i in range(parameters.shape[0]):
+            bestScore = 0
+            optClust = [None]*2
+            #calculate the distance matrix
+            if parameters['Linkage'][i] == 'ward':
                 
+                dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])
+                dist = squareform(dist)
+                link_mat = ward(dist)
+                for j in range(10):
+                    labels_ = fcluster(link_mat,j+2,criterion='maxclust')
+                                
+                    #update the best clustering solutions
+                    score = valIndex[parameters['Optimizer'][i]](data,labels_,parameters['Distance'][i])
+                    if score > bestScore:
+                        optClust[0],optClust[1] = j+2, labels_-1
+                        bestScore = score
+                best_labels[i]= optClust[1]    
+                optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
+                
+                for k in optClusters:
+                    optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
+                #update the co-occurrence matrix
+                coOcc = GB.popCooccurrence(optClusters,coOcc,parameters.shape[0])
+
+            elif parameters['Optimizer'][i] =="DBI":
+                #update such that best score is lowest
+                bestScore =10**10
+
+                #get the distance metric out
+                dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])
+                for j in range(10):
+                    #calculate the clustering solutions
+                    agglo = AC(n_clusters=j+2,linkage=parameters['Linkage'][i],
+                            metric='precomputed').fit(dist)
+                    
+                    #update the best clustering solutions
+                    score = valIndex[parameters['Optimizer'][i]](data,agglo.labels_+1,parameters['Distance'][i])
+                    if score < bestScore:
+                        optClust[0],optClust[1] = j+2, agglo.labels_
+                        bestScore = score
+                best_labels[i]= optClust[1]    
+                optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
+
+                for k in optClusters:
+                    optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
+                #update the co-occurrence matrix
+                coOcc = GB.popCooccurrence(optClusters,coOcc,parameters.shape[0])
+
+            else:
+                #get the distance metric for clustering
+                dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])      
+                for j in range(10):
+                    #calculate the clustering solutions
+                    agglo = AC(n_clusters=j+2,linkage=parameters['Linkage'][i],
+                            metric='precomputed').fit(dist)
+                    
+                    #update the best clustering solutions
+                    score = valIndex[parameters['Optimizer'][i]](dist,agglo.labels_,metric='precomputed')
+                    if score > bestScore:
+                        optClust[0],optClust[1] = j+2, agglo.labels_
+                        bestScore = score
+                best_labels[i]= optClust[1]    
+                optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
+
+                for k in optClusters:
+                    optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
+                
+                coOcc = GB.popCooccurrence(optClusters,coOcc,parameters.shape[0])
+
+        #make the coOccurence matrix a dataframe.
+        coOcc1 = pd.DataFrame(coOcc)
+        try:
+            #try to save the large .csv file of the CoOccurence matrix.
+            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
+        except:
+            print('Issue saving the co-occurence matrix as .csv. This error should not occur, should have been caught earlier')
+
+        #generate linkage function
+        dissim = 1 - np.around(coOcc,decimals=3)
+        dissim = squareform(dissim)
+        linkageMetabOut = linkage(dissim,'average')
+
+        #Get the labels for the optimal solution and plot the comparisons 
+        labelsCoOcc =fcluster(linkageMetabOut,2,'maxclust')
+        GB.randComp(best_labels)
+        GB.adjRandComp(best_labels)
+        GB.coOccMonoComp(best_labels,labelsCoOcc)
+
+        #create the ensemble dendrogram using ward-euclidean inputs. 
+        GB.createEnsemDendrogramNew(coOcc,metab_data,data,norm=0,minMetabs=0,numClusts=len(parameters),
+                                link='average',dist='euclidean',func="ensemble",colMap='viridis');
+    
+        return      
 
     def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', type='base'):
         '''
@@ -807,6 +947,119 @@ class GUIUtils:
         logging.info(': Sucessfully completed Ensemble clustering!')
         
         return
+    
+    def validateMono(self, upperLimClust=10, transform ='None',scale ='None',linkage='average',dissimilarity='euclidean', func = 'SIL'):
+        '''
+        This functionality is designed to perform clustering optimization on a set of input data. Specifically this is designed to 
+        generate agglomerative hierarchical clustering solutions to be optimized using a optimization metric.
+
+        Input:
+        self - the object for the UI
+        
+        upperLimClust - Upper limit of the number of clusters the user would like to consider for optimization purposes
+
+        transform - which transform would the user like to use on their data. No transform is the default
+
+        scale - which data scaling would the user like to use on their data. No scaling is the default.
+
+        linkage - which agglomerative hierarchical clustering linkage function would the user like to use. Average linkage function is the default
+
+        dissimilarity - which dissimilarity measure would the user like to use. Euclidean dissimilarity is the default. 
+
+        func - which optimization metric would the user like to use. The default is 'SIL' (i.e., Silhouette)
+
+        Output: 
+        Matplotlib plot of the optimization
+
+        .csv of the optimization metric scores for the considered metric
+
+        Recommended number of clusters given the optimization metric. 
+
+        '''
+        valIndex = {
+        'Calinski-Harabasz':metrics.calinski_harabasz_score,
+        'Silhouette':metrics.silhouette_score,
+        'Davies-Bouldin':metrics.davies_bouldin_score
+        }
+
+        #message until this is fully implemented as I want. 
+        messagebox.showinfo(title='INFORMATION', message='Working to create mono-clustering validation functionality')
+
+        #log that user called MST
+        logging.info(': User called Cluster validation function.')
+
+        filename = filedialog.askopenfilename()
+        try:
+            data, col_groups = GB.readAndPreProcess(file=filename, transform = transform, scale =scale, func='CC')
+        except BaseException:
+            logging.error(': Unable to proceed, due to file error!')
+            messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
+            return
+        
+        #define the optimal cluster list for saving
+        optClust = [None]*2
+        optScores = np.ones((len(range(2,upperLimClust+1)),2))
+        if linkage == 'ward':
+            #calculate the distance matrix, which in this from should give me the sparse form. So, I should not need to use squareform
+            dist = pdist(data, dissimilarity)
+            print(type(dist))
+            # dist = squareform(dist)
+            link_mat = ward(dist)
+
+            #define the best score as 0 if Silhouette or Calinski-Harabasz
+            if func == 'Davies-Bouldin':
+                bestScore = 10**10
+                for j in range(2, upperLimClust+1):
+                    labels_ = fcluster(link_mat,j,criterion='maxclust')
+                                
+                    #update the best clustering solutions
+                    optScores[j-2,1] = valIndex[func](data,labels_-1)
+                    optScores[j-2,0] = j
+                    if optScores[j-2,1] < bestScore:
+                        optClust[0],optClust[1] = j, labels_-1
+                        bestScore = optScores[j-2,1]
+            else:
+                bestScore = -1
+                for j in range(2, upperLimClust+1):
+                    labels_ = fcluster(link_mat,j,criterion='maxclust')
+                                
+                    #update the best clustering solutions
+                    optScores[j-2,1] = valIndex[func](data,labels_-1)
+                    optScores[j-2,0] = j
+                    if optScores[j-2,1] > bestScore:
+                        optClust[0],optClust[1] = j, labels_-1
+                        bestScore = optScores[j-2,1]
+        else:
+            #calculate the distance matrix, which in this from should give me the sparse form. So, I should not need to use squareform
+            dist = pdist(data, dissimilarity)
+            # dist = distance[ensemble['Distance'][i]](data)
+
+            for j in range(2, upperLimClust+1):
+                #calculate the clustering solutions
+                agglo = AC(n_clusters=j,linkage=linkage,
+                        metric='precomputed').fit(dist)
+                
+                if func == 'Davies-Bouldin':
+                    bestScore = 10**10
+                    #update the best clustering solutions
+                    optScores[j-2,1] = valIndex[func](data,labels_-1)
+                    optScores[j-2,0] = j
+                    if optScores[j-2,1] < bestScore:
+                        optClust[0],optClust[1] = j, agglo.labels_
+                        bestScore = optScores[j-2,1]
+                else:
+                    bestScore = -1
+                    #update the best clustering solutions
+                    optScores[j-2,1] = valIndex[func](data,labels_-1)
+                    optScores[j-2,0] = j
+                    if optScores[j-2,1] < bestScore:
+                        optClust[0],optClust[1] = j, agglo.labels_
+                        bestScore = optScores[j-2,1]
+        plt.plot(optScores[:,0],optScores[:,1],'r-')
+        plt.show()
+        return
+
+
 
     def MST(self,transform ='None',scale ='None', func = 'k-means based'):
         '''
@@ -1321,7 +1574,6 @@ class GUIUtils:
         #log that the user called the Create Clustergram function
         logging.info(': User called the Create Clustergram Function.')
         #check that the file the user selects is appropriate
-        global metab_data
         file = filedialog.askopenfilename()
         metab_data = GB.readAndPreProcess(file=file,transform='None',scale='None',func='Raw')
         
@@ -2279,9 +2531,360 @@ class GUIUtils:
         coOcc1 = pd.DataFrame(coOcc)
         try:
             #try to save the large .csv file of the CoOccurence matrix.
-            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
+            coOcc1.to_excel('EnsembleCoOcc.xlsx',index=False)
         except:
             messagebox.showerror(title="Co-occurence matrix didn't save!", message="Co-occurence matrix did not save, may need to install openpyxl or xlsxwriter.")
 
         #create the ensemble dendrogram using ward-euclidean inputs. 
         GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minFeature,numClusts=ensemble.shape[0],link='ward',dist='euclidean',func="ensemble",colMap=cmap);
+
+    def metaboBot(analysis='uni'):
+        '''
+
+        '''
+        #set up the browser runner, update the directory, get all the csv files within the folder of interest
+        directory = filedialog.askdirectory()
+
+        curDir = os.getcwd()
+        os.chdir(directory)
+        files = glob.glob( '*.csv')
+        browser = webdriver.Chrome()
+
+        for i in range(len(files)):
+            #get file of interest and 
+            file = files[i]
+            # loc, name = os.path.split(file)
+            name = file.strip('.csv')
+            file = directory+'/'+file
+
+
+
+            ## Navigate to the MetaboAnalyst Website for the one-factor stats analysis
+            browser.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/StatUploadView.xhtml')
+            time.sleep(2)
+
+            #click on the peak intensities radio button
+            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt19"]/tbody/tr/td[3]/div/div[2]/span').click()
+            time.sleep(3)
+
+            #send the file to the website
+            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt25_input"]').send_keys(file)
+
+            time.sleep(3)
+            #submit
+            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt26"]').click()
+            time.sleep(4)
+
+            #proceed after data check
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt17"]/span[1]').click()
+            time.sleep(3)
+
+            #Standard Deviation Filtering
+            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt24"]/tbody/tr[2]/td/div/div[2]/span').click()
+
+            #Submit Filtering Selection
+            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt36"]').click()
+            time.sleep(2)
+
+            #Proceed to data pre-processing
+            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt37"]').click()
+            time.sleep(3)
+
+            #select the wanted pre-processing, normalize and proceed.
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt73"]/div[2]/span').click()
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt93"]/div[2]/span').click()
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt103"]').click()
+            time.sleep(4)
+            browser.find_element(By.XPATH,'//*[@id="form1:nextBn"]').click()
+            time.sleep(5)
+
+            if analysis == 'uni':
+                #select fold-change analysis
+                browser.find_element(By.XPATH,'//*[@id="j_idt11"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a').click()
+                time.sleep(2)
+
+                #select t-test analysis
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt60:3_1"]/div').click()
+                time.sleep(2)
+
+                #select volcano plot analysis
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt75:3_2"]/div').click()
+                time.sleep(2)
+
+                #update the p-value threshold of the FDR correction volcano plot
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt50"]').clear()
+                time.sleep(5)
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt50"]').send_keys(0.05)
+                time.sleep(4)
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt51"]/tbody/tr/td[2]/div/div[2]/span').click()
+                browser.find_element(By.XPATH,'//*[@id="form3:j_idt58"]').click()
+                time.sleep(5)
+                #PCA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt94:3_7"]/div').click()
+                time.sleep(5)
+
+                #2D scores PCA
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
+                time.sleep(5)
+
+                #PLS-DA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt144:3_8"]/div').click()
+                time.sleep(5)
+
+                #PLS-DA 2D scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
+                time.sleep(5)
+
+                #PLS-DA VIP Scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
+                time.sleep(5)
+
+                #Dendrogram
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt197:3_13"]/div').click()
+                time.sleep(5)
+
+                #Heatmap
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt33:3_14"]/div').click()
+                time.sleep(3)
+
+            elif analysis == 'multi':
+                #ANOVA
+                browser.find_element(By.XPATH,'//*[@id="j_idt11"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a').click()
+                time.sleep(3)
+                
+                #PCA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt74:3_7"]/div').click()
+                time.sleep(5)
+
+                #2D scores PCA
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
+                time.sleep(5)
+
+                #PLS-DA
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt144:3_8"]/div').click()
+                time.sleep(5)
+
+                #PLS-DA 2D scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
+                time.sleep(5)
+
+                #PLS-DA VIP Scores
+                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
+                time.sleep(5)
+
+                #Dendrogram
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt197:3_13"]/div').click()
+                time.sleep(5)
+
+                #Heatmap
+                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt33:3_14"]/div').click()
+                time.sleep(3)
+
+
+            #download
+            browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt95:4"]/div').click()
+            time.sleep(4)
+
+            #download the zip file
+            browser.find_element(By.XPATH,'//*[@id="ac:form1:j_idt18_data"]/tr[1]/td[1]/a').click()
+            time.sleep(25)
+
+            rename = name+'.zip'
+            #get the user information, and give the appropriate extensions to the Download folder
+            basepath = os.path.expanduser('~')
+            if platform.system() == 'Darwin':
+                basepath +='/Downloads/Download.zip'
+                os.rename(basepath,rename)
+            elif platform.system() == 'Windows':
+                basepath +='\\Downloads\\Download.zip'
+                os.rename(basepath,rename)
+
+            zip_dir = directory + '/'+ name
+            with zipfile.ZipFile(rename,'r') as zip_ref:
+                zip_ref.extractall(zip_dir)
+
+            os.remove(rename)
+
+    def mummiBot():
+        #set up the browser runner, update the directory, get all the csv files within the folder of interest
+        directory = filedialog.askdirectory()
+
+        curDir = os.getcwd()
+
+        os.chdir(directory)
+        files = glob.glob( '*.csv')
+
+        browser = webdriver.Chrome()
+
+        for i in range(len(files)):
+            #get file of interest and 
+            file = files[i]
+            name = file.strip('.csv')
+            file = directory+'/'+file
+
+            ## Navigate to the MetaboAnalyst Website for the one-factor stats analysis
+            browser.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/PeakUploadView.xhtml')
+            time.sleep(2)
+            browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19"]/div[3]').click()
+            time.sleep(2)
+            lcMode = 'Positive'
+            if lcMode == 'Positive':
+                browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19_0"]').click()
+            time.sleep(2)
+
+            #upload the files you would like to have analyzed
+            browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt46_input"]').send_keys(file)
+            browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt48"]').click()
+            time.sleep(2)
+            #submit the file to be analyzed
+            browser.find_element(By.XPATH,'//*[@id="form1:j_idt17"]').click()
+            time.sleep(2)
+
+            #Clear the p-value to ensure 0.05 is value.
+            browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt24"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').clear()
+            browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt24"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').send_keys(0.05)
+            time.sleep(2)
+
+            #selected database
+            db = 'Mouse_KEGG'
+
+            if db == 'Human_BioCyc':
+                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt123"]/div[2]/span').click()
+            elif db == 'Human_KEGG':
+                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt125"]/div[2]/span').click()
+            elif db == 'Mouse_BioCyc':
+                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt127"]/div[2]/span').click()
+            elif db == 'Mouse_KEGG':
+                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt129"]/div[2]/span').click()
+            elif db == 'Rat_KEGG':
+                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt131"]/div[2]/span').click()
+            elif db == 'Cow_KEGG':
+                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt133"]/div[2]/span').click()
+
+            #proceed to the pathway analysis.
+            browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt246"]').click()
+            time.sleep(5)
+            #select the download tab
+            browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt75:4"]/div').click()
+            time.sleep(2)
+            browser.find_element(By.XPATH,'//*[@id="ac:form1:j_idt18_data"]/tr[1]/td[1]/a').click()
+            time.sleep(10)
+
+            #Rename files such that they save to their own directories
+            rename = name+'.zip'
+            #get the user information, and give the appropriate extensions to the Download folder
+            basepath = os.path.expanduser('~')
+            if platform.system() == 'Darwin':
+                basepath +='/Downloads/Download.zip'
+                os.rename(basepath,rename)
+            elif platform.system() == 'Windows':
+                basepath +='\\Downloads\\Download.zip'
+                os.rename(basepath,rename)
+
+            zip_dir = directory + '/'+ name
+            with zipfile.ZipFile(rename,'r') as zip_ref:
+                zip_ref.extractall(zip_dir)
+            #remove the zip file
+            os.remove(rename)
+
+        #close out the current browser window
+        browser.close()
+
+
+
+    def externalCriteria(data,clusts,comp='rand'):
+        '''
+
+        '''
+
+        #set up the dictionary for the distance measure.
+        distance = {
+        'CNS': GB.correlationNosqrt,
+        'CS': GB.correlationSqrt
+        }
+
+        #setting the functions into a validation, and distance metrics. 
+        valIndex = {
+            'CH':GB.calinskiHarabasz_correlation,
+            'SIL':metrics.silhouette_score,
+            'DBI':GB.daviesBouldinScore_correlation
+        }
+
+        #In this functionality I need to read in the data, and ask for a .csv of the clustering parameters of interest similar to ensemble. 
+
+        #read in the data file of interest.
+        dataFile = filedialog.askopenfilename()
+        data, col_groups = GB.readAndPreProcess(dataFile,transform='None',scale='None',func="CC")
+
+        #ask the user for the clustering parameters they would like to use.
+        #read in the csv, for ensemble creation
+        clustsFile = filedialog.askopenfilename()
+        clusts = pd.read_csv(clustsFile)
+
+        #a list for saving the best labels from each clustering
+        best_labels = [None]*clusts.shape[0]
+        
+        #go through the clustering parameters of interest and generate the 
+        for i in range(clusts.shape[0]):
+            bestScore = 0
+            optClust = [None]*2
+            #calculate the distance matrix
+            if clusts['Linkage'][i] == 'ward':
+                #calculate the distance metric for the clustering of interest. 
+                dist = distance[clusts['Distance'][i]](data,metric=clusts['Correlation'][i])
+                dist = squareform(dist)
+                link_mat = ward(dist)
+                for j in range(10):
+                    labels_ = fcluster(link_mat,j+2,criterion='maxclust')
+                                
+                    #update the best clustering solutions
+                    score = valIndex[clusts['Optimizer'][i]](data,labels_,clusts['Distance'][i])
+                    if score > bestScore:
+                        optClust[0],optClust[1] = j+2, labels_-1
+                        bestScore = score
+                #save the labels that were best.
+                best_labels[i]= optClust[1]   
+                
+            elif clusts['Optimizer'][i] =="DBI":
+                #update such that best score is lowest
+                bestScore =10**10
+
+                #get the distance metric out
+                dist = distance[clusts['Distance'][i]](data,metric=clusts['Correlation'][i])
+                for j in range(10):
+                    #calculate the clustering solutions
+                    agglo = AC(n_clusters=j+2,linkage=clusts['Linkage'][i],
+                            metric='precomputed').fit(dist)
+                    
+                    #update the best clustering solutions
+                    score = valIndex[clusts['Optimizer'][i]](data,agglo.labels_+1,clusts['Distance'][i])
+                    if score < bestScore:
+                        optClust[0],optClust[1] = j+2, agglo.labels_
+                        bestScore = score
+                #save the labels that were best
+                best_labels[i]= optClust[1]    
+
+            else:
+                #get the distance metric for clustering
+                dist = distance[clusts['Distance'][i]](data,metric=clusts['Correlation'][i])      
+                for j in range(10):
+                    #calculate the clustering solutions
+                    agglo = AC(n_clusters=j+2,linkage=clusts['Linkage'][i],
+                            metric='precomputed').fit(dist)
+                    
+                    #update the best clustering solutions
+                    score = valIndex[clusts['Optimizer'][i]](dist,agglo.labels_,metric='precomputed')
+                    if score > bestScore:
+                        optClust[0],optClust[1] = j+2, agglo.labels_
+                        bestScore = score
+                #save the labels that were best
+                best_labels[i]= optClust[1]    
+
+        #check for what is what and send labels. 
+        if comp =='rand':
+            #send to the rand index function
+            GB.randComp(best_labels)
+
+        elif comp =='adjRand':
+            #send to the adjusted rand function
+            GB.adjRandComp(best_labels)

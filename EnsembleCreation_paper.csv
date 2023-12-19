@@ -1,0 +1,4 @@
+Distance,Linkage,Optimizer,Correlation
+CS,ward,CH,spearman
+CS,average,SIL,spearman
+CNS,complete,DBI,spearman
