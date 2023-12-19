@@ -1,4 +1,4 @@
-# Ensemble Clustering ombined with Clustering Optimization. 
+# Ensemble Clustering combined with Clustering Optimization. 
 ### Please contact me by email hislopbrady@gmail.com with any questions
 
 
