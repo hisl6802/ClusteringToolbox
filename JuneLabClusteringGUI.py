@@ -58,7 +58,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.getStarted = ttk.Button(self,text="Get Started!",command=self.create_widgets).grid(column=2, row=7,sticky=(N,S,E,W),columnspan=1)
 
 	def create_widgets(self):
-		'''pyt
+		'''
 		'''
 
 		#get the project name
@@ -87,60 +87,24 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.style = ttk.Style()
 		self.style.configure("RW.TLabel", foreground="#f03d33",font=("TkHeadingFont",30))
 		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="black", background="#000000",font=("Arial",14))
-		self.JuneLab = ttk.Label(self, text="June Lab Clustering GUI",style="RW.TLabel").grid(column=0,row=0,columnspan=4)
-		self.clust = ttk.Button(self,text="Create Clustergram",style="RW.TButton",command=self.createClustergram).grid(column=1,row=1, sticky=(N,S,E,W))
-		#Create a button to allow the user to create a medians file for better clustering results. 
-		self.med = ttk.Button(self, text="Group Medians", style="RW.TButton", command=self.medians).grid(column=1, row=3, sticky =(N,S,E,W))
+		self.JuneLab = ttk.Label(self, text="Clustering Toolbox",style="RW.TLabel").grid(column=0,row=0,columnspan=4)
+		self.clust = ttk.Button(self,text="Create Clustergram", style="RW.TButton",command=self.createClustergram).grid(column=1,row=1, sticky=(N,S,E,W))
 		#Create a button to allow the user to compare the four most common linkage functions.
 		self.link = ttk.Button(self, text="Compare Linkage Functions", style="RW.TButton", command=self.linkages).grid(column=2, row=1,sticky =(N,S,E,W))
-		#Create a button to allow the user to validate the appropriate number of clusters needed for a given set of metabolites.
-		self.val = ttk.Button(self, text="Compound Match-Up", style="RW.TButton", command=self.compound).grid(column=3, row=2, sticky =(N,S,E,W))
 		#Create a button to allow the user to create the peaks to pathways files needed to analyze the peaks to pathways in Mummichog
 		self.peak = ttk.Button(self, text="Peaks to Pathways", style="RW.TButton", command=self.P2P).grid(column=2, row=2, sticky =(N,S,E,W))
-		#Create a button to allow the user to check the integrity of the data downloaded from Metaboanalysts Volcano plot results. 
-		self.integrity = ttk.Button(self, text="Data Integrity", style="RW.TButton", command=self.integrity).grid(column=2, row=3, sticky =(N,S,E,W))
 		#Create a button to allow the user to do an Ensemble clustering on the data.
 		self.ensemble = ttk.Button(self,text="Ensemble Clustering", style="RW.TButton", command=self.ensemble).grid(column=1,row=2,sticky=(N,S,E,W))
-		#Create a button to allow the user to create a minimum spanning tree on data
-		self.mst = ttk.Button(self,text='MST Optimization', style="RW.TButton", command=self.mst).grid(column=1,row=9,sticky=(N,S,E,W))
 		#Create a button for the generation of a report
 		self.generate = ttk.Button(self,text='Selected Clusters Figure', style="RW.TButton", command=self.genSelClustFig).grid(column=3,row=3,sticky=(N,S,E,W))
-		#Create a button for the users to submit requests. 
-		self.request = ttk.Button(self, text="Submit Request", style = "RW.TButton", command=self.userRequest).grid(column=2, row=5, sticky=(N,S,E,W))
 		#Create a button for the selection of clusters
-		self.selection = ttk.Button(self, text="Cluster Selection",style = "RW.TButton",command=self.clusterSelection).grid(column=1, row=4,sticky=(N,S,E,W))
-		#Create a button for locally weighted clustering
-		self.localWeight = ttk.Button(self,text="Locally Weighted Ensemble",style="RW.TButton",command=self.localWeighted).grid(column=3, row=4,sticky=(N,S,E,W))
-		#Create a button for the users to submit requests. 
-		self.heatmap = ttk.Button(self, text="Heatmap Analyses", style = "RW.TButton", command=self.heatmapAnalyses).grid(column=2, row=4, sticky=(N,S,E,W))
-		#create a button for the users to bulid an anova-based heatmap
-		self.anHeatMap = ttk.Button(self,text="Build ANOVA Heatmap", style= "RW.TButton", command = self.anovaHeatMap).grid(column=1,row=5,sticky=(N,S,E,W))
-		#create a button for the users to look-up enzymes
-		self.enzymeLU = ttk.Button(self,text="Enzyme Look Up", style="RW.TButton", command=self.enzymeLookUp).grid(column=3,row=5,sticky=(N,S,E,W))
-		#create a button for the users to create CIs from the metabolic t-test data.
-		self.tTestCIs = ttk.Button(self,text="CIs for t-tests", style="RW.TButton",command=self.CIsTtest).grid(column=1,row=6,sticky=(N,S,E,W))
-		#create a button for the user to ask for help.
-		self.Help = ttk.Button(self, text="Help/Documentation", style="RW.TButton", command=self.helpOut).grid(column=2,row=6,sticky=(N,S,E,W))
-		#create a button for the user to be able to perform a bootstrapping procedure. 
-		self.bootstrapping = ttk.Button(self, text='Bootstrapping', style ="RW.TButton", command=self.bootstrap).grid(column=3,row=6, sticky=(N,S,E,W))
-		#create a button for the user to compare different inputs for normalization
-		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(column=2,row=7,sticky=(N,S,E,W))
-		#create a button for the user to match the mz to rt for "improved" mummichog results
-		self.mzToRT = ttk.Button(self,text="MZ to RT", style="RW.TButton",command=self.MZ_RT).grid(column=1,row=7,sticky=(N,S,E,W))
-		#create a button for metaboanalyst file generation
-		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(column=3,row=7,sticky=(N,S,E,W))
+		self.selection = ttk.Button(self, text="Cluster Selection",style = "RW.TButton",command=self.clusterSelection).grid(column=3, row=2,sticky=(N,S,E,W))
 		#create a button for clustering the co-occurrence matrix.
-		self.coOccClust = ttk.Button(self,text="Cluster Ensemble Results",style="RW.TButton",command=self.coClust).grid(column=1,row=8,sticky=(N,S,E,W))
-		#create a button for using the MetaboAnalystBot
-		self.mBot = ttk.Button(self,text="MetaboBot",style="RW.TButton",command=self.metaboBot).grid(column=2,row=8,sticky=(N,S,E,W))
-		#create a button for using the MummichogBot
-		self.mumBot = ttk.Button(self,text="MummiBot",style="RW.TButton",command=self.mummiBot).grid(column=3,row=8,sticky=(N,S,E,W))
+		self.coOccClust = ttk.Button(self,text="Cluster Ensemble Results",style="RW.TButton",command=self.coClust).grid(column=1,row=3,sticky=(N,S,E,W))
 		#create a button for mono-clustering validation
 		self.mumBot = ttk.Button(self,text="Clustering Optimization",style="RW.TButton",command=self.monoVal).grid(column=3,row=1,sticky=(N,S,E,W))
 		#create a button for mono-clustering validation
-		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(column=2,row=9,sticky=(N,S,E,W))
-		#create a button for full optimized 
-		self.optEnsem = ttk.Button(self,text="Full Opt. Ensemble",style="RW.TButton",command=self.newEnsem).grid(column=3,row=9,sticky=(N,S,E,W))
+		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(column=2,row=3,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -167,7 +131,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_remove()
 		widgets = self.winfo_children()
 
-		n = 28
+		n = 10
 		widgetDict = {}
 		for i in range(n):
 			#create a dictionary of the widgets from home window
@@ -175,32 +139,15 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		widgetDict[0].grid(column=0, row=0,columnspan=4)
 		widgetDict[1].grid(column=1, row=1, sticky=(N,S,E,W))
-		widgetDict[2].grid(column=1, row=3, sticky =(N,S,E,W))
-		widgetDict[3].grid(column=2, row=1,sticky =(N,S,E,W))
-		widgetDict[4].grid(column=3, row=2, sticky =(N,S,E,W))
-		widgetDict[5].grid(column=2, row=2, sticky =(N,S,E,W))
-		widgetDict[6].grid(column=2, row=3, sticky =(N,S,E,W))
-		widgetDict[7].grid(column=1, row=2,sticky=(N,S,E,W))
-		widgetDict[8].grid(column=1, row=9,sticky=(N,S,E,W))
-		widgetDict[9].grid(column=3, row=3,sticky=(N,S,E,W))
-		widgetDict[10].grid(column=2, row=5, sticky=(N,S,E,W))
-		widgetDict[11].grid(column=1, row=4,sticky=(N,S,E,W))
-		widgetDict[12].grid(column=3, row=4, sticky=(N,S,E,W))
-		widgetDict[13].grid(column=2,row=4,sticky=(N,S,E,W))
-		widgetDict[14].grid(column=1,row=5,sticky=(N,S,E,W))
-		widgetDict[15].grid(column=3,row=5,sticky=(N,S,E,W))
-		widgetDict[16].grid(column=1,row=6,sticky=(N,S,E,W))
-		widgetDict[17].grid(column=2,row=6,sticky=(N,S,E,W))
-		widgetDict[18].grid(column=3,row=6,sticky=(N,S,E,W))
-		widgetDict[19].grid(column=2,row=7,sticky=(N,S,E,W))
-		widgetDict[20].grid(column=1,row=7,sticky=(N,S,E,W))
-		widgetDict[21].grid(column=3,row=7,sticky=(N,S,E,W))
-		widgetDict[22].grid(column=1,row=8,sticky=(N,S,E,W))
-		widgetDict[23].grid(column=2,row=8,sticky=(N,S,E,W))
-		widgetDict[24].grid(column=3,row=8,sticky=(N,S,E,W))
-		widgetDict[25].grid(column=3,row=1,sticky=(N,S,E,W))
-		widgetDict[26].grid(column=2,row=9,sticky=(N,S,E,W))
-		widgetDict[27].grid(column=3,row=9,sticky=(N,S,E,W))
+		widgetDict[2].grid(column=2, row=1, sticky =(N,S,E,W))
+		widgetDict[3].grid(column=2, row=2,sticky =(N,S,E,W))
+		widgetDict[4].grid(column=1, row=2, sticky =(N,S,E,W))
+		widgetDict[5].grid(column=3, row=3, sticky =(N,S,E,W))
+		widgetDict[6].grid(column=3, row=2, sticky =(N,S,E,W))
+		widgetDict[7].grid(column=1, row=3,sticky=(N,S,E,W))
+		widgetDict[8].grid(column=3, row=1,sticky=(N,S,E,W))
+		widgetDict[9].grid(column=2, row=3,sticky=(N,S,E,W))
+
 		
 		#add all the visual padding back to the widgets to aesthetics
 		count = -1

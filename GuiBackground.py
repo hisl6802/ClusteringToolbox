@@ -1273,7 +1273,6 @@ def validationSil(coOcc, link_mat,numClusters):
     '''
     '''
     labels_ = fcluster(link_mat,numClusters,criterion='maxclust')
-
     return metrics.silhouette_score(1-np.around(coOcc,decimals=3),labels_,metric='precomputed')
         
 def recClustersPostVal(coOcc,ax,metab_data,inds):
@@ -2584,8 +2583,10 @@ def calinskiHarabasz_correlation(data, labels, dist):
     numer = centDissim/(len(np.unique(labels))-1)
     #calculating the denominator 
     denom = clusterSpreads.sum()/(data.shape[0]-len(np.unique(labels)))
-
-    #calculate the Calinski-Harabasz
+    denom += 0.001
+    warnings.warn('Automatically adding jitter to denominator of Calinski-Harabasz calculation to ensure no zeros')
+    
+    #calculate the Calinski-Harabasz metric  
     CH = numer/denom
 
     return CH
@@ -2619,6 +2620,8 @@ def daviesBouldinScore_correlation(data,labels,dist):
 
     #get the centroid dissimilarities
     centDissim = distance[dist](centroids)
+    centDissim += 0.001
+    warnings.warn('Small jitter added to ensure no zero centroid distances')
     if isinstance(centDissim,np.float64):
         #make the dissimilarity between cluster centers square
         centDissim = np.array([[0, centDissim],[centDissim, 0]])

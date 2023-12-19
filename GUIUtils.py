@@ -32,7 +32,6 @@ import os
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
 import mplcursors
-from LocallyWeighted import LocallyWeighted as LW 
 
 from Bio.KEGG import REST
 from Bio.KEGG import Compound
@@ -1708,71 +1707,6 @@ class GUIUtils:
         cursor.visible =False
         cursor.connect("add", lambda sel: GB.select(sel.target,dend,linkageOne,linkDir,linkageClusters,data_orig))
         plt.show()
-
-
-    def localWeighted():
-        '''
-        This function performs locally-weighted ensemble clustering
-
-        Input: TBD
-
-        Output:
-        Recommended clusters
-        Ensemble Clustergram
-
-        '''
-
-        #optimum number of clusters from validation index.
-        sys.setrecursionlimit(10**8) 
-        metab_data = GB.fileCheck()
-
-        if metab_data is None:
-            logging.error(': File does not meet input requirements.')   
-            return
-       
-        #List for the use in creating and plotting the clustering results
-        linkageList = ['single','complete','average']
-        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean'] 
-        
-        #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
-        numClusterings = (len(linkageList)*len(distList))+1
-
-        #read in the data
-        data = GB.readInColumns(metab_data)
-        
-        #Standardize the data before clustering the results
-        logging.info(': Pre-processing data.')
-        for i in range(data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
-
-        #creates empty dictionary for clusterings
-        clusters = {}
-
-        #performs first 12 base clusterings and populates clusters dictionary
-        for i in range(len(linkageList)):
-            for j in range(len(distList)):
-                linkCur = linkage(data,linkageList[i],distList[j])
-                valid = GB.clustConnectLink(linkCur)
-                index = str(linkageList[i] + '_' + distList[j])
-                clusters.update({index:valid})
-                logging.info(str(linkageList[i])+'-'+str(distList[j]) +' done!')
-
-        #performs 13th base clustering and populates clusters dictionary
-        linkCur = linkage(data, 'ward', 'euclidean')
-        valid = GB.clustConnectLink(linkCur)
-        logging.info(str('ward-euclidean done!'))
-        clusters.update({'ward_euclidean':valid})
-
-
-        optNum = 2
-        
-        refClust = LW.clustFinder(data=data,optNum=optNum,clusters=clusters)
-        
-        
-        ECI = LW.clustCompare(refClust)
-       
-        consensusMat = LW.consensus(ECI,refClust,data)
-        regionsOut = LW.regions(consensusMat)
 
     def enzymeLookUp(numSheets):
         '''
