@@ -1,5 +1,5 @@
-# Ensemble Clustering Combined with clustering optimization. 
-### Please contact me through Discord if you are in the June Lab or through brady.hislop@student.montana.edu for example files that will work in this GUI.
+# Ensemble Clustering ombined with Clustering Optimization. 
+### Please contact me by email hislopbrady@gmail.com with any questions
 
 
 
