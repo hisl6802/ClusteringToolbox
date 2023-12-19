@@ -1,23 +1,23 @@
 import numpy as np
 import itertools
 import statistics as stat
-from scipy.cluster.hierarchy import dendrogram
-from scipy.cluster.hierarchy import linkage
+from scipy.cluster.hierarchy import dendrogram,linkage,fcluster
 from scipy.spatial.distance import pdist,squareform
+from scipy.stats import spearmanr,pearsonr
 from scipy.sparse import csr_matrix
 from matplotlib import pyplot as plt
+import matplotlib as mpl
 from matplotlib import colors as mcolors
 import pandas as pd
 import seaborn as sns
 import tkinter as tk
 from tkinter import HORIZONTAL, filedialog, messagebox
-from tkinter.ttk import Button
-from tkinter.ttk import Progressbar
 import logging, time, glob,sys,os,ast
 from PIL import Image
 from seaborn.matrix import clustermap
 import math
 import config
+import warnings
 
 from fpdf import FPDF
 
@@ -25,6 +25,7 @@ from Bio.KEGG import REST
 from Bio.KEGG import Compound
 from Bio.KEGG import Enzyme
 from tqdm import tqdm
+from sklearn import metrics
 
 
 def fileCheck(file=''):
@@ -66,6 +67,40 @@ def fileCheck(file=''):
 
     # data = dataCheck(data)
     return data
+
+
+
+
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+###-------------------------------------------------------------- Correlation metrics ---------------------------------------------------------------------------------------------------------
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def correlationNosqrt(data):
+    '''
+    calculate the distance matrix for the equation
+
+    1-|r(Y,Y')|
+
+    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
+
+    
+    '''
+
+    out = spearmanr(data.T)
+
+    return np.around(1-abs(out.statistic),decimals=3)
+
+def correlationSqrt(data):
+    '''
+    calculate the distance matrix for the equation
+
+    (2*(1-|r(Y,Y')|))^1/2
+
+    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
+    '''
+
+    out = spearmanr(data.T)
+
+    return np.around((2*(1-abs(out.statistic)))**0.5,decimals=3)
 
 
 
@@ -290,6 +325,54 @@ def cubeRtTrans(data):
 
     return dataUpdate
 
+def createEnsemDendrogramNew(data, metab_data, orig_data, norm=1, minMetabs=0, numClusts = 13, link='ward', dist='euclidean', func="ensemble", colMap ='viridis'):
+    '''
+    Create ensemble dendrogram
+    
+    Input:
+
+    Required:
+
+    data - co-occurence matrix
+    metab_data - original raw data
+
+    Optional:
+
+    norm - 0 or 1 for the normalization of ensemble (should always be zero)
+    link - input the linkage function you would like the program to use for the ensemble clustering (or final clustering)
+    dist - distance measure you would like to use in the final clustering of the data. 
+    func - should always be ensemble. 
+
+
+    Output:
+    
+    Outputs the ensemble clustergram and sends the output to the function which generates the output files. 
+
+    '''
+    #generate linkage function
+    dissim = 1 - np.around(data,decimals=3)
+    dissim = squareform(dissim)
+    #linkage where we calculate a linkage based upon calculating distance of co-occurrence
+    # linkageMetabOut = linkage(data,link,dist)
+    #linkage where we turn co-occurrence into the dissimilarity measure
+    linkageMetabOut = linkage(dissim,link)
+
+
+    #plot the ensemble clustering co-occurence matrix and the resulting clustergram of the original data but using the clustering of the ensemble clustering
+    g = sns.clustermap(data, figsize=(7, 5), xticklabels=False, yticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageMetabOut, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+    plt.savefig('EnsembleClustergram01.png',dpi=600,transparent=True)
+    # ax = g.ax_heatmap
+    # axD = g.ax_row_dendrogram
+
+    c = sns.clustermap(orig_data,figsize=(7, 5), xticklabels=False,yticklabels=False, row_linkage=linkageMetabOut, col_cluster=False, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+    ax = c.ax_heatmap
+    inds = c.dendrogram_row.reordered_ind
+
+    #getting to clusters
+    #recClusters(dataFinal,ax,groupDendLeaves,metab_data,minMetabs,numClusts)
+    recClustersPostVal(data,ax,metab_data,inds)
+    plt.savefig('ClusteringOnOriginalData.png',dpi=600,transparent=True)
+    plt.show()
 
 #ensemble dendrogram function
 def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, link='ward',dist='euclidean',func="ensemble",colMap ='viridis'):
@@ -1185,6 +1268,44 @@ def pdfHeader(file):
         if i == len(identifiers)-1 and check == False:
             header = 'Unknown test, have Brady add the new test to the text file.'
             return header
+        
+def validationSil(coOcc, link_mat,numClusters):
+    '''
+    '''
+    labels_ = fcluster(link_mat,numClusters,criterion='maxclust')
+
+    return metrics.silhouette_score(1-np.around(coOcc,decimals=3),labels_,metric='precomputed')
+        
+def recClustersPostVal(coOcc,ax,metab_data,inds):
+    '''
+    '''
+
+    #calculate the linkage matrix
+    #generate linkage function
+    dissim = 1 - np.around(coOcc,decimals=3)
+    dissim = squareform(dissim)
+    link_mat = linkage(dissim,'average')
+    
+    #get the scores out.
+    scores = np.zeros((2,9))
+    for i in range(2,11):
+        scores[1,i-2] = validationSil(coOcc,link_mat,i);
+        scores[0,i-2] = i
+
+    optClustCoOcc = np.where(scores[0,:] == np.min(scores[0,:]))[0][0] + 2
+
+    labels = fcluster(link_mat,optClustCoOcc,criterion='maxclust')-1
+
+    for i in np.unique(labels):
+        elements_to_find = list(np.where(np.unique(labels)[i-1]==labels)[0]) 
+        filename = 'Cluster' + str(i+1) +'.xlsx'
+        metab_data.loc[elements_to_find].to_excel(filename)#,index=False)
+        indices = [i for i, value in enumerate(inds) if value in elements_to_find] 
+        ax.plot([0,metab_data.shape[1]],[min(indices),min(indices)],'r--')
+        ax.plot([0,metab_data.shape[1]],[max(indices)+1 ,max(indices)+1 ],'r--')
+        ax.plot([0,0],[min(indices),max(indices)+1],'r--')
+        ax.plot([metab_data.shape[1]-2,metab_data.shape[1]-2],[min(indices),max(indices)+1],'r--')
+    return
 
 def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numClusts):
     '''
@@ -1208,7 +1329,6 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
     while j < ensemMetabs:
         #look for the number of ones indicating the total number of 
         #metabolites in the current cluster.
-        print(numClusts-1.1)
         found = np.where(dataFinal[j,:]>((numClusts-0.9)/numClusts))
 
         #determine the length of the array found
@@ -2179,4 +2299,344 @@ def transformations(data, transform='None', scale='None',first='1'):
     return data
 
 
+#############################################################################
+##################### External optimization metrics #########################
 
+def randComp(labels):
+    '''
+    Input:
+
+    labels => list of labels for comparison
+    
+
+    '''
+    ## Calculating the Rand-index 
+    rand_scores = np.zeros((len(labels),len(labels)))
+    for i in range(len(labels)):
+        for j in range(i,len(labels)):
+            rand_scores[i,j] = metrics.rand_score(labels[i],labels[j])
+            rand_scores[j,i] = rand_scores[i,j]
+
+    ########################### Comparison plots for the clustering solution in the ensemble (Rand-index)
+    rand_scores_i = rand_scores.reshape(rand_scores.size,1,order='C')
+
+    #get a linspace vectore for storing the plotting range.
+    x = np.linspace(0.0, 1.0, 100)
+    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
+
+    #put rand scores into the form that allows to use with subplot
+    r =rand_scores_i
+
+    #get indices of upper matrix so they don't plot
+    upperMatInd = np.triu_indices(rand_scores.shape[0],1)
+    upperInds = []
+    for i in range(upperMatInd[0].shape[0]):
+        upperInds.append(rand_scores.shape[0]*upperMatInd[0][i] + upperMatInd[1][i] +1)
+
+    #create the plot objects for plotting the rand indices
+    fig, ax = plt.subplots(rand_scores.shape[0],rand_scores.shape[1],figsize=(12,12))
+
+    #at the moment assume that the list will always be this. 
+    distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
+                ('Complete','Corr'),('Complete','CorrSqrt'))
+    count=-1
+    for i in range(1,rand_scores.size+1):
+        ax = plt.subplot(rand_scores.shape[0],rand_scores.shape[1],i)
+        #remove the spines
+        ax.spines[['right', 'top','left','bottom']].set_visible(False)
+        #remove the tick markers
+        ax.tick_params(left = False,bottom=False,right=False,
+                    labelbottom=False,labelleft=False)
+        if i in upperInds:
+            continue
+        
+        if (i-1)%(rand_scores.shape[0]+1) == 0:
+            #adding the hyperparameter set to the graph
+            count+=1
+            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
+            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
+        else:
+            #adding points to the graph based upon fit
+            ax.scatter(0.1,.1,s=(r[i-1]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(r[i-1]*100)-1,:]))
+            ax.text(0.098,0.09925,"{:.2f}".format(r[i-1][0]),fontsize=14,font="Arial")
+    
+    #plot the colorbar
+    cmap = mpl.cm.cool
+    norm = mpl.colors.Normalize(vmin=0, vmax=1)
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(rand_scores.shape[0],rand_scores.shape[1],rand_scores.shape[0]), cmap='Reds',
+                                    norm=norm,
+                                    orientation='vertical')
+    
+    #save the figure of the rand indicies
+    plt.savefig('ComparisonPlot_RandIndex.png',dpi=600)
+    return
+
+
+
+def adjRandComp(labels):
+    '''
+    Input:
+
+    labels => list of labels for comparison
+    '''
+    ## Calculating the Rand-index and Adjusted Rand-index for each set of scores. 
+    adj_rand_scores = np.zeros((len(labels),len(labels)))
+    for i in range(len(labels)):
+        for j in range(i,len(labels)):
+            adj_rand_scores[i,j] = metrics.adjusted_rand_score(labels[i],labels[j])
+            adj_rand_scores[j,i] = adj_rand_scores[i,j]
+
+
+    ########################### Comparison plots for the clustering solution in the ensemble (adjusted Rand-index)
+    adj_rand_scores_i = adj_rand_scores.reshape(adj_rand_scores.size,1,order='C')
+    x = np.linspace(0.0, 1.0, 100)
+    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
+
+    ########################### Comparison plots for the clustering solution in the ensemble (adjusted Rand-index)
+    r =adj_rand_scores_i 
+    fig, ax = plt.subplots(adj_rand_scores.shape[0],adj_rand_scores.shape[1],figsize=(12,12))
+    distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
+                ('Complete','Corr'),('Complete','CorrSqrt'))
+
+    #getting the indicies that correspond to the upper triangle of the give matrix.
+    upperMatInd = np.triu_indices(adj_rand_scores.shape[0],1)
+    upperInds = []
+    for i in range(upperMatInd[0].shape[0]):
+        upperInds.append(adj_rand_scores.shape[0]*upperMatInd[0][i] + upperMatInd[1][i] +1)
+
+    count=-1
+    for i in range(1,adj_rand_scores.size+1):
+        ax = plt.subplot(adj_rand_scores.shape[0],adj_rand_scores.shape[1],i)
+        #remove the spines
+        ax.spines[['right', 'top','left','bottom']].set_visible(False)
+        #remove the tick markers
+        ax.tick_params(left = False,bottom=False,right=False,labelbottom=False,labelleft=False)
+
+        #go to the next iteration if the current iteration contains an upper triangle index. 
+        if i in upperInds:
+            continue
+        
+        if (i-1)%(adj_rand_scores.shape[0]+1)== 0:
+            #adding the hyperparameter set to the graph
+            count+=1
+            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
+            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
+        else:
+            #adding points to the graph based upon fit
+            ax.scatter(0.1,.1,s=(r[i-1]*(2250))+2750,alpha=0.7,c=tuple(rgb[0,int((r[i-1]*49.5)+49.5),:]))
+            ax.text(0.098,0.09925,"{:.2f}".format(r[i-1][0]),fontsize=14,font="Arial")
+    
+    cmap = mpl.cm.cool
+    norm = mpl.colors.Normalize(vmin=-1, vmax=1)
+
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(adj_rand_scores.shape[0],adj_rand_scores.shape[1],adj_rand_scores.shape[0]), cmap='Reds',
+                                    norm=norm,
+                                    orientation='vertical');
+
+    #save the figure as a publication quality figure. 
+    plt.savefig('ComparisonPlot_AdjustedRandIndex.png',dpi=600)
+    
+    return
+
+def coOccMonoComp(labels,labelsCoOcc):
+    '''
+    Comparison of generate ensemble clustering solution to the mono-clustering solutions that make up the ensemble.
+    
+
+    Input:
+        labels - these are the labels for each of the mono-clustering solutions
+        labelsCoOcc - labels for the ensemble clustering solution. 
+
+    Output: 
+    Figure of the comparison of clustering solutions. 
+    '''
+
+    #create the plot object for specific plotting. 
+    fig, ax = plt.subplots(len(labels),3,figsize=(8,12))
+    fig.tight_layout(pad=2)
+    x = np.linspace(0.0, 1.0, 100)
+    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
+
+    #comparison of the clustering results
+    compCoOcc_orig = np.zeros((len(labels),2))
+    for i in range(len(labels)):
+        compCoOcc_orig[i,0] = metrics.rand_score(labelsCoOcc,labels[i])
+        compCoOcc_orig[i,1] = metrics.adjusted_rand_score(labelsCoOcc,labels[i])
+    
+    #the current list of mono-clustering solutions in the ensemble. 
+    distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
+                ('Complete','Corr'),('Complete','CorrSqrt'))
+
+    count = -1
+    for i in range(1,(compCoOcc_orig.shape[0]*3)+2):
+        ax = plt.subplot(compCoOcc_orig.shape[0]+1,3,i)
+        #remove the spines
+        ax.spines[['right', 'top','left','bottom']].set_visible(False)
+        #remove the tick markers
+        ax.tick_params(left = False,bottom=False,right=False,labelbottom=False,labelleft=False)
+
+        if i in [1,4,7,10,13,16]:
+            #adding the hyperparameter set to the graph
+            count += 1
+            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
+            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
+
+        elif i in [2,5,8,11,14,17]: #adding the rand-index comps
+            ax.scatter(0.1,.1,s=(compCoOcc_orig[count,0]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(compCoOcc_orig[count,0]*100)-1,:]));
+            ax.text(0.099,0.09925,"{:.2f}".format(compCoOcc_orig[count,0]),fontsize=14,font="Arial")
+
+        elif i in [3,6,9,12,15,18]: #adding the adjusted rand-index comps
+            ax.scatter(0.1,.1,s=(compCoOcc_orig[count,1]*(2250))+2750,alpha=0.7,c=tuple(rgb[0,int((compCoOcc_orig[count,0]*49.5)+49.5),:]));
+            ax.text(0.099,0.09925,"{:.2f}".format(compCoOcc_orig[count,1]),fontsize=14,font="Arial")
+
+
+    #create the color maps for the scale bars for both the rand index and the adjusted rand index.  
+    cmap = mpl.cm.cool
+    norm = mpl.colors.Normalize(vmin=0, vmax=1)
+
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,20), cmap='Reds',
+                                    norm=norm,
+                                    orientation='vertical');
+
+    norm = mpl.colors.Normalize(vmin=-1, vmax=1)
+
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,21), cmap='Reds',
+                                    norm=norm,
+                                    orientation='vertical');
+
+    #saving the plot of comparisons between mono-clustering solutions and the final ensemble solution. 
+    plt.savefig('ComparisonPlot_Ensem_monoClustSols.png',dpi=600)
+
+    return
+
+
+def correlationNosqrt(data,metric = 'spearman'):
+    '''
+    calculate the distance matrix for the equation
+
+    1-|r(Y,Y')|
+
+    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
+    '''
+    
+    if metric== 'pearson':
+        #out defines the pearson correlation
+        out = np.corrcoef(data)
+        return 1-abs(np.around(out,decimals=3))
+    elif metric == 'spearman':
+        #out defines the correlation study in this case spearman 
+        out = spearmanr(data.T)
+        return np.around(1-abs(out.statistic),decimals=3)
+
+def correlationSqrt(data,metric='spearman'):
+    '''
+    calculate the distance matrix for the equation
+
+    (2*(1-|r(Y,Y')|))^1/2
+
+    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
+    '''
+    if metric=='spearman':
+        #out defines the correlation study in this case spearman 
+        out = spearmanr(data.T)
+        return np.around((2*(1-abs(out.statistic)))**0.5,decimals=3)
+    elif metric=='pearson':
+        #get the pearson correlation
+        out = np.corrcoef(data)
+        return np.around((2*(1-abs(out)))**0.5,decimals=3)
+
+def calinskiHarabasz_correlation(data, labels, dist):
+    '''
+    '''
+
+    #set up the dictionary for the distance measure.
+    distance = {
+        'CNS': correlationNosqrt,
+        'CS': correlationSqrt
+        }
+    
+    #get the center of all data objects
+    dataCenter = data.mean(axis=0)
+
+    #get the unique cluster labels and use to create dictionary to store cluster info
+    keys = np.unique(labels)
+    clusterSpreads = np.zeros((len(keys),1))
+    #create a matrix of the cluster centroids
+    centroids = np.zeros((len(keys),data.shape[1]))
+    #number of data objects in clusters
+    sizeClusts = np.zeros_like(clusterSpreads)
+    sizeClusts = sizeClusts.reshape(len(keys),)
+
+    # #without the sum I get what?
+    for i in keys:
+        #get the squared spread in the cluster
+        if len(list(np.where(labels==i)[0])) ==1:
+            warnings.warn('Clusters of size 1 detected')
+            clusterSpreads[i-1] = 0
+        else:
+            clusterSpreads[i-1] = (distance[dist](np.vstack([data[list(np.where(labels==i)[0]),:].mean(axis=0),data[list(np.where(labels==i)[0]),:]]))[0,:]**2).sum()
+        #save the centroids and the size of the clusters
+        centroids[i-1] = data[list(np.where(labels==i)[0]),:].mean(axis=0)
+        sizeClusts[i-1] = len(list(np.where(labels==i)[0]))
+
+    #calculating the numerator
+    centDissim = ((distance[dist](np.vstack([dataCenter, centroids]))[0,1:]**2)*sizeClusts).sum()
+    numer = centDissim/(len(np.unique(labels))-1)
+    #calculating the denominator 
+    denom = clusterSpreads.sum()/(data.shape[0]-len(np.unique(labels)))
+
+    #calculate the Calinski-Harabasz
+    CH = numer/denom
+
+    return CH
+
+
+def daviesBouldinScore_correlation(data,labels,dist):
+    '''
+    '''
+
+    
+    #set up the dictionary for the distance measure.
+    distance = {
+        'CNS': correlationNosqrt,
+        'CS': correlationSqrt
+        }
+    #get the unique cluster labels and use to create dictionary to store cluster info
+    keys = np.unique(labels)
+    avgClusterSpread = dict.fromkeys(keys)
+    #create a matrix of the cluster centroids
+    centroids = np.zeros((len(keys),data.shape[1]))
+
+    #calculate the spread of each cluster, and place data into 
+    for i in np.unique(labels):
+        #get the current clusters data, with that data np.vstack data, and get the average spread placing in dict
+        if len(list(np.where(labels==i)[0])) ==1:
+            avgClusterSpread[i] = 0
+            warnings.warn('Clusters of size 1 were detected')
+        else:
+            avgClusterSpread[i] = (distance[dist](np.vstack([data[list(np.where(labels==i)[0]),:].mean(axis=0),data[list(np.where(labels==i)[0]),:]]))[0,:].sum())/len(list(np.where(labels==i)[0]))
+        centroids[i-1] = data[list(np.where(labels==i)[0]),:].mean(axis=0)
+
+    #get the centroid dissimilarities
+    centDissim = distance[dist](centroids)
+    if isinstance(centDissim,np.float64):
+        #make the dissimilarity between cluster centers square
+        centDissim = np.array([[0, centDissim],[centDissim, 0]])
+
+    #create matrix of max scores
+    maxScores = np.zeros((len(np.unique(labels)),1))
+    
+    for i in np.unique(labels):
+        for j in np.unique(labels):
+            if i == j:
+                continue
+            #calculate Fc_h's for current cluster
+            Fch_cur = (avgClusterSpread[i]+avgClusterSpread[j])/centDissim[i-1,j-1]
+            #update the maximum for the current cluster being considered
+            if Fch_cur > maxScores[i-1]:
+                maxScores[i-1] = Fch_cur
+
+    #calculate the Davies-Bouldin metric
+    DBI = (maxScores.sum())/len(np.unique(labels))
+    
+    return DBI

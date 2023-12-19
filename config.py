@@ -15,6 +15,8 @@ scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range 
 linkageList = ('single','ward','complete','average')
 distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
 normList = ('Normalize','Do not')
+optList = ('Silhouette','Davies-Bouldin','Calinski-Harabasz')
+metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison')
 
 
 #parameters for bootstrapping
