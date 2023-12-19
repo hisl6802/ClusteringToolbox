@@ -45,7 +45,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		numThreads = int(multiprocessing.cpu_count())
 		#set up the start up page.
-		self.JuneLab = ttk.Label(self, text="GUI Set-Up",style="RW.TLabel").grid(column=0,row=0,columnspan=4)
+		self.JuneLab = ttk.Label(self, text="Project set-up",style="RW.TLabel").grid(column=0,row=0,columnspan=4)
 		self.NameLab = ttk.Label(self, text="Please input your name or a Project name:",font=("TkHeadingFont",16)).grid(column=2,row=1,sticky=(N,S,E,W),pady=10)
 		self.name = tk.StringVar()
 		self.threads = tk.StringVar()
