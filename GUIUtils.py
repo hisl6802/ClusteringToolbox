@@ -208,106 +208,37 @@ class GUIUtils:
         #log that the user called the group medians function
         logging.info(': User called the Group Medians function.')
         file = filedialog.askopenfilename()
-        medians = GB.fileCheck(file=file)
-        if medians is None:
-            #log error message and return the function for soft exit.
-            logging.error(': Error reading in the excel sheet')
-            return
 
-        #get the group letters to know which groups to find the medians of
-        groups = medians['mz']
+        #read in the file as a dataframe
+        medians = pd.read_excel(file)
+        
+        #get the retention time adn the mz values
+        rt = medians[list(medians.columns)[-1]]
+        mz = medians[list(medians.columns)[0]]
 
-        metaboliteIdentities = list(medians.columns)
-        metaboliteIdentities = metaboliteIdentities[2:len(metaboliteIdentities)]
+        #transpose the input files
+        medians = medians.T
 
-        #put groups into a list so we know how many groups we need to find the median for.
-        groups = set(groups)
-        groups = sorted(groups)
+        #groupby the appropriate column and get its median
+        med_out = medians.groupby([0]).median()
+        med_out = med_out.T
 
-        #get the groupID for each sample
-        samples = list(medians['mz'])
+        #add retention time and mass to charge ratio's back in
+        med_out.insert(0,"mz",mz)
+        med_out.insert(med_out.shape[1],"rtmed",rt)
 
-        #create numpy array that contains the medians...
-        mediansOut = np.zeros((len(metaboliteIdentities),len(groups)+2))
+        #set up a list to put into the first row
+        ph = pd.Series(med_out.shape[1]*[1.0])
 
-
-        for i in range(len(groups)):
-            #create list of indicies for the program to obtain
-            curInd = []
-            numFound = 0
-            #get theh current number of times a particular group is present.
-            numLocs = samples.count(groups[i])
-            for j in range(len(samples)):
-                #find the numLocs
-                curEntry = samples[j]
-                if curEntry == groups[i]:
-                    #add one to the numFound
-                    numFound += 1
-                    curInd.append(j)
-                    if numFound == numLocs:
-                        break
-
-            #determine the median for each metabolite across the samples for each group
-            for j in range(len(metaboliteIdentities)):
-                #for each metabolite grab the current list of data
-                curMetabMed = []
-                for k in range(len(curInd)):
-                    #add values too list that are from the list of values
-                    curMetabMed.append(medians[metaboliteIdentities[j]][curInd[k]])
-
-                curMedian = stat.median(curMetabMed)
-                mediansOut[j,i+1] = curMedian
-
-        for i in range(len(metaboliteIdentities)):
-            #check if theh current value is a string, if it is then fix string. 
-            if isinstance(metaboliteIdentities[i], str):
-                #correct the string to a float.
-                #find the first instance of the decimal, then search for values after
-                curString = metaboliteIdentities[i]
-                first = curString.find('.')
-                startRemove = curString.find('.',first+1,len(curString))
-                updatedString = curString[0:startRemove]
-                curVal = float(updatedString)
-                mediansOut[i,0] = curVal
-
-            else:
-                mediansOut[i,0] = metaboliteIdentities[i]
-
-        if rmZeros == 1:
-            #create a numpy array that cna continually be added to. 
-            mediansNZ = np.zeros((1,mediansOut.shape[1]))
-
-            #remove the zeros from the data sheet, allowing the final data sheet to only contain detected metabolites.
-            #number of groups to determine whether or not to keep the column. 
-            numGroups = len(groups)
-            for i in range(len(metaboliteIdentities)):
-                #get the current row from the numpy array
-                curRow = mediansOut[i,1:mediansOut.shape[1]-1]
-                curZero = np.where(curRow == 0)
-                numZero = len(curZero[0])
-                if numZero/numGroups < 0.5:
-                    #add the row to the output of medians NZ
-                    newRow = np.zeros((1,mediansOut.shape[1]))
-                    newRow[0,0] = mediansOut[i,0]
-                    newRow[0,newRow.shape[1]-1] = mediansOut[i,mediansOut.shape[1]-1]
-                    newRow[0,1:newRow.shape[1]-1] = curRow
-                    mediansNZ = np.vstack([mediansNZ, newRow])
-
-            mediansNZ = np.delete(mediansNZ,0,0)
-            mediansOut = mediansNZ
-            logging.info(': Zeros removed from the data set!')
-        else:
-            logging.info(': Zeros are not being removed!')
-
-
-        columns =['m/z']
-        columns.extend(groups)
-        columns.append('rt_med')
-
-        mediansExcel = pd.DataFrame(data=mediansOut,columns=columns)
+        #set the first row to the appropriate value
+        med_out.loc[0] = ph
+        #sort the values so the top row is the placeholder (ph)
+        med_out = med_out.sort_index(ascending=True)
+        
+        #add medians to file name for saving
         file = file[0:len(file)-5]
         file = file + 'Medians.xlsx'
-        mediansExcel.to_excel('MediansOutput.xlsx',index=False,sheet_name="Medians")
+        med_out.to_excel(file,index=False)
 
         #logging the completion of the group medians function
         logging.info(': Successfully grouped the Medians of each group!')
