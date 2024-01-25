@@ -2019,11 +2019,108 @@ class GUIUtils:
         plt.savefig("Normalized.png",dpi=600,transparent=True)
         plt.show()
 
+    def progenesis():
+        '''
+        '''
+
+        #have the user select the progenesis output spreadsheet. 
+        messagebox.showinfo(title='File selection',message="Select progenesis output file, with two sheets.")
+        fileName = filedialog.askopenfilename()
+        d1 = pd.read_excel(fileName, sheet_name=0)
+        d2 = pd.read_excel(fileName, sheet_name=1)
+        index = list(d2["Identifications"].where(d2["Identifications"]!=0).dropna().index)
+        d2 = d2.iloc[index]
+
+        #columns 
+        d2 = d2[["m/z","Neutral mass (Da)","Retention time (min)","Identifications","Accepted Compound ID","Accepted Description"]]
+
+        #mz from datasheet two
+        mz_d = d2[["m/z"]].dropna().to_numpy()
+
+        # read in search values (SV) were looking for
+        messagebox.showinfo(title='File selection',message="Select excel workbook with mz, and comparisons.")
+        SV_file = filedialog.askopenfilename()
+        SV_pd_ = pd.read_excel(SV_file)
+        SV_pd = SV_pd_["m.z"].to_numpy()
+
+        LL = mz_d * np.ones(len(SV_pd))
+
+        mz_SV = SV_pd[:]
+        QL = mz_SV * np.ones([len(mz_d),1])
+
+        # get tolerance values for each of the SV's 
+        tol = mz_SV * (20/1000000)
+        A = LL - QL
+        # finds where the two are very close
+        temp = np.where(abs(A) <= tol)
+        looking_at = mz_d[temp[:][0]]
+
+        #checking our matches against the input data file... typically a vip matches
+        compDict = {}
+        for i in range(0,len(SV_pd)):
+            # for the chosen searching value
+            
+            # look at where it has matches
+            temp_indexes = np.where(temp[1]==i)[0]
+            d2_indexes =[]
+            for j in range(0,len(temp_indexes)):
+                # for each of the matches
+                # look at where in d2 it matches
+                temp_d2_indexes = temp[0][temp_indexes[j]]
+                d2_indexes.append(temp_d2_indexes)
+            
+            # add all d2 indexes for each
+            compDict[i] = d2_indexes
+
+        matches = 0
+        for i in range(0,len(compDict)):
+            # for each entry in the dictionary
+            d1_match = []
+            for j in range(0,len(compDict[i])):
+                # for each entry in the dictionary's array find its mz value in d2
+                mz_d2 = mz_d[compDict[i][j]]
+                # then look for that in d1
+                d1_match.extend(d1["m/z"].where(d1["m/z"].to_numpy() == mz_d2).dropna().index)
+
+            # get all the data from those matches
+            match_DF = d1.loc[d1_match]
+
+            #check for the number of matches present... if there aren't any matches move on the next iteration
+            if len(match_DF)==0:
+                continue
+            else: 
+                matches +=1
+
+
+            match_DF=match_DF.sort_values("Score",ascending=False)
+            match_DF=match_DF.drop(columns=["Compound","Not fragmented","Not identified"])
+            sheetName = "Query List " + str(mz_SV[i])
+            Query = len(d1_match)*[None]
+            comp = len(d1_match)*[None]
+
+            #set the first value in the Query to the mz_SV
+            Query[0] = mz_SV[i]
+            comp[0]  = SV_pd_['comparison'][i]
+            match_DF.insert(0, "Query", Query, True)
+            match_DF.insert(match_DF.shape[1],"Comparisons",comp,True)
+
+            #place the matches into a matrix of interest
+            if matches == 1:
+                final_df = match_DF
+            else:
+                final_df=pd.concat([final_df,match_DF])
+
+        if matches == 0:
+            messagebox.showinfo(message='No Matches found!')
+        else:
+            final_df.to_excel('VIPwComps.xlsx',index=False)
+            messagebox.showinfo(message='Saved matching queries to VIPwComps.xlsx')
+
+        return
+    
     def mzrt():
         '''
         '''
-
-
         #show messagebox telling user which files to select first
         messagebox.showinfo(title="File selection order",message="Please select the XCMS file, then select file made for peaks to pathways that does not contain retention times.")
 

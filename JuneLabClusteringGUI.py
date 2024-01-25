@@ -141,6 +141,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(column=2,row=9,sticky=(N,S,E,W))
 		#create a button for full optimized 
 		self.optEnsem = ttk.Button(self,text="Full Opt. Ensemble",style="RW.TButton",command=self.newEnsem).grid(column=3,row=9,sticky=(N,S,E,W))
+		#create a button for full optimized 
+		self.progenesis = ttk.Button(self,text="VIP (MS/MS Comp.)",style="RW.TButton",command=self.progen).grid(column=1,row=10,sticky=(N,S,E,W))
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -167,7 +169,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_remove()
 		widgets = self.winfo_children()
 
-		n = 28
+		n = 29
 		widgetDict = {}
 		for i in range(n):
 			#create a dictionary of the widgets from home window
@@ -201,6 +203,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		widgetDict[25].grid(column=3,row=1,sticky=(N,S,E,W))
 		widgetDict[26].grid(column=2,row=9,sticky=(N,S,E,W))
 		widgetDict[27].grid(column=3,row=9,sticky=(N,S,E,W))
+		widgetDict[28].grid(column=3,row=10,sticky=(N,S,E,W))
 		
 		#add all the visual padding back to the widgets to aesthetics
 		count = -1
@@ -1966,6 +1969,12 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.scaleListBox.grid(column=2,row=4,columnspan=1)
 		self.clustersListBox = clustersListBox
 		self.clustersListBox.grid(column=3,row=4,columnspan=1)
+	
+	def progen(self):
+		'''
+		'''
+
+		GU.progenesis()
 		
 if __name__ == '__main__':
 	#launch application
