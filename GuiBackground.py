@@ -2300,7 +2300,7 @@ def transformations(data, transform='None', scale='None',first='1'):
 #############################################################################
 ##################### External optimization metrics #########################
 
-def randComp(labels):
+def randComp(labels,distLink):
     '''
     Input:
 
@@ -2335,8 +2335,8 @@ def randComp(labels):
     fig, ax = plt.subplots(rand_scores.shape[0],rand_scores.shape[1],figsize=(12,12))
 
     #at the moment assume that the list will always be this. 
-    distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
-                ('Complete','Corr'),('Complete','CorrSqrt'))
+    # distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
+    #             ('Complete','Corr'),('Complete','CorrSqrt'))
     count=-1
     for i in range(1,rand_scores.size+1):
         ax = plt.subplot(rand_scores.shape[0],rand_scores.shape[1],i)
@@ -2371,7 +2371,7 @@ def randComp(labels):
 
 
 
-def adjRandComp(labels):
+def adjRandComp(labels, distLink):
     '''
     Input:
 
@@ -2393,8 +2393,8 @@ def adjRandComp(labels):
     ########################### Comparison plots for the clustering solution in the ensemble (adjusted Rand-index)
     r =adj_rand_scores_i 
     fig, ax = plt.subplots(adj_rand_scores.shape[0],adj_rand_scores.shape[1],figsize=(12,12))
-    distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
-                ('Complete','Corr'),('Complete','CorrSqrt'))
+    # distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
+    #             ('Complete','Corr'),('Complete','CorrSqrt'))
 
     #getting the indicies that correspond to the upper triangle of the give matrix.
     upperMatInd = np.triu_indices(adj_rand_scores.shape[0],1)
@@ -2436,7 +2436,7 @@ def adjRandComp(labels):
     
     return
 
-def coOccMonoComp(labels,labelsCoOcc):
+def coOccMonoComp(labels,labelsCoOcc,distLink):
     '''
     Comparison of generate ensemble clustering solution to the mono-clustering solutions that make up the ensemble.
     
@@ -2462,10 +2462,14 @@ def coOccMonoComp(labels,labelsCoOcc):
         compCoOcc_orig[i,1] = metrics.adjusted_rand_score(labelsCoOcc,labels[i])
     
     #the current list of mono-clustering solutions in the ensemble. 
-    distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
-                ('Complete','Corr'),('Complete','CorrSqrt'))
+    # distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
+    #             ('Complete','Corr'),('Complete','CorrSqrt'))
 
     count = -1
+    #create the labels list of interest for text, rand, and adj_rand comps
+    text_list = [(3*i)+1 for i in range(len(labels))]
+    rand_list = [(3*i)+2 for i in range(len(labels))]
+    adj_list =  [(3*i)+3 for i in range(len(labels))]
     for i in range(1,(compCoOcc_orig.shape[0]*3)+2):
         ax = plt.subplot(compCoOcc_orig.shape[0]+1,3,i)
         #remove the spines
@@ -2473,17 +2477,17 @@ def coOccMonoComp(labels,labelsCoOcc):
         #remove the tick markers
         ax.tick_params(left = False,bottom=False,right=False,labelbottom=False,labelleft=False)
 
-        if i in [1,4,7,10,13,16]:
+        if i in text_list:
             #adding the hyperparameter set to the graph
             count += 1
             ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
             ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
 
-        elif i in [2,5,8,11,14,17]: #adding the rand-index comps
+        elif i in rand_list: #adding the rand-index comps
             ax.scatter(0.1,.1,s=(compCoOcc_orig[count,0]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(compCoOcc_orig[count,0]*100)-1,:]));
             ax.text(0.099,0.09925,"{:.2f}".format(compCoOcc_orig[count,0]),fontsize=14,font="Arial")
 
-        elif i in [3,6,9,12,15,18]: #adding the adjusted rand-index comps
+        elif i in adj_list: #adding the adjusted rand-index comps
             ax.scatter(0.1,.1,s=(compCoOcc_orig[count,1]*(2250))+2750,alpha=0.7,c=tuple(rgb[0,int((compCoOcc_orig[count,0]*49.5)+49.5),:]));
             ax.text(0.099,0.09925,"{:.2f}".format(compCoOcc_orig[count,1]),fontsize=14,font="Arial")
 
@@ -2492,13 +2496,13 @@ def coOccMonoComp(labels,labelsCoOcc):
     cmap = mpl.cm.cool
     norm = mpl.colors.Normalize(vmin=0, vmax=1)
 
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,20), cmap='Reds',
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,(compCoOcc_orig.shape[0]+1)*3 - 1), cmap='Reds',
                                     norm=norm,
                                     orientation='vertical');
 
     norm = mpl.colors.Normalize(vmin=-1, vmax=1)
 
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,21), cmap='Reds',
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,(compCoOcc_orig.shape[0]+1)*3), cmap='Reds',
                                     norm=norm,
                                     orientation='vertical');
 
@@ -2542,6 +2546,19 @@ def correlationSqrt(data,metric='spearman'):
         #get the pearson correlation
         out = np.corrcoef(data)
         return np.around((2*(1-abs(out)))**0.5,decimals=3)
+    
+def pairWise(data,metric='euclidean'):
+    '''
+    Calculate the wanted distance matrix and ensure it is in the proper form for the agglomerative hiearchical clustering functionality. 
+    Check the scipy.spatial.distance pdist for more information on the available distance metrics. 
+
+    '''
+
+    #use the pairwise distance function and return squareform as input
+    out = pdist(data,metric)
+    out = squareform(out)
+
+    return out
 
 def calinskiHarabasz_correlation(data, labels, dist):
     '''

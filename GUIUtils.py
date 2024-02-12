@@ -663,7 +663,7 @@ class GUIUtils:
         messagebox.showinfo(title="Success", message="Compound Matches has been generated!")
         return
     
-    def ensembleClusteringFullOpt(parameters, transform='None',scale='None'):
+    def ensembleClusteringFullOpt(parameters, numClusts = 10, transform='None',scale='None'):
         '''
         '''
 
@@ -689,13 +689,16 @@ class GUIUtils:
         #setting the functions into a validation, and distance metrics. 
         valIndex = {
             'CH':GB.calinskiHarabasz_correlation,
+            'CH_':metrics.calinski_harabasz_score,
             'SIL':metrics.silhouette_score,
-            'DBI':GB.daviesBouldinScore_correlation
+            'DBI':GB.daviesBouldinScore_correlation,
+            'DBI_':metrics.davies_bouldin_score
         }
 
         distance = {
             'CNS': GB.correlationNosqrt,
-            'CS': GB.correlationSqrt
+            'CS': GB.correlationSqrt,
+            'PW': GB.pairWise
         }
 
 
@@ -710,7 +713,7 @@ class GUIUtils:
                 dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])
                 dist = squareform(dist)
                 link_mat = ward(dist)
-                for j in range(10):
+                for j in range(numClusts):
                     labels_ = fcluster(link_mat,j+2,criterion='maxclust')
                                 
                     #update the best clustering solutions
@@ -732,7 +735,7 @@ class GUIUtils:
 
                 #get the distance metric out
                 dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])
-                for j in range(10):
+                for j in range(numClusts):
                     #calculate the clustering solutions
                     agglo = AC(n_clusters=j+2,linkage=parameters['Linkage'][i],
                             metric='precomputed').fit(dist)
@@ -753,7 +756,7 @@ class GUIUtils:
             else:
                 #get the distance metric for clustering
                 dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])      
-                for j in range(10):
+                for j in range(numClusts):
                     #calculate the clustering solutions
                     agglo = AC(n_clusters=j+2,linkage=parameters['Linkage'][i],
                             metric='precomputed').fit(dist)
@@ -786,9 +789,14 @@ class GUIUtils:
 
         #Get the labels for the optimal solution and plot the comparisons 
         labelsCoOcc =fcluster(linkageMetabOut,2,'maxclust')
-        GB.randComp(best_labels)
-        GB.adjRandComp(best_labels)
-        GB.coOccMonoComp(best_labels,labelsCoOcc)
+
+
+        #get the labels in a tuple to send to the function    
+        ensemble_s = parameters[['Distance','Linkage']]
+        distLink = tuple(ensemble_s.itertuples(index=False,name=None))
+        GB.randComp(best_labels,distLink)
+        GB.adjRandComp(best_labels,distLink)
+        GB.coOccMonoComp(best_labels,labelsCoOcc,distLink)
 
         #create the ensemble dendrogram using ward-euclidean inputs. 
         GB.createEnsemDendrogramNew(coOcc,metab_data,data,norm=0,minMetabs=0,numClusts=len(parameters),
