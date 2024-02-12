@@ -10,8 +10,8 @@ from selenium.webdriver.common.by import By
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 from scipy.cluster.hierarchy import dendrogram
-from scipy.cluster.hierarchy import linkage,ward,fcluster
-from scipy.spatial.distance import pdist,squareform
+from scipy.cluster.hierarchy import linkage, ward, fcluster
+from scipy.spatial.distance import pdist, squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import t
@@ -205,44 +205,39 @@ class GUIUtils:
         This function outputs a .csv file with _Medians appended to the end of the original file name. *** This will soon be updated to
         an excel file output for easy calling and input to the createClustergram, MST or Ensemble clustering functions. 
         '''
+
         #log that the user called the group medians function
         logging.info(': User called the Group Medians function.')
         file = filedialog.askopenfilename()
 
-        #read in the file as a dataframe
-        medians = pd.read_excel(file)
-        
-        #get the retention time adn the mz values
-        rt = medians[list(medians.columns)[-1]]
-        mz = medians[list(medians.columns)[0]]
+        #getting the needed data. 
+        df = pd.read_excel(file)
+        rt = df[list(df.columns)[-1]]
+        mz = df[list(df.columns)[0]]
 
-        #transpose the input files
-        medians = medians.T
+        #transpose the matrix to get what I want.
+        df = df.T
+        out = df.groupby([0]).median()
+        out = out.T
 
-        #groupby the appropriate column and get its median
-        med_out = medians.groupby([0]).median()
-        med_out = med_out.T
+        out.insert(0,"mz",mz)
+        out.insert(out.shape[1],"rtmed",rt)
 
-        #add retention time and mass to charge ratio's back in
-        med_out.insert(0,"mz",mz)
-        med_out.insert(med_out.shape[1],"rtmed",rt)
+        #set up a place holder with first and last places as None
+        ph = [i for i in range(0,out.shape[1])]
+        ph[0] = None;ph[-1]=None
+        out.loc[0,list(out.columns)] = ph
 
-        #set up a list to put into the first row
-        ph = pd.Series(med_out.shape[1]*[1.0])
-
-        #set the first row to the appropriate value
-        med_out.loc[0] = ph
-        #sort the values so the top row is the placeholder (ph)
-        med_out = med_out.sort_index(ascending=True)
-        
-        #add medians to file name for saving
-        file = file[0:len(file)-5]
-        file = file + 'Medians.xlsx'
-        med_out.to_excel(file,index=False)
+        #reorder the indicies and save the file with _medians attached
+        out = out.sort_index(ascending=True)
+        outFile = os.path.basename(file)
+        outFile = outFile[:-5]
+        outFile += "_medians.xlsx"
+        out.to_excel(outFile,index=False)
 
         #logging the completion of the group medians function
-        logging.info(': Successfully grouped the Medians of each group!')
-        messagebox.showinfo(title="Success",message="Successfully created MediansOutput.xlsx file!!")
+        logging.info(': Successfully calculated the medians of each metabolite in each group!')
+        messagebox.showinfo(title="Success",message="Successfully created medians file!!")
         return
 
     def linkageComparison(file,num_comps,linkList,distance, transform,scale):
@@ -270,7 +265,7 @@ class GUIUtils:
         logging.info(': User called the Linkage Comparison function.')
         #check that the file is appropriate for our data set
 
-        data, col_groups = GB.readAndPreProcess(file =file,transform=transform,scale=scale,func="CC")
+        data, col_groups = GB.readAndPreProcess(file=file, transform=transform, scale=scale, func="CC")
         del(col_groups)
         #input the arguments to the log file so user has record of what was input.
         logging.info(':-------------------------------------------------------------')
@@ -451,7 +446,6 @@ class GUIUtils:
         file = filedialog.askopenfilename()
         my_data = pd.read_csv(file)
 
-        
         if typeFile == 'all':
 
             my_final_data = np.zeros((len(my_data["Matched.Compound"]),2))
