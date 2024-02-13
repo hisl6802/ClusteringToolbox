@@ -18,6 +18,42 @@ normList = ('Normalize','Do not')
 optList = ('Silhouette','Davies-Bouldin','Calinski-Harabasz')
 metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison')
 
+#keyword arguments for grid, simply add more as need. 
+grid_kwargs = {
+    0: {'column': 0, 'row': 0, 'columnspan': 4},
+    1: {'column': 1, 'row': 1, 'sticky': 'nsew'},
+    2: {'column': 1, 'row': 3, 'sticky': 'nsew'},
+    3: {'column': 2, 'row': 1, 'sticky': 'nsew'},
+    4: {'column': 3, 'row': 2, 'sticky': 'nsew'},
+    5: {'column': 2, 'row': 2, 'sticky': 'nsew'},
+    6: {'column': 2, 'row': 3, 'sticky': 'nsew'},
+    7: {'column': 1, 'row': 2, 'sticky': 'nsew'},
+    8: {'column': 1, 'row': 9, 'sticky': 'nsew'},
+    9: {'column': 3, 'row': 3, 'sticky': 'nsew'},
+    10: {'column': 2, 'row': 5, 'sticky': 'nsew'},
+    11: {'column': 1, 'row': 4, 'sticky': 'nsew'},
+    12: {'column': 3, 'row': 4, 'sticky': 'nsew'},
+    13: {'column': 2, 'row': 4, 'sticky': 'nsew'},
+    14: {'column': 1, 'row': 5, 'sticky': 'nsew'},
+    15: {'column': 3, 'row': 5, 'sticky': 'nsew'},
+    16: {'column': 1, 'row': 6, 'sticky': 'nsew'},
+    17: {'column': 2, 'row': 6, 'sticky': 'nsew'},
+    18: {'column': 3, 'row': 6, 'sticky': 'nsew'},
+    19: {'column': 2, 'row': 7, 'sticky': 'nsew'},
+    20: {'column': 1, 'row': 7, 'sticky': 'nsew'},
+    21: {'column': 3, 'row': 7, 'sticky': 'nsew'},
+    22: {'column': 1, 'row': 8, 'sticky': 'nsew'},
+    23: {'column': 2, 'row': 8, 'sticky': 'nsew'},
+    24: {'column': 3, 'row': 8, 'sticky': 'nsew'},
+    25: {'column': 3, 'row': 1, 'sticky': 'nsew'},
+    26: {'column': 2, 'row': 9, 'sticky': 'nsew'},
+    27: {'column': 3, 'row': 9, 'sticky': 'nsew'},
+}
+
+# Example of using the kwargs for widget #1
+# widgetDict[1].grid(**grid_kwargs[1])
+
+
 
 #parameters for bootstrapping
 numReSamp = 0
