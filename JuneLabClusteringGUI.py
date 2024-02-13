@@ -29,7 +29,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.rowconfigure(3, weight = 2)
 		self.rowconfigure(4, weight = 2)
 		self.columnconfigure(3, weight=2)
-		
 
 		self.startUpPage()
 
@@ -56,7 +55,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.getStarted = ttk.Button(self,text="Get Started!",command=self.create_widgets).grid(column=2, row=7,sticky=(N,S,E,W),columnspan=1)
 
 	def create_widgets(self):
-		'''pyt
+		'''
 		'''
 
 		#get the project name
@@ -82,67 +81,61 @@ class JuneLabClusteringGUI(ttk.Frame):
 		objects = self.grid_slaves()
 		for i in objects:
 			i.destroy()
-
+		
+		#set the style for the widgets
 		self.style = ttk.Style()
 		self.style.configure("RW.TLabel", foreground="#f03d33",font=("TkHeadingFont",30))
 		self.style.configure("RW.TButton", padding=15, borderwidth=15, foreground="black", background="#000000",font=("Arial",14))
 
 		#Label for the clustering UI
-		self.GUILab = ttk.Label(self, text="Clustering GUI",style="RW.TLabel").grid(**config.grid_kwargs[0])
+		self.GUILab = ttk.Label(self, text="Clustering Toolbox",style="RW.TLabel").grid(**config.grid_kwargs[0])
 		#create a button for the creation of a clustergram 
 		self.clust = ttk.Button(self,text="Create Clustergram",style="RW.TButton",command=self.createClustergram).grid(**config.grid_kwargs[1])
-		#Create a button to allow the user to create a medians file for better clustering results. 
-		self.med = ttk.Button(self, text="Group Medians", style="RW.TButton", command=self.medians).grid(**config.grid_kwargs[2])
 		#Create a button to allow the user to compare the four most common linkage functions.
-		self.link = ttk.Button(self, text="Compare Linkage Functions", style="RW.TButton", command=self.linkages).grid(**config.grid_kwargs[3])
-		#Create a button to allow the user to validate the appropriate number of clusters needed for a given set of metabolites.
-		self.val = ttk.Button(self, text="Compound Match-Up", style="RW.TButton", command=self.compound).grid(**config.grid_kwargs[4])
+		self.link = ttk.Button(self, text="Compare Linkage Functions", style="RW.TButton", command=self.linkages).grid(**config.grid_kwargs[2])
+		#create a button for mono-clustering validation
+		self.mumBot = ttk.Button(self,text="Clustering Optimization",style="RW.TButton",command=self.monoVal).grid(**config.grid_kwargs[3])
+		#Create a button to allow the user to do an Ensemble clustering on the data.
+		self.ensemble = ttk.Button(self,text="Ensemble Clustering", style="RW.TButton", command=self.ensemble).grid(**config.grid_kwargs[4])
 		#Create a button to allow the user to create the peaks to pathways files needed to analyze the peaks to pathways in Mummichog
 		self.peak = ttk.Button(self, text="Peaks to Pathways", style="RW.TButton", command=self.P2P).grid(**config.grid_kwargs[5])
+		#Create a button to allow the user to validate the appropriate number of clusters needed for a given set of metabolites.
+		self.val = ttk.Button(self, text="Compound Match-Up", style="RW.TButton", command=self.compound).grid(**config.grid_kwargs[6])
+		#Create a button to allow the user to create a medians file for better clustering results. 
+		self.med = ttk.Button(self, text="Group Medians", style="RW.TButton", command=self.medians).grid(**config.grid_kwargs[7])
 		#Create a button to allow the user to check the integrity of the data downloaded from Metaboanalysts Volcano plot results. 
-		self.integrity = ttk.Button(self, text="Data Integrity", style="RW.TButton", command=self.integrity).grid(**config.grid_kwargs[6])
-		#Create a button to allow the user to do an Ensemble clustering on the data.
-		self.ensemble = ttk.Button(self,text="Ensemble Clustering", style="RW.TButton", command=self.ensemble).grid(**config.grid_kwargs[7])
-		#Create a button to allow the user to create a minimum spanning tree on data
-		self.mst = ttk.Button(self,text='MST Optimization', style="RW.TButton", command=self.mst).grid(**config.grid_kwargs[8])
+		self.integrity = ttk.Button(self, text="Data Integrity", style="RW.TButton", command=self.integrity).grid(**config.grid_kwargs[8])
 		#Create a button for the generation of a report
 		self.generate = ttk.Button(self,text='Selected Clusters Figure', style="RW.TButton", command=self.genSelClustFig).grid(**config.grid_kwargs[9])
-		#Create a button for the users to submit requests. 
-		self.request = ttk.Button(self, text="Submit Request", style = "RW.TButton", command=self.userRequest).grid(**config.grid_kwargs[10])
 		#Create a button for the selection of clusters
-		self.selection = ttk.Button(self, text="Cluster Selection",style = "RW.TButton",command=self.clusterSelection).grid(**config.grid_kwargs[11])
-		#Create a button for locally weighted clustering
-		self.localWeight = ttk.Button(self,text="Locally Weighted Ensemble",style="RW.TButton",command=self.localWeighted).grid(**config.grid_kwargs[12])
+		self.selection = ttk.Button(self, text="Cluster Selection",style = "RW.TButton",command=self.clusterSelection).grid(**config.grid_kwargs[10])
 		#Create a button for the users to submit requests. 
-		self.heatmap = ttk.Button(self, text="Heatmap Analyses", style = "RW.TButton", command=self.heatmapAnalyses).grid(**config.grid_kwargs[13])
-		#create a button for the users to bulid an anova-based heatmap
-		self.anHeatMap = ttk.Button(self,text="Build ANOVA Heatmap", style= "RW.TButton", command = self.anovaHeatMap).grid(**config.grid_kwargs[14])
+		self.heatmap = ttk.Button(self, text="Heatmap Analyses", style = "RW.TButton", command=self.heatmapAnalyses).grid(**config.grid_kwargs[11])
 		#create a button for the users to look-up enzymes
-		self.enzymeLU = ttk.Button(self,text="Enzyme Look Up", style="RW.TButton", command=self.enzymeLookUp).grid(**config.grid_kwargs[15])
+		self.enzymeLU = ttk.Button(self,text="Enzyme Look Up", style="RW.TButton", command=self.enzymeLookUp).grid(**config.grid_kwargs[12])
+		#create a button for the users to bulid an anova-based heatmap
+		self.anHeatMap = ttk.Button(self,text="Build ANOVA Heatmap", style= "RW.TButton", command = self.anovaHeatMap).grid(**config.grid_kwargs[13])
 		#create a button for the users to create CIs from the metabolic t-test data.
-		self.tTestCIs = ttk.Button(self,text="CIs for t-tests", style="RW.TButton",command=self.CIsTtest).grid(**config.grid_kwargs[16])
+		self.tTestCIs = ttk.Button(self,text="CIs for t-tests", style="RW.TButton",command=self.CIsTtest).grid(**config.grid_kwargs[14])
 		#create a button for the user to ask for help.
-		self.Help = ttk.Button(self, text="Help/Documentation", style="RW.TButton", command=self.helpOut).grid(**config.grid_kwargs[17])
-		#create a button for the user to be able to perform a bootstrapping procedure. 
-		self.bootstrapping = ttk.Button(self, text='Bootstrapping', style ="RW.TButton", command=self.bootstrap).grid(**config.grid_kwargs[18])
-		#create a button for the user to compare different inputs for normalization
-		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(**config.grid_kwargs[19])
+		self.Help = ttk.Button(self, text="Help/Documentation", style="RW.TButton", command=self.helpOut).grid(**config.grid_kwargs[15])
 		#create a button for the user to match the mz to rt for "improved" mummichog results
-		self.mzToRT = ttk.Button(self,text="MZ to RT", style="RW.TButton",command=self.MZ_RT).grid(**config.grid_kwargs[20])
+		self.mzToRT = ttk.Button(self,text="MZ to RT", style="RW.TButton",command=self.MZ_RT).grid(**config.grid_kwargs[16])
+		#create a button for the user to compare different inputs for normalization
+		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(**config.grid_kwargs[17])
 		#create a button for metaboanalyst file generation
-		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(**config.grid_kwargs[21])
-		#create a button for clustering the co-occurrence matrix.
-		self.coOccClust = ttk.Button(self,text="Cluster Ensemble Results",style="RW.TButton",command=self.coClust).grid(**config.grid_kwargs[22])
+		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(**config.grid_kwargs[18])
 		#create a button for using the MetaboAnalystBot
-		self.mBot = ttk.Button(self,text="MetaboBot",style="RW.TButton",command=self.metaboBot).grid(**config.grid_kwargs[23])
+		self.mBot = ttk.Button(self,text="MetaboBot",style="RW.TButton",command=self.metaboBot).grid(**config.grid_kwargs[19])
 		#create a button for using the MummichogBot
-		self.mumBot = ttk.Button(self,text="MummiBot",style="RW.TButton",command=self.mummiBot).grid(**config.grid_kwargs[24])
+		self.mumBot = ttk.Button(self,text="MummiBot",style="RW.TButton",command=self.mummiBot).grid(**config.grid_kwargs[20])
+		#Create a button to allow the user to create a minimum spanning tree on data
+		self.mst = ttk.Button(self,text='MST Optimization', style="RW.TButton", command=self.mst).grid(**config.grid_kwargs[21])
 		#create a button for mono-clustering validation
-		self.mumBot = ttk.Button(self,text="Clustering Optimization",style="RW.TButton",command=self.monoVal).grid(**config.grid_kwargs[25])
-		#create a button for mono-clustering validation
-		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(**config.grid_kwargs[26])
+		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(**config.grid_kwargs[22])
 		#create a button for full optimized 
-		self.progenesis = ttk.Button(self,text="VIP (MS/MS Comp.)",style="RW.TButton",command=self.progen).grid(**config.grid_kwargs[27])
+		self.progenesis = ttk.Button(self,text="VIP (MS/MS Comp.)",style="RW.TButton",command=self.progen).grid(**config.grid_kwargs[23])
+
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
 
@@ -1369,58 +1362,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		self.cmap = cmap
 		self.cmap.grid(column=1,row=1,sticky=(N))
-
-
-	def localWeighted(self):
-		#send the user to locally weighted ensemble clustering
-		GU.localWeighted()
 	
-	def userRequest(self):
-		def generateRequest(*args):
-			#create the pdf and title for each page
-			pdf = fpdf.FPDF('P','mm','Letter')
-			title = self.title.get()
-			body = self.body.get()
-
-			#Create the title and set the default font
-			directory = 'C:/Users/Public/Documents/Requests'
-			os.chdir(directory)
-
-			#determine the current user
-			curUser = getpass.getuser()
-			curUser = GB.who(curUser)
-			
-			#create first page
-			pdf.add_page()
-			title += '-' + curUser
-			pdf.set_font('Arial', 'B', 24)
-			pdf.cell(197, 10, title, 0, 0, 'C')
-			pdf.line(5,20,200,20)
-			pdf.ln(15)
-			pdf.set_font('Arial',style='',size=18)
-
-			pdf.multi_cell(197,8,body,0,0,'J')
-			ending = '.pdf'
-			fileName = ''
-			curTime = time.strftime("%a_%b_%d_%Y_%H_%M")
-			fileName += curUser + '_' + curTime + ending
-			pdf.output(fileName, 'F')
-			logging.info(': Sucessfully created a pdf of the results!')
-			logging.info(': Leaving the pdf User Request Function!')
-
-		objects = self.grid_slaves()
-		for i in objects:
-			i.grid_forget()
-
-		self.header = ttk.Label(self,text="Submit Request",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N))
-		self.title = tk.StringVar()
-		self.body = tk.StringVar()
-		self.entrytitle = ttk.Entry(self,textvariable=self.title).grid(column=1,row=2, pady=3)
-		self.entrybody = ttk.Entry(self,textvariable=self.body).grid(column=1,row=4, pady=3)
-		self.labelTitle = ttk.Label(self, text='Title',font=("TkHeadingFont",20)).grid(row=1,column=1,sticky=(N))
-		self.labelBody = ttk.Label(self, text='Description',font=("TkHeadingFont",20)).grid(row=3,column=1,sticky=(N))
-		self.home4 = ttk.Button(self,text="Return to Home",command=self.home).grid(column=1,row=6, sticky=(N))
-		self.buttonSubmit = ttk.Button(self,text = 'Submit Request', command = generateRequest).grid(column=1,row=5)
 
 	def anovaHeatMap(self):
 		'''
@@ -1665,13 +1607,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 		'''
 		#send straight to the function
 		GU.mzrt()
-
-	def coClust(self):
-		'''
-		'''
-		
-		#sent to the coOccClust function
-		GU.coOccClust()
 
 	def mfg(self):
 		'''

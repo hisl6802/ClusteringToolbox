@@ -42,7 +42,7 @@ from ValidationMetric import ValidationMetric as VM
 class GUIUtils:
     def dataIntegrity(file):
         '''
-        The data integrity function checks and corrects Volcano plot outputs from MetaboAnalyst for extra decimals. 
+        The data integrity allows users to determine whether the first column of data in a dataframe contains double decimals. This error mostly arises when working with MetaboAnalyst results. 
 
         Input:
 
@@ -139,8 +139,8 @@ class GUIUtils:
     def createClustergram(norm,linkFunc,distMet,cmap,colOrder=[], transform = 'None', scale ='None'):
         '''
         The function is responsible for generating the clustergrams for multivariate data. This function is capable of
-        using all the linkage functions and distance measures currently implemented to the scipy.hierarchy method. OF
-        note the ward-euclidean distance is the only combination available from the scipy.hierarcy package. 
+        using all the linkage functions and distance measures currently implemented to the scipy.hierarchy method. Note the ward-euclidean distance is the only combination 
+        available from the scipy.hierarcy package. 
         
         Input:
 
@@ -151,7 +151,6 @@ class GUIUtils:
         distMet - input a string for the distance measure you would like to use (i.e., 'euclidean')
 
         Output:
-
         This function outputs a .png of the generated clustergram. 
         '''
         
@@ -713,8 +712,6 @@ class GUIUtils:
                 link_mat = ward(dist)
                 for j in range(numClusts):
                     labels_ = fcluster(link_mat,j+2,criterion='maxclust')
-                    if i ==0 and j==0:
-                        print(labels_)
                     #update the best clustering solutions
                     score = valIndex[parameters['Optimizer'][i]](data,labels_,parameters['Distance'][i])
                     if score > bestScore:
@@ -722,7 +719,6 @@ class GUIUtils:
                         bestScore = score
                 best_labels[i]= optClust[1]    
                 optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-                print('WardoptNum:',optClust[0])
                 for k in optClusters:
                     optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
                 #update the co-occurrence matrix
@@ -767,7 +763,6 @@ class GUIUtils:
                         bestScore = score
                 best_labels[i]= optClust[1]    
                 optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-                print('AverageoptNum:',optClust[0])
                 for k in optClusters:
                     optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
                 
@@ -779,7 +774,7 @@ class GUIUtils:
             #try to save the large .csv file of the CoOccurence matrix.
             coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
         except:
-            print('Issue saving the co-occurence matrix as .csv. This error should not occur, should have been caught earlier')
+            logging.info('Issue saving the co-occurence matrix as .csv. This error should not occur, should have been caught earlier')
 
         #generate linkage function
         dissim = 1 - np.around(coOcc,decimals=3)
@@ -2217,22 +2212,32 @@ class GUIUtils:
                         
             else:
                 #create a numpy array in which you subtract the current mz value from the value
-                print('work in progress')
+                messagebox.showinfo(message='work in progress')
+                logging.info('You have entered a state that currently doesnt do anything.')
 
             
         dataP2P = pd.DataFrame(dataP2P,columns=["m.z","p.value","r.t"])
 
         dataP2P.to_csv('Update_p2pFile.csv',index=False)
+
+        return
     
     def mfgUtil(fileName,variant):
         '''
+        The goal of this function is to streamline the generation of files for analysis in MetaboAnalyst. 
+
+        Input: 
+
+        fileName - (path or name of file in current directory) name of the file that you want to split into MetaboAnalyst Files
+        variant - "All", "Multi", or "Uni". Allows the user to specify the comparisons they would like the function to create files for. Either all possible, only multivariate or only univariate. 
+
+        Output:
+        Comma separated values for the wanted comparisons. These files can be directly submitted to the metaboBot for analysis. 
+
+        - Connor Boone, 2023
         '''
-        logging.info(":called Metaboamalyst File generation functions,")
-        logging.info(":User selected INPUT SELECTION")
-
-
-
-
+        logging.info(": called MetaboAnalyst File generation functions,")
+        logging.info(": User selected {variant}")
         dir = os.getcwd()
 
         excelFile = fileName
@@ -2252,23 +2257,18 @@ class GUIUtils:
             levels = uni[1:len(uni)]
             
             identifierDict[title] = list(levels)
-            
-
 
         comparisons = list(identifierDict.values())
-        print("Comparing: " + str(comparisons))
+        logging.info("Comparing: " + str(comparisons))
         uni_F1 = []*len(comparisons)
         for k in range(0,len(comparisons)):
             temp = []
-            
             # get all unique combinations
             for i in range(2,len(comparisons[k])+1):
                     temp.extend(combinations(comparisons[k],i))
 
             uni_F1.append(temp)
-            # display combinations
 
-        print((uni_F1))
         # combine everything we need to compare
         comparitors = sum(comparisons,[])
 
@@ -2278,13 +2278,8 @@ class GUIUtils:
         iter = 0
         # for all comparitors
         for i in range(0,len(comparisons)):
-            # print()
-            # print(comparisons[i])
-
             # for each level
-            for j in range(0,len(comparisons[i])):
-                # print("Comparing " + str(comparisons[i][j]))
-                
+            for j in range(0,len(comparisons[i])):                
                 # for each level, look at the comparison list
                 for m in range(0,len(comparisons)):
                     
@@ -2297,19 +2292,15 @@ class GUIUtils:
 
                         # run through each comparison and level 
                         for k in range(0,len(uni_F1[m])):
-
+                            
+                            #determine the types of files the user wanted out. 
                             if variant == "All":
-                                # print(str(comparisons[i][j]) + ":" + str(uni_F1[m][k]))
                                 tempDict[currentIndex] = uni_F1[m][k]
                                 currentIndex += 1
-                            elif variant == "Multi" and len(uni_F1[m][k]) > 2:
-                                # print(str(comparisons[i][j]) + ":" + str(uni_F1[m][k]))
-                                
+                            elif variant == "Multi" and len(uni_F1[m][k]) > 2:                                
                                 tempDict[currentIndex] = uni_F1[m][k]
                                 currentIndex += 1
-                            elif variant == "Uni" and len(uni_F1[m][k]) == 2:
-                                # print(str(comparisons[i][j]) + ":" + str(uni_F1[m][k]))
-                                
+                            elif variant == "Uni" and len(uni_F1[m][k]) == 2:                                
                                 tempDict[currentIndex] = uni_F1[m][k]
                                 currentIndex += 1
                             pass
@@ -2320,34 +2311,21 @@ class GUIUtils:
 
                 # save this index in the lookup table
                 lookupTable[tempIndex] = comparisons[i][j]
-                
-        print("Dictionary")
-        for i in range(0,len(myDict)):
-            print(str(i) + ":" + str(myDict[i]))
-        # print()
-        # print("Lookup table: " + str(lookupTable))
-
-
 
         # for each comparitor
         for j in range(0,len(myDict)):
             # for each comparitor's variate sets
-            # print(len(myDict[j]))
-            # print(myDict[j])
-            # print(j)
             if not len(myDict[j]) == 0:
                 # if the current index is not empty 
                 for k in range(0,len(myDict[j])):
-                    # print(k)
                     os.chdir(dir)
             
                     data = pd.read_excel(excelFile)
                     df = pd.DataFrame(data)
                     df = df.drop("rtmed",axis=1)
-                    # the variate combination were looking at
+                    # the variate combination we're looking at
                     variateCombo = myDict[j][k]
-            
-                        
+
                     variateList = []
                     fileName = lookupTable[j] + "_"
                     # creates the csv file name using the variates in the file
@@ -2355,27 +2333,20 @@ class GUIUtils:
                         fileName += variateCombo[i]
                         if i+1 != len(variateCombo):
                             fileName += "_"
-                    print(fileName)
                     
                     variateList.append(lookupTable[j])
                     variateList.extend(list(variateCombo))
-                    # print(variateList)
-            
-            
                     
                     tempArray = variateList
-                    # tempArray = ["Inj","Young","Aging"]
                     # Injury or Age
                     selected = tempArray[0]
                     
                     # get the number of rows with factors
                     numCols = sum(data["rtmed"].isna())
-                    
-                    
+
                     data_a = data
                     
                     myKeys = list(identifierDict.keys())
-                    # print(myKeys)
                     index = -1
                     
                     # finds the index where the selected variant is
@@ -2386,11 +2357,9 @@ class GUIUtils:
                                 break
                     
                     myIndex = myKeys.index(myKeys[index]);
+                    #remove NA's
                     df = df[list(df.iloc[myIndex].dropna().index)] # removes any NA
-                    rowNumber = df.loc[df['mz'] == myKeys[index]].index # gets the row number of the selected header
-                    
-                    # print(rowNumber)
-                    
+                    rowNumber = df.loc[df['mz'] == myKeys[index]].index # gets the row number of the selected header                  
                     
                     notNeeded = []
                     for k in range(0,len(myKeys)):
@@ -2398,11 +2367,9 @@ class GUIUtils:
                         
                         # checks to see if we care about this data based on the varaint selection above
                         temp = []
-                        # print(tempArray)
                         for i in range(0,len(rowVals)):
                             if rowVals[i] in tempArray:
-                                # print("found " + rowVals[i])
-                                
+                               
                                 temp.extend([True])
                             else:
                                 temp.extend([False])
@@ -2411,14 +2378,9 @@ class GUIUtils:
                         a = np.where(temp != True)[0]
                         
                         notNeeded.extend(list(a))
-                        
-                    # print(notNeeded)
+
                     df = df.drop([index]) # drops the row of data we dont care about
                     data_a = df.drop(columns=data_a.columns[notNeeded]) # removes the columns with data we dont care about
-            
-            
-                    # print(selected + " removed from dataset")
-                    
                     
                     fileName = ""
                     # creates the csv file name using the variates in the file
@@ -2426,17 +2388,12 @@ class GUIUtils:
                         fileName += tempArray[i]
                         if i+1 != len(tempArray):
                             fileName += "_"
-                    
-                    # print(fileName)
-                    # print(len(tempArray))
-                    # create new folder
             
-                    # current directory is the directory where i want the folder to be placed in
+                    # create a new directory if the name below isn't present. 
                     newpath = 'CSV_Files' # name of new folder
                     if not os.path.exists(newpath): # check to see if folder exists
                         os.makedirs(newpath) # if it does not, create a new folder
                     os.chdir(newpath) # move to the new folder
-                    # print(newpath)
             
                     # determines whether the chosen comparison is uni or multi variate 
                     if len(tempArray) == 3:
@@ -2455,7 +2412,6 @@ class GUIUtils:
                     # goes back out to the "CSV_Files" directory
                     os.chdir("..")
         os.chdir(dir)
-        print("Done")
         logging.info(":Completed")
 
     def coOccClust():
