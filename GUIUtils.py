@@ -685,7 +685,6 @@ class GUIUtils:
         # create labels
         best_labels = [None]*parameters.shape[0]
 
-
         #setting the functions into a validation, and distance metrics. 
         valIndex = {
             'CH':GB.calinskiHarabasz_correlation,
@@ -709,13 +708,13 @@ class GUIUtils:
             optClust = [None]*2
             #calculate the distance matrix
             if parameters['Linkage'][i] == 'ward':
-                
                 dist = distance[parameters['Distance'][i]](data,metric=parameters['Correlation'][i])
                 dist = squareform(dist)
                 link_mat = ward(dist)
                 for j in range(numClusts):
                     labels_ = fcluster(link_mat,j+2,criterion='maxclust')
-                                
+                    if i ==0 and j==0:
+                        print(labels_)
                     #update the best clustering solutions
                     score = valIndex[parameters['Optimizer'][i]](data,labels_,parameters['Distance'][i])
                     if score > bestScore:
@@ -723,7 +722,7 @@ class GUIUtils:
                         bestScore = score
                 best_labels[i]= optClust[1]    
                 optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-                
+                print('WardoptNum:',optClust[0])
                 for k in optClusters:
                     optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
                 #update the co-occurrence matrix
@@ -747,7 +746,7 @@ class GUIUtils:
                         bestScore = score
                 best_labels[i]= optClust[1]    
                 optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-
+                print('CompleteoptNum:',optClust[0])
                 for k in optClusters:
                     optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
                 #update the co-occurrence matrix
@@ -768,7 +767,7 @@ class GUIUtils:
                         bestScore = score
                 best_labels[i]= optClust[1]    
                 optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-
+                print('AverageoptNum:',optClust[0])
                 for k in optClusters:
                     optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
                 
@@ -935,7 +934,7 @@ class GUIUtils:
         if linkage == 'ward':
             #calculate the distance matrix, which in this from should give me the sparse form. So, I should not need to use squareform
             dist = pdist(data, dissimilarity)
-            print(type(dist))
+
             # dist = squareform(dist)
             link_mat = ward(dist)
 

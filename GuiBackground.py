@@ -18,6 +18,7 @@ from seaborn.matrix import clustermap
 import math
 import config
 import warnings
+from multiprocessing import Pool
 
 from fpdf import FPDF
 
@@ -1269,7 +1270,20 @@ def pdfHeader(file):
         
 def validationSil(coOcc, link_mat,numClusters):
     '''
+    From the number of clusters submitted what is the optimization index out. This will need to continously improve as the 'maxclust' is not perfect. In fact, at times 'maxclust' can 
+    not give out the desired number of clusters. 
+    
+    Inputs: 
+    CoOcc - (N x N) co-occurrence matrix from the ensemble clustering
+    link_mat - (scipy linkage object) link matrix created by linkage in the clustering. 
+    numClusters - (integer) the number of clusters to determine before sending the labels to the metrics.silhouette_score(*args,**kwargs)
+
+    Output:
+    This function returns the Silhouette score. 
+
     '''
+
+    #get the labels from the clustering.
     labels_ = fcluster(link_mat,numClusters,criterion='maxclust')
 
     return metrics.silhouette_score(1-np.around(coOcc,decimals=3),labels_,metric='precomputed')
@@ -1277,6 +1291,7 @@ def validationSil(coOcc, link_mat,numClusters):
 def recClustersPostVal(coOcc,ax,metab_data,inds):
     '''
     '''
+    print(coOcc)
 
     #calculate the linkage matrix
     #generate linkage function
@@ -1284,21 +1299,46 @@ def recClustersPostVal(coOcc,ax,metab_data,inds):
     dissim = squareform(dissim)
     link_mat = linkage(dissim,'average')
     
-    #get the scores out.
-    scores = np.zeros((2,9))
+    #create a multithreading version of the output.
+    #create an empty list
+    argsMulti = []
+
     for i in range(2,11):
-        scores[1,i-2] = validationSil(coOcc,link_mat,i);
-        scores[0,i-2] = i
+        #create a list that multithreading can use
+        argsMulti.append((coOcc, link_mat, i))
 
-    optClustCoOcc = np.where(scores[0,:] == np.min(scores[0,:]))[0][0] + 2
+    if __name__ == 'GuiBackground':
+        print(config.numThreads)
+        with Pool(config.numThreads) as p:
+            scores = p.starmap(validationSil,argsMulti)
+    scores = np.array(scores)
+    print(scores)
 
+    
+    # #get the validation scores out for the considered solution. 
+    # scores = np.zeros((2,9))
+    # for i in range(2,11):
+    #     scores[1,i-2] = validationSil(coOcc,link_mat,i);
+    #     scores[0,i-2] = i
+    # print(scores)
+    #search the list of where the best clustering solution is, 
+    # optClustCoOcc = np.where(scores[1,:] == np.max(scores[1,:]))[0][0] + 2
+    optClustCoOcc = np.where(scores == np.max(scores))[0][0] + 2
+    print(optClustCoOcc)
+    #labels for the solution. 
     labels = fcluster(link_mat,optClustCoOcc,criterion='maxclust')-1
 
     for i in np.unique(labels):
+        #get the list of elements which need to be discovered in the graph.
         elements_to_find = list(np.where(np.unique(labels)[i-1]==labels)[0]) 
+        #update the file name for the cluster number identified.
         filename = 'Cluster' + str(i+1) +'.xlsx'
+        #save the element data to excel. sheet. 
         metab_data.loc[elements_to_find].to_excel(filename)#,index=False)
+        #use list comprehension to create a list of found items.
         indices = [i for i, value in enumerate(inds) if value in elements_to_find] 
+
+        #create red boxes around the clusters on a clustergram. 
         ax.plot([0,metab_data.shape[1]],[min(indices),min(indices)],'r--')
         ax.plot([0,metab_data.shape[1]],[max(indices)+1 ,max(indices)+1 ],'r--')
         ax.plot([0,0],[min(indices),max(indices)+1],'r--')
@@ -1750,7 +1790,6 @@ def readAndPreProcess(file='',transform = 'None', scale ='None',func='else',firs
     #check that the file the user selects is appropriate
     ###Should only be used when reading in excel files.
     metab_data = fileCheck(file=file)
-
     if metab_data is None:
         #log error message and return for soft exit.
         logging.error(': Error loading in the Excel sheet.')
@@ -2524,11 +2563,11 @@ def correlationNosqrt(data,metric = 'spearman'):
     if metric== 'pearson':
         #out defines the pearson correlation
         out = np.corrcoef(data)
-        return 1-abs(np.around(out,decimals=3))
+        return 1-abs(np.around(out,decimals=5))
     elif metric == 'spearman':
         #out defines the correlation study in this case spearman 
         out = spearmanr(data.T)
-        return np.around(1-abs(out.statistic),decimals=3)
+        return np.around(1-abs(out.statistic),decimals=5)
 
 def correlationSqrt(data,metric='spearman'):
     '''
@@ -2541,11 +2580,11 @@ def correlationSqrt(data,metric='spearman'):
     if metric=='spearman':
         #out defines the correlation study in this case spearman 
         out = spearmanr(data.T)
-        return np.around((2*(1-abs(out.statistic)))**0.5,decimals=3)
+        return np.around((2*(1-abs(out.statistic)))**0.5,decimals=5)
     elif metric=='pearson':
         #get the pearson correlation
         out = np.corrcoef(data)
-        return np.around((2*(1-abs(out)))**0.5,decimals=3)
+        return np.around((2*(1-abs(out)))**0.5,decimals=5)
     
 def pairWise(data,metric='euclidean'):
     '''
