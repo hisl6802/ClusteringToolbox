@@ -86,7 +86,7 @@ def correlationNosqrt(data):
 
     out = spearmanr(data.T)
 
-    return np.around(1-abs(out.statistic),decimals=3)
+    return np.around(1-abs(out.statistic),decimals=5)
 
 def correlationSqrt(data):
     '''
@@ -99,7 +99,7 @@ def correlationSqrt(data):
 
     out = spearmanr(data.T)
 
-    return np.around((2*(1-abs(out.statistic)))**0.5,decimals=3)
+    return np.around((2*(1-abs(out.statistic)))**0.5,decimals=5)
 
 
 
@@ -2373,9 +2373,6 @@ def randComp(labels,distLink):
     #create the plot objects for plotting the rand indices
     fig, ax = plt.subplots(rand_scores.shape[0],rand_scores.shape[1],figsize=(12,12))
 
-    #at the moment assume that the list will always be this. 
-    # distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
-    #             ('Complete','Corr'),('Complete','CorrSqrt'))
     count=-1
     for i in range(1,rand_scores.size+1):
         ax = plt.subplot(rand_scores.shape[0],rand_scores.shape[1],i)
@@ -2432,8 +2429,6 @@ def adjRandComp(labels, distLink):
     ########################### Comparison plots for the clustering solution in the ensemble (adjusted Rand-index)
     r =adj_rand_scores_i 
     fig, ax = plt.subplots(adj_rand_scores.shape[0],adj_rand_scores.shape[1],figsize=(12,12))
-    # distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
-    #             ('Complete','Corr'),('Complete','CorrSqrt'))
 
     #getting the indicies that correspond to the upper triangle of the give matrix.
     upperMatInd = np.triu_indices(adj_rand_scores.shape[0],1)
@@ -2475,6 +2470,81 @@ def adjRandComp(labels, distLink):
     
     return
 
+
+def mutualInfo(labels,distLink, score='norm'):
+    '''
+    Input:
+
+    labels => list of labels for comparison
+    
+
+    '''
+    ## Calculating the Rand-index 
+    if score == 'norm':
+        scores = np.zeros((len(labels),len(labels)))
+        for i in range(len(labels)):
+            for j in range(i,len(labels)):
+                scores[i,j] = metrics.normalized_mutual_info_score(labels[i],labels[j])
+                scores[j,i] = scores[i,j]
+    elif score == 'adj':
+        scores = np.zeros((len(labels),len(labels)))
+        for i in range(len(labels)):
+            for j in range(i,len(labels)):
+                scores[i,j] = metrics.adjusted_mutual_info_score(labels[i],labels[j])
+                scores[j,i] = scores[i,j]
+
+    ########################### Comparison plots for the clustering solution in the ensemble (Rand-index)
+    rand_scores_i = scores.reshape(scores.size,1,order='C')
+
+    #get a linspace vectore for storing the plotting range.
+    x = np.linspace(0.0, 1.0, 100)
+    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
+
+    #put rand scores into the form that allows to use with subplot
+    r =rand_scores_i
+
+    #get indices of upper matrix so they don't plot
+    upperMatInd = np.triu_indices(scores.shape[0],1)
+    upperInds = []
+    for i in range(upperMatInd[0].shape[0]):
+        upperInds.append(scores.shape[0]*upperMatInd[0][i] + upperMatInd[1][i] +1)
+
+    #create the plot objects for plotting the rand indices
+    fig, ax = plt.subplots(scores.shape[0],scores.shape[1],figsize=(12,12))
+
+    count=-1
+    for i in range(1,scores.size+1):
+        ax = plt.subplot(scores.shape[0], scores.shape[1],i)
+        #remove the spines
+        ax.spines[['right', 'top','left','bottom']].set_visible(False)
+        #remove the tick markers
+        ax.tick_params(left = False,bottom=False,right=False,
+                    labelbottom=False,labelleft=False)
+        if i in upperInds:
+            continue
+        
+        if (i-1)%(scores.shape[0]+1) == 0:
+            #adding the hyperparameter set to the graph
+            count+=1
+            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
+            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
+        else:
+            #adding points to the graph based upon fit
+            ax.scatter(0.1,.1,s=(r[i-1]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(r[i-1]*100)-1,:]))
+            ax.text(0.098,0.09925,"{:.2f}".format(r[i-1][0]),fontsize=14,font="Arial")
+    
+    #plot the colorbar
+    cmap = mpl.cm.cool
+    norm = mpl.colors.Normalize(vmin=0, vmax=1)
+    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(scores.shape[0],scores.shape[1],scores.shape[0]), cmap='Reds',
+                                    norm=norm,
+                                    orientation='vertical')
+    
+    #save the figure of the rand indicies
+    filename = 'ComparisonPlot_' + score + '_mutual_info.png'
+    plt.savefig(filename,dpi=600)
+    return
+
 def coOccMonoComp(labels,labelsCoOcc,distLink):
     '''
     Comparison of generate ensemble clustering solution to the mono-clustering solutions that make up the ensemble.
@@ -2499,10 +2569,6 @@ def coOccMonoComp(labels,labelsCoOcc,distLink):
     for i in range(len(labels)):
         compCoOcc_orig[i,0] = metrics.rand_score(labelsCoOcc,labels[i])
         compCoOcc_orig[i,1] = metrics.adjusted_rand_score(labelsCoOcc,labels[i])
-    
-    #the current list of mono-clustering solutions in the ensemble. 
-    # distLink = (('Ward','Corr'),('Ward','CorrSqrt'),('Average','Corr'),('Average','CorrSqrt'),
-    #             ('Complete','Corr'),('Complete','CorrSqrt'))
 
     count = -1
     #create the labels list of interest for text, rand, and adj_rand comps

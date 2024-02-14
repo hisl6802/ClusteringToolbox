@@ -16,7 +16,7 @@ linkageList = ('single','ward','complete','average')
 distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correlation','canberra','braycurtis','minkowski','cityblock')
 normList = ('Normalize','Do not')
 optList = ('Silhouette','Davies-Bouldin','Calinski-Harabasz')
-metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison')
+metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison','Normalized Mutual Info.','Adjusted Mutual Info.')
 
 #keyword arguments for grid, simply add more as need. 
 grid_kwargs = {

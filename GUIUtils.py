@@ -32,7 +32,6 @@ import os
 import GuiBackground as GB
 from tkinter import filedialog, messagebox
 import mplcursors
-from LocallyWeighted import LocallyWeighted as LW 
 
 from Bio.KEGG import REST
 from Bio.KEGG import Compound
@@ -1636,71 +1635,6 @@ class GUIUtils:
         cursor.connect("add", lambda sel: GB.select(sel.target,dend,linkageOne,linkDir,linkageClusters,data_orig))
         plt.show()
 
-
-    def localWeighted():
-        '''
-        This function performs locally-weighted ensemble clustering
-
-        Input: TBD
-
-        Output:
-        Recommended clusters
-        Ensemble Clustergram
-
-        '''
-
-        #optimum number of clusters from validation index.
-        sys.setrecursionlimit(10**8) 
-        metab_data = GB.fileCheck()
-
-        if metab_data is None:
-            logging.error(': File does not meet input requirements.')   
-            return
-       
-        #List for the use in creating and plotting the clustering results
-        linkageList = ['single','complete','average']
-        distList = ['euclidean','sqeuclidean','chebyshev','seuclidean'] 
-        
-        #calculate the number of clusterings based upon the size of the lists and an additional term for the ward-euclidean run. 
-        numClusterings = (len(linkageList)*len(distList))+1
-
-        #read in the data
-        data = GB.readInColumns(metab_data)
-        
-        #Standardize the data before clustering the results
-        logging.info(': Pre-processing data.')
-        for i in range(data.shape[0]):
-            data[i,:] = GB.standardize(data[i,:])
-
-        #creates empty dictionary for clusterings
-        clusters = {}
-
-        #performs first 12 base clusterings and populates clusters dictionary
-        for i in range(len(linkageList)):
-            for j in range(len(distList)):
-                linkCur = linkage(data,linkageList[i],distList[j])
-                valid = GB.clustConnectLink(linkCur)
-                index = str(linkageList[i] + '_' + distList[j])
-                clusters.update({index:valid})
-                logging.info(str(linkageList[i])+'-'+str(distList[j]) +' done!')
-
-        #performs 13th base clustering and populates clusters dictionary
-        linkCur = linkage(data, 'ward', 'euclidean')
-        valid = GB.clustConnectLink(linkCur)
-        logging.info(str('ward-euclidean done!'))
-        clusters.update({'ward_euclidean':valid})
-
-
-        optNum = 2
-        
-        refClust = LW.clustFinder(data=data,optNum=optNum,clusters=clusters)
-        
-        
-        ECI = LW.clustCompare(refClust)
-       
-        consensusMat = LW.consensus(ECI,refClust,data)
-        regionsOut = LW.regions(consensusMat)
-
     def enzymeLookUp(numSheets):
         '''
         '''
@@ -1924,70 +1858,6 @@ class GUIUtils:
         tTests.to_excel('t_testWCIs.xlsx',index=False)
         messagebox.showinfo(title="Success",message="A t_testWCIs.xlsx file has successfully been created!")
         return
-
-    def bootstrapping(numReSamp,numPerSamp):
-        '''
-        Hello, there!!
-        '''
-
-        #log that user called MST
-        logging.info(': User called the bootstrapping function.')
-
-        #get the file of interest
-        filename = filedialog.askopenfilename()
-
-        try:
-            data = GB.readAndPreProcess(file=filename, func='else')
-        
-        except BaseException:
-            logging.error(': Unable to proceed, due to file error!')
-            messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
-            return
-
-
-        #determine the number of groups in the sample set.
-        num_groups=data.shape[1]
-        num_metabs = data.shape[0]
-
-
-        if num_groups >= int(numPerSamp):
-            bootCur = []
-            for i in range(int(numReSamp)):
-                bootCur.append(stat.mean(random.choices(data[1,:], k=int(numReSamp))))
-
-        #convert the current list to a numpy array for ease of using the sort function
-        bootCur = np.array(bootCur)
-
-        #sort the bootCur numpy array in descending order
-        bootCur = np.sort(bootCur)
-
-        #calculate LB and UB indicies for analysis
-        indLB = int(numReSamp)*0.025
-        indUB = int(numReSamp)*0.975
-
-        #linear interpolation of indLB and indUB to land at 95%CI
-        if math.floor(indLB) != math.ceil(indLB):
-            #calculate linear interpolated value
-            bootCILB = bootCur[int(math.floor(indLB))] + ((indLB-math.floor(indLB))(bootCur[int(math.ceil(indLB))] - bootCur[int(math.floor(indLB))]))
-        else:
-            bootCILB = bootCur[int(math.floor(indLB))]
-
-        if math.floor(indUB) != math.ceil(indUB):
-            #calculate linear interpolated value
-            bootCIUB = bootCur[int(math.floor(indUB))] + ((indUB-math.floor(indUB))(bootCur[int(math.ceil(indUB))] - bootCur[int(math.floor(indUB))]))
-
-        else:
-            bootCIUB = bootCur[int(math.ceil(indUB))]
-
-        bootCI = (bootCILB,bootCIUB)
-        
-
-        g = sns.kdeplot(bootCur,color='r',fill=True)
-        #plot vertical lines of upper and lower bounds
-        g.vlines(bootCI,0,g.get_ylim()[1],colors=['k'])
-
-        plt.show()
-
 
 
     def normalityCheck(transform=config.curTrans,scale=config.curScale):
@@ -2413,115 +2283,7 @@ class GUIUtils:
                     os.chdir("..")
         os.chdir(dir)
         logging.info(":Completed")
-
-    def coOccClust():
-        '''
-        '''
-
-        #get the directory from the user
-        directory = filedialog.askdirectory()
-
-        #change to the directory, after getting current directory
-        curDir = os.getcwd()
-        os.chdir(directory)
-
-        #read in the csv file: EnsembleCoOcc
-        coOcc = pd.read_csv('EnsembleCoOcc.csv')
-        #get the original file and read it in
-        origFile = glob.glob('*.xlsx')
-        orig = pd.read_excel(origFile[0])
-
-        #find the best set of parameters
-        bestScore = 0
-        optClust = [None]*2
-        for j in range(10):
-            #calculate the clustering solutions
-            agglo = AC(n_clusters=j+2,linkage='average',metric='euclidean').fit(coOcc)
-
-            #update the best clustering solutions
-            score = metrics.silhouette_score(coOcc, agglo.labels_)
-            if score > bestScore:
-                optClust[0],optClust[1] = j+2, agglo.labels_
-                bestScore = score
-
-                
-        #loop over the results getting the indicies for a specific cluster and export to an excel workbook
-        for i in np.unique(optClust[1]):
-            #find where the indicies are in optClust[1]
-            orig.loc[list(np.where(optClust[1]==i)[0])].to_excel('EnsembleOut_'+str(i+1)+'.xlsx',index=False)
-
-
-
-        #go back into the original directory
-        os.chdir(curDir)
-        messagebox.showinfo(title="Success",message="Ensemble output files generated from optimization of final results!")
-        
-
-    def allAgglo(transform, scale,cmap,optClust,minFeature):
-        '''
-        '''
-        print(transform,scale,cmap,optClust,minFeature)
-        messagebox.showinfo(title='Input file',message='Please select excel file of data you want to cluster.')
-        dataF = filedialog.askopenfilename()
-        messagebox.showinfo(title='Input file',message='Please select .csv file of wanted ensemble, and input metrics.')
-        #ask for ensemble input file containing the parameters of interest
-        file = filedialog.askopenfilename()
-        #read in the ensemble parameter information
-        ensemble = pd.read_csv(file)
-
-        ############### All agglomerative ensemble ############################
-
-        #read in the data dataset of interest
-        data, col_groups = GB.readAndPreProcess(file=dataF,transform=transform,scale=scale,func="CC")
-        metab_data = GB.readAndPreProcess(file=dataF,transform='None',func='Raw')
-        
-    
-        #setting up the storage for the outputs
-        optClust= [None]*2
-        best_labels = [None]*ensemble.shape[0]
-        bestScore = 0
-        labels=[]
-
-        #create a function dictionary of the metrics that are available to the user at the moment
-        valIndex = {
-            'CH':metrics.calinski_harabasz_score,
-            'SIL':metrics.silhouette_score,
-            'DBI':metrics.davies_bouldin_score
-        }
-
-        #create co-occurrence matrix.
-        coOcc = GB.cooccurrence(data)
-        for i in range(ensemble.shape[0]):
-            bestScore = 0
-            optClust = [None]*2
-            for j in range(10):
-                #calculate the clustering solutions
-                agglo = AC(n_clusters=j+2,linkage=ensemble['Linkage'][i],metric=ensemble['Distance'][i]).fit(data)
-                
-                #update the best clustering solutions
-                score = valIndex[ensemble['Optimizer'][0]](data,agglo.labels_)
-                if score > bestScore:
-                    optClust[0],optClust[1] = j+2, agglo.labels_
-                    bestScore = score
-            best_labels[i]= optClust[1]    
-            optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-            
-
-            labels.append(optClust[1])
-            for k in optClusters:
-                optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
-            
-            coOcc = GB.popCooccurrence(optClusters,coOcc,ensemble.shape[0])
-        #make the coOccurence matrix a dataframe.
-        coOcc1 = pd.DataFrame(coOcc)
-        try:
-            #try to save the large .csv file of the CoOccurence matrix.
-            coOcc1.to_excel('EnsembleCoOcc.xlsx',index=False)
-        except:
-            messagebox.showerror(title="Co-occurence matrix didn't save!", message="Co-occurence matrix did not save, may need to install openpyxl or xlsxwriter.")
-
-        #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogram(coOcc,metab_data,norm=0,minMetabs=minFeature,numClusts=ensemble.shape[0],link='ward',dist='euclidean',func="ensemble",colMap=cmap);
+        return 
 
     def metaboBot(analysis='uni'):
         '''
@@ -2777,7 +2539,7 @@ class GUIUtils:
 
 
 
-    def externalCriteria(data,clusts,comp='rand'):
+    def externalCriteria(comp='rand'):
         '''
 
         '''
@@ -2785,7 +2547,8 @@ class GUIUtils:
         #set up the dictionary for the distance measure.
         distance = {
         'CNS': GB.correlationNosqrt,
-        'CS': GB.correlationSqrt
+        'CS': GB.correlationSqrt,
+        'PW': GB.pairWise
         }
 
         #setting the functions into a validation, and distance metrics. 
@@ -2805,6 +2568,8 @@ class GUIUtils:
         #read in the csv, for ensemble creation
         clustsFile = filedialog.askopenfilename()
         clusts = pd.read_csv(clustsFile)
+        clusts_s = clusts[['Distance','Linkage']]
+        distLink = tuple(clusts_s.itertuples(index=False,name=None))
 
         #a list for saving the best labels from each clustering
         best_labels = [None]*clusts.shape[0]
@@ -2868,8 +2633,22 @@ class GUIUtils:
         #check for what is what and send labels. 
         if comp =='rand':
             #send to the rand index function
-            GB.randComp(best_labels)
+            GB.randComp(best_labels,distLink)
+            messagebox.showinfo(title='Completed',message='Successfully saved the output of the Rand-Index comparison.')
 
         elif comp =='adjRand':
             #send to the adjusted rand function
-            GB.adjRandComp(best_labels)
+            GB.adjRandComp(best_labels,distLink)
+            messagebox.showinfo(title='Completed',message='Successfully saved the output of the Adjusted Rand-Index comparison.')
+
+        elif comp =='Normalized Mutual Info.':
+            #send to the mutual info function
+            GB.mutualInfo(best_labels,distLink,'norm')
+        
+        elif comp =='Adjusted Mutual Info.':
+            #send to the mutual info function
+            GB.mutualInfo(best_labels,distLink,'adj')
+
+        else:
+            #eventually add here so that I can support this functionality. 
+            messagebox.showinfo(title='Currently not supporting the comparison between mono-clustering and ensemble clustering solutions.')

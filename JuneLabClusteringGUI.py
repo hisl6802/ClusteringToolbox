@@ -1522,27 +1522,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.numSampsList = numSampsList
 		self.numSampsList.grid(column=1,row=2,sticky=(N))
 
-	def bootstrap(self):
-		def submitBoot(*args):
-			config.numReSamp = self.BootEntry.get()
-			config.numPerSamp = self.IntensityBoot.get()
-			GU.bootstrapping(config.numReSamp,config.numPerSamp)
-		
-		#eliminating the objects from home page.
-		objects = self.grid_slaves()
-		for i in objects:
-			i.grid_forget()
-
-		self.bootstrapHead = ttk.Label(self,text="Bootstrapping", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N))
-		self.numSampsBoot = ttk.Label(self,text="How many samples for bootstrapping?").grid(column=1,row=1,sticky=(N))
-		self.BootEntry = tk.StringVar()
-		self.numSampsBootEntry = ttk.Entry(self,textvariable=self.BootEntry).grid(column=1,row=2,pady=3)
-		self.numIntensitiesBoot = ttk.Label(self,text="Number of samples per boot?").grid(column=1,row=3,sticky=(N))
-		self.IntensityBoot = tk.StringVar()
-		self.numIntensitiesBootEntry = ttk.Entry(self, textvariable=self.IntensityBoot).grid(column=1,row=4,pady=3)
-		self.bootSubmit = ttk.Button(self,text="Submit",command=submitBoot).grid(column=1,row=5,sticky=(N))
-		self.bootHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=6,sticky=(N))
-
 	def normalityC(self):
 		'''
 		'''
@@ -1665,6 +1644,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 		def submitExternal(*args):
 			'''
 			'''
+			selection = metricsListBox.curselection()
+			selection = config.metrics[selection[0]]
+			print(selection)
 			GU.externalCriteria()
 
 		#get rid of the objects that aren't needed for the external optimization.
@@ -1689,13 +1671,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 		# linkNames = StringVar(value=linkageList)
 		self.metricsListBox = metricsListBox
 		self.metricsListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
-
-	def newEnsem(self):
-		'''
-		'''
-		file = filedialog.askopenfilename()
-		parameters = pd.read_csv(file)
-		GU.ensembleClusteringFullOpt(parameters)
 
 	def monoVal(self):
 		'''
