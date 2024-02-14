@@ -1,0 +1,395 @@
+Copyright 2022 MONTANA STATE UNIVERSITY
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided 
+that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the 
+following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and 
+the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or 
+promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY MONTANA STATE UNIVERSITY "AS IS" AND ANY EXPRESS OR IMPLIED 
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. MONTANA STATE UNIVERSITY’S AGGREGATE 
+LIABILITY FOR ALL DAMAGES ARISING OUT OF OR RELATED TO THIS AGREEMENT, WHETHER IN 
+CONTRACT OR TORT, OR OTHERWISE, SHALL BE LIMITED TO THE TOTAL AMOUNTS ACTUALLY RECEIVED 
+FROM A LICENSEE UNDER THIS AGREEMENT WITHIN THE TWELVE (12) MONTHS IMMEDIATELY 
+PRECEDING THE EVENT GIVING RISE TO LIABILITY.  IN NO EVENT SHALL USE OF THE COPYRIGHTED 
+MATERIALS, OR ANYTHING IN THIS LICENSE AGREEMENT, BE CONSTRUED AS AN EXPRESS OR IMPLIED 
+WAIVER BY MONTANA STATE UNIVERSITY OF ANY APPLICABLE GOVERNMENTAL OR SOVEREIGN 
+IMMUNITY, AS AN EXPRESS OR IMPLIED ACCEPTANCE OF MONTANA STATE UNIVERSITY OF LIABILITIES 
+ARISING AS A RESULT OF ACTIONS WHICH LIE IN TORT OR COULD LIE IN TORT IN EXCESS OF ANY 
+LIABILITIES ALLOWED UNDER MONTANA LAW, AS A PLEDGE OF THE FULL FAITH AND CREDIT OF ANY 
+STATE, OR AS THE ASSUMPTION BY MSU OF A DEBT, CONTRACT, OR LIABILITY OF MONTANA STATE 
+UNIVERSITY IN VIOLATION OF APPLICABLE LAW.
+
+Notwithstanding anything to the contrary, use, copying, modifications, redistributions, and/or products 
+derived from this software must additionally comply, as applicable, with the following licenses for the 
+identified constituent components: 
+Package
+Version
+License
+Location
+altgraph
+0.17
+
+https://github.com/ronaldoussoren/altgraph/blob/mast
+er/LICENSE
+Bio
+1.3.8
+
+Subpackage of BioPython
+Biopython
+1.79
+BSD 3-Clause
+https://github.com/biopython/biopython/blob/master/L
+ICENSE.rst
+biothings-
+client          
+0.2.6
+
+https://github.com/biothings/biothings_client.py/blob/
+master/LICENSE.txt
+certifi
+2021.10
+.8
+SSLCACertifica
+teFile
+https://github.com/certifi/python-
+certifi/blob/master/LICENSE
+cffi
+1.15.1
+
+https://github.com/python-cffi/release-
+doc/blob/master/LICENSE
+charset-
+normalizer
+2.0.12
+MIT License
+https://github.com/Ousret/charset_normalizer/blob/ma
+ster/LICENSE
+click
+8.1.3
+BSD 3-Clause
+https://github.com/pallets/click/blob/main/LICENSE.rst
+colorama
+0.4.4
+BSD 3-Clause
+https://github.com/tartley/colorama/blob/master/LICEN
+SE.txt
+coloredlogs
+15.0.1
+MIT License
+https://github.com/xolox/python-
+coloredlogs/blob/master/LICENSE.txt
+colormath
+3.0.0
+BSD 3-Clause
+https://github.com/gtaylor/python-
+colormath/blob/master/LICENSE.txt
+commonmark
+0.9.1
+
+https://github.com/readthedocs/commonmark.py/blob/
+master/LICENSE
+cycler
+0.10.0
+BSD 3-Clause
+https://github.com/matplotlib/cycler/blob/main/LICENS
+E
+et-xmlfile                
+1.0.1
+MIT License
+https://pypi.org/project/et-xmlfile/#description
+Fdpf
+1.7.2
+GNU Lesser 
+General Public 
+License v3.0
+https://github.com/PyFPDF/fpdf2/blob/master/LICENSE
+Future
+0.18.2
+MIT License
+https://github.com/PythonCharmers/python-
+future/blob/master/LICENSE.txt
+Humanfriendl
+y
+10.0
+MIT License
+https://github.com/xolox/python-
+humanfriendly/blob/master/LICENSE.txt
+Idna
+3.3
+BSD 3-Clause
+https://github.com/kjd/idna/blob/master/LICENSE.md
+Importlib-
+metadata
+4.11.4
+Apache 
+License 2.0
+https://github.com/kjd/idna/blob/master/LICENSE.md
+Jinja2
+3.1.2
+BSD 3-Clause
+https://github.com/pallets/jinja/blob/main/LICENSE.rst
+Joblib
+1.0.1
+BSD 3-Clause
+https://github.com/joblib/joblib/blob/master/LICENSE.t
+xt
+Kiwisolver
+1.3.1
+Modified BSD 
+License
+https://github.com/QPYPI/kiwisolver/blob/master/LICE
+NSE
+Lzstring
+1.0.4
+MIT License
+https://github.com/QPYPI/kiwisolver/blob/master/LICE
+NSE
+Markdown
+3.3.7
+
+https://github.com/Python-
+Markdown/markdown/blob/master/LICENSE.md
+MarkupSafe
+2.1.1
+BSD 3-Clause
+https://pypi.org/project/MarkupSafe/
+Matplotlib
+3.3.3
+
+https://github.com/matplotlib/matplotlib/blob/main/LIC
+ENSE/LICENSE
+Mplcursors
+0.4
+MIT License
+https://github.com/anntzer/mplcursors/blob/main/LICE
+NSE.txt
+Multiqc
+1.12
+GNU General 
+Public License 
+v3.0
+https://github.com/ewels/MultiQC/blob/master/LICENS
+E
+Mygene
+3.2.2
+
+https://github.com/biothings/mygene.py/blob/master/L
+ICENSE.txt
+Network
+2.8.4
+MIT License
+https://pypi.org/project/network/
+Numpy
+1.19.4
+BSD 3-Clause
+https://github.com/numpy/numpy/blob/main/LICENSE.t
+xt
+Openpyxl
+3.0.7
+MIT License
+https://github.com/theorchard/openpyxl/blob/master/L
+ICENCE.rst
+Packaging
+21.3
+Creative 
+Commons
+https://github.com/pypa/packaging.python.org
+Pandas
+1.1.4
+BSD 3-Clause
+https://github.com/pandas-
+dev/pandas/blob/main/LICENSE
+Pefile
+2021.9.
+3
+MIT License
+https://github.com/erocarrera/pefile/blob/master/LICE
+NSE
+Pillow
+8.0.1
+HPND License
+https://github.com/python-
+pillow/Pillow/blob/main/LICENSE
+Pip
+22.0.4
+MIT License
+https://github.com/pypa/pip/blob/main/LICENSE.txt
+Pycparser
+2.21
+
+https://github.com/eliben/pycparser/blob/master/LICEN
+SE
+Pygments
+2.12.0
+BSD 2-Clause
+https://github.com/pygments/pygments/blob/master/LI
+CENSE
+Pyinstaller
+4.5.1
+No license 
+shown
+https://github.com/pyinstaller/pyinstaller/blob/develop
+/README.rst
+Pyinstaller-
+hooks-contrib
+2021.3
+Apache 2.0
+https://github.com/pyinstaller/pyinstaller-hooks-
+contrib/blob/master/LICENSE.APL.txt
+Pynput
+1.7.3
+No license 
+found
+https://github.com/moses-palmer/pynput
+Pyparsing
+2.4.7
+MIT License
+https://github.com/pyparsing/pyparsing/blob/master/LI
+CENSE
+Pyreadline3
+3.4.1
+BSD type
+https://github.com/pyreadline3/pyreadline3/blob/mast
+er/LICENSE.md
+Python-
+dateutil
+2.8.1
+Apache 2.0 
+License
+https://github.com/dateutil/dateutil/blob/master/LICEN
+SE
+Pytz
+2020.4
+MIT License
+https://github.com/stub42/pytz/blob/master/LICENSE.tx
+t
+Pytz-
+deprecation-
+shim
+0.1.0.po
+st0
+Apache 2.0 
+License
+https://github.com/pganssle/pytz-deprecation-
+shim/blob/master/LICENSE
+Pywin32-
+ctypes
+0.2.0
+No license 
+found
+https://github.com/mhammond/pywin32
+PyYAML
+6.0
+MIT License
+https://github.com/yaml/pyyaml/blob/master/LICENSE
+Requests
+2.27.1
+Apache 2.0 
+License
+https://github.com/psf/requests/blob/main/LICENSE
+Rich
+12.4.4
+MIT License
+https://github.com/Textualize/rich/blob/master/LICENS
+E
+Rpy2
+3.5.3
+GNU General 
+Public License 
+v2.0
+https://github.com/rpy2/rpy2/blob/master/LICENSE
+Scikit-learn
+0.24.2
+BSD License
+https://scikit-
+learn.org/dev/developers/contributing.html#testing-
+and-improving-test-coverage
+Scipy
+1.5.4
+BSD 3-Clause
+https://github.com/scipy/scipy/blob/main/LICENSE.txt
+Seaborn
+0.11.1
+BSD 3-Clause
+https://github.com/mwaskom/seaborn/blob/master/LIC
+ENSE.md
+Setuptools
+58.1.0
+MIT License
+https://github.com/pypa/setuptools/blob/main/LICENSE
+Simplejson
+3.17.6
+MIT License
+https://github.com/simplejson/simplejson/blob/master/
+LICENSE.txt
+Six
+1.15.0
+MIT License
+https://github.com/benjaminp/six/blob/master/LICENSE
+Spectra
+0.0.11
+MIT License
+https://github.com/jsvine/spectra/blob/master/LICENSE
+.txt
+Threadpoolctl
+2.2.0
+MIT License
+https://github.com/joblib/threadpoolctl/blob/master/LI
+CENSE
+Torch
+1.11.0
+
+https://github.com/pytorch/pytorch/blob/master/LICEN
+SE
+Tqdm
+4.64.0
+MIT License
+https://github.com/tqdm/tqdm/blob/master/LICENCE
+Typing_exten
+sions
+4.2.0
+Python 
+software 
+foundation 
+license version 
+2
+https://github.com/python/typing_extensions/blob/mai
+n/LICENSE
+Tzdata
+2022.2
+Apache 
+License 2.0
+https://github.com/python/tzdata/blob/master/LICENSE
+Tzlocal
+4.2
+MIT License
+https://github.com/regebro/tzlocal/blob/master/LICENS
+E.txt
+Urllib3
+1.26.9
+MIT License
+https://github.com/regebro/tzlocal/blob/master/LICENS
+E.txt
+Xlrd
+1.2.0
+
+https://github.com/regebro/tzlocal/blob/master/LICENS
+E.txt
+XlsxWriter
+3.0.3
+BSD 2-Clause
+https://github.com/jmcnamara/XlsxWriter/blob/main/LI
+CENSE.txt
+Zipp
+3.8.0
+MIT License
+https://github.com/jaraco/zipp/blob/main/LICENSE
+
