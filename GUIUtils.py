@@ -1702,7 +1702,7 @@ class GUIUtils:
         
             dFDict[i].to_excel(writer,sheet_name=str(i+1))
         try:
-            writer.save()
+            writer.close()
         except:
             messagebox.showerror(title='No worky',message='Need to investigate further')
 
