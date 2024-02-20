@@ -14,7 +14,7 @@ The Clustering Toolbox was built to mimic the pre-processing steps taken during 
 1. If you do not have python installed, install at [python.org](https://www.python.org/) and make sure to install pip to your command line.
 2. Otherwise, proceed to next steps.
 
-### After Installation
+### After Installation of python
 1. `git clone https://github.com/hisl6802/ECCO`
    - or Download zip file from the Code <> button above.
   
