@@ -2,11 +2,14 @@
 from numpy.lib.arraysetops import isin
 import pandas as pd
 import numpy as np
-from selenium import webdriver
 import time
 import platform
+from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 from scipy.cluster.hierarchy import dendrogram
@@ -741,7 +744,6 @@ class GUIUtils:
                         bestScore = score
                 best_labels[i]= optClust[1]    
                 optClusters = dict.fromkeys(list(range(0,optClust[0])),[])
-                print('CompleteoptNum:',optClust[0])
                 for k in optClusters:
                     optClusters.update({k:np.where(optClust[1]==k)[0].tolist()})
                 #update the co-occurrence matrix
@@ -902,6 +904,9 @@ class GUIUtils:
         Recommended number of clusters given the optimization metric. 
 
         '''
+        
+
+
         valIndex = {
         'Calinski-Harabasz':metrics.calinski_harabasz_score,
         'Silhouette':metrics.silhouette_score,
@@ -1217,9 +1222,6 @@ class GUIUtils:
 
         #change the current working directory to 
         os.chdir(direct)
-
-
-
         files = glob.glob('*.xlsx')
 
         ensemFiles = []
@@ -2285,17 +2287,18 @@ class GUIUtils:
         logging.info(":Completed")
         return 
 
-    def metaboBot(analysis='uni'):
+    def metaboBot(analysis='Uni'):
         '''
 
         '''
+        start =time.time()
         #set up the browser runner, update the directory, get all the csv files within the folder of interest
         directory = filedialog.askdirectory()
 
         curDir = os.getcwd()
         os.chdir(directory)
         files = glob.glob( '*.csv')
-        browser = webdriver.Chrome()
+        driver = webdriver.Chrome()#options=chrome_options
 
         for i in range(len(files)):
             #get file of interest and 
@@ -2304,153 +2307,395 @@ class GUIUtils:
             name = file.strip('.csv')
             file = directory+'/'+file
 
+            driver.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/StatUploadView.xhtml')
 
 
-            ## Navigate to the MetaboAnalyst Website for the one-factor stats analysis
-            browser.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/StatUploadView.xhtml')
-            time.sleep(2)
+            #wait the homepage loads, if it doesn't load in 10 seconds quit.  
+            try:
+                #wait for element to show up
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12:j_idt20"]/div[3]/div'))
+                )
+                #with element detected click it.
+                driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt20"]/div[3]/div').click()
+                driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt26_input"]').send_keys(file)
+                driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt27"]').click()
+            except:
+                driver.quit()
+                messagebox.showerror(message='I quit on homepage')
+                return
 
-            #click on the peak intensities radio button
-            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt19"]/tbody/tr/td[3]/div/div[2]/span').click()
-            time.sleep(3)
+            #wait for the data check to complete  
+            try:
+                #wait for element to show up
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt18"]'))
+                )
+                #proceed with data analysis
+                driver.find_element(By.XPATH,'//*[@id="form1:j_idt18"]').click()
+            except:
+                driver.quit()
+                messagebox.showerror(message='I quit on data processing page')
+                return
 
-            #send the file to the website
-            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt25_input"]').send_keys(file)
+            #check for the correct button then move on.
+            try:
+                #wait for element to show up
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span'))
+                )
+                #standard deviation filtering into pre-processing
+                driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span').click()
+                driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt41"]').click()
+                driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt42"]').click()
 
-            time.sleep(3)
-            #submit
-            browser.find_element(By.XPATH,'//*[@id="j_idt11:j_idt26"]').click()
-            time.sleep(4)
+            except:
+                driver.quit()
+                #add message box here if you end up here.
+                messagebox.showerror(message='I quit on the pre-processing page')
 
-            #proceed after data check
-            browser.find_element(By.XPATH,'//*[@id="form1:j_idt17"]/span[1]').click()
-            time.sleep(3)
+            #get the data normalized
+            try:
+                #wait for element to show up
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span'))
+                )
+                #click on log-transformation
+                driver.find_element(By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span').click()
 
-            #Standard Deviation Filtering
-            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt24"]/tbody/tr[2]/td/div/div[2]/span').click()
+                #wait for element to show up
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span').click()
+                #wait for element to show up
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt104"]/span'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="form1:j_idt104"]/span').click()
+            except:
+                driver.quit()
+                #add message here.
+                messagebox.showerror(message='I quit on the data normalization page') 
+                return
 
-            #Submit Filtering Selection
-            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt36"]').click()
-            time.sleep(2)
-
-            #Proceed to data pre-processing
-            browser.find_element(By.XPATH,'//*[@id="j_idt13:j_idt37"]').click()
-            time.sleep(3)
-
-            #select the wanted pre-processing, normalize and proceed.
-            browser.find_element(By.XPATH,'//*[@id="form1:j_idt73"]/div[2]/span').click()
-            browser.find_element(By.XPATH,'//*[@id="form1:j_idt93"]/div[2]/span').click()
-            browser.find_element(By.XPATH,'//*[@id="form1:j_idt103"]').click()
-            time.sleep(4)
-            browser.find_element(By.XPATH,'//*[@id="form1:nextBn"]').click()
-            time.sleep(5)
-
-            if analysis == 'uni':
-                #select fold-change analysis
-                browser.find_element(By.XPATH,'//*[@id="j_idt11"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a').click()
+            #proceed to next step after pre-processing
+            try:
+                #the element is present but not clickable. 
                 time.sleep(2)
+                #wait for element to show up
+                element = WebDriverWait(driver,15).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:nextBn"]/span'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="form1:nextBn"]/span').click()  
 
-                #select t-test analysis
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt60:3_1"]/div').click()
-                time.sleep(2)
+            except:
+                driver.quit()
+                #add appropriate message
+                messagebox.showerror(message='I quit on the preprocessing page')
+                return
 
-                #select volcano plot analysis
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt75:3_2"]/div').click()
-                time.sleep(2)
+            if analysis == 'Uni':
+                #perform fold-change
+                try:
+                #   wait for element to show up
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a').click()
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I quit on the fold-change selection page')
+                    return
 
-                #update the p-value threshold of the FDR correction volcano plot
-                browser.find_element(By.XPATH,'//*[@id="form3:j_idt50"]').clear()
-                time.sleep(5)
-                browser.find_element(By.XPATH,'//*[@id="form3:j_idt50"]').send_keys(0.05)
-                time.sleep(4)
-                browser.find_element(By.XPATH,'//*[@id="form3:j_idt51"]/tbody/tr/td[2]/div/div[2]/span').click()
-                browser.find_element(By.XPATH,'//*[@id="form3:j_idt58"]').click()
-                time.sleep(5)
-                #PCA
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt94:3_7"]/div').click()
-                time.sleep(5)
+                #peform a t-test
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt78:3_1"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt78:3_1"]/div').click()
+                except:
+                    driver.quit()
+                    messagebox.showerror(message='I quit on the t-test page')
+                    return
 
-                #2D scores PCA
-                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
-                time.sleep(5)
+
+                #perform volcano plot analysis
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt93:3_2"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt93:3_2"]/div').click()
+
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="form3:j_idt51"]'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt51"]').clear()
+                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt51"]').send_keys(0.05)
+                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt52"]/div[2]/div/div[2]/span').click()
+                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt59"]').click()
+
+                except:
+                    driver.quit()
+                    messagebox.showerror(message='I quit on the volcano plot analyses page')
+                    return
+
+                #principal components analysis.
+                try:
+                    time.sleep(3)
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt112:3_7"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt112:3_7"]/div').click()
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[3]/a'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
+                except:
+                    driver.quit()
+                    messagebox.showerror(message='I quit on the principal components analysis page')
+                    return
 
                 #PLS-DA
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt144:3_8"]/div').click()
-                time.sleep(5)
+                try:
+                    
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div').click()
 
-                #PLS-DA 2D scores
-                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
-                time.sleep(5)
+                except:
+                    driver.quit()
+                    #add needed message.
+                    messagebox.showerror(message='I quit on initial PLS-DA')
+                    return
 
-                #PLS-DA VIP Scores
-                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
-                time.sleep(5)
+                #PLS-DA extra's
+                try:
+                    time.sleep(2)
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[2]/a'))
+                    )
+                    
+                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[4]/a'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
 
-                #Dendrogram
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt197:3_13"]/div').click()
-                time.sleep(5)
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I quit on PLS-DA extras')
+                    return
 
-                #Heatmap
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt33:3_14"]/div').click()
-                time.sleep(3)
+                #create a dendrogram 
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div').click()
 
-            elif analysis == 'multi':
-                #ANOVA
-                browser.find_element(By.XPATH,'//*[@id="j_idt11"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a').click()
-                time.sleep(3)
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I quit at the dendrogram')
+                    return
+
+                #create a heatmap
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div').click()
+
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror('I quit at the heatmap')
+                    return
                 
-                #PCA
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt74:3_7"]/div').click()
-                time.sleep(5)
+                # go to the download page
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div'))
+                    )
+                    print('I detected the download button.')
+                    time.sleep(3)
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div').click()
+                    print('I clicked')
 
-                #2D scores PCA
-                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
-                time.sleep(5)
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I didn''t make it to the download page' )
+                    return
+
+
+            elif analysis == 'Multi':
+                #ANOVA
+                try:
+                    #the element is present but not clickable. 
+                    #wait for element to show up
+                    element = WebDriverWait(driver,15).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a').click()  
+
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message=' I quit on ANOVA page')
+                    return
+
+
+                #principal components analysis.
+                try:
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt92:3_7"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt92:3_7"]/div').click()
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[3]/a'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
+                except:
+                    driver.quit()
+                    messagebox.showerror(message='I quit on the principal components analysis page')
+                    return
+
 
                 #PLS-DA
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt144:3_8"]/div').click()
-                time.sleep(5)
+                try:
+                    
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div').click()
 
-                #PLS-DA 2D scores
-                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
-                time.sleep(5)
+                except:
+                    driver.quit()
+                    #add needed message.
+                    messagebox.showerror(message='I quit on initial PLS-DA')
+                    return
 
-                #PLS-DA VIP Scores
-                browser.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
-                time.sleep(5)
+                #PLS-DA extra's
+                try:
+                    time.sleep(2)
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[2]/a'))
+                    )
+                    
+                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
+                    #wait for element
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[4]/a'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
 
-                #Dendrogram
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt197:3_13"]/div').click()
-                time.sleep(5)
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I quit on PLS-DA extras')
+                    return
 
-                #Heatmap
-                browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt33:3_14"]/div').click()
-                time.sleep(3)
+                #create a dendrogram 
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div').click()
+
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I quit at the dendrogram')
+                    return
+
+                #create a heatmap
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div').click()
+
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I quit at the heatmap')
+                    return
+
+ 
+                # go to the download page
+                try:
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div'))
+                    )
+                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div').click()
+
+                except:
+                    driver.quit()
+                    #add appropriate message
+                    messagebox.showerror(message='I didn''t make it to the download page' )
+                    return
+                
+            
 
 
-            #download
-            browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt95:4"]/div').click()
-            time.sleep(4)
+            ##### After analysis trying to download the data.  
+            #download results
+            try:
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a').click()
 
-            #download the zip file
-            browser.find_element(By.XPATH,'//*[@id="ac:form1:j_idt18_data"]/tr[1]/td[1]/a').click()
-            time.sleep(25)
+            except:
+                driver.quit()
+                #Add appropriate message
+                messagebox.showerror(message='I didn''t download the data. ')
+                return
 
+
+            #rename zip file, but first check that it has downloaded.
             rename = name+'.zip'
-            #get the user information, and give the appropriate extensions to the Download folder
             basepath = os.path.expanduser('~')
-            if platform.system() == 'Darwin':
-                basepath +='/Downloads/Download.zip'
-                os.rename(basepath,rename)
-            elif platform.system() == 'Windows':
-                basepath +='\\Downloads\\Download.zip'
-                os.rename(basepath,rename)
+            basepath +='/Downloads/Download.zip'
+            #get the start time to give plenty of time for the download to occur. 
+            downloadTime = 0
+            downloaded = False
+            start = time.time()
+            while downloadTime < 60:
+                #checking for download.
+                downloadTime = time.time() - start
+                if os.path.exists(basepath):
+                    #file has downloaded
+                    downloaded = True
+                    break
 
-            zip_dir = directory + '/'+ name
-            with zipfile.ZipFile(rename,'r') as zip_ref:
-                zip_ref.extractall(zip_dir)
+            if downloaded:
+                time.sleep(2)
+                #rename the file and unzip into the appropriate folder
+                os.rename(basepath,rename)
+                directory = os.getcwd()
+                zip_dir = directory + '/'+ name
+                with zipfile.ZipFile(rename,'r') as zip_ref:
+                    zip_ref.extractall(zip_dir)
+                #remove the downloaded and renamed zip file. 
+                os.remove(rename)
 
-            os.remove(rename)
+        logging.info(' Completed the analysis for the selected inputs. ')
+        messagebox.showinfo(message='Successfully completed runs for all files in the files in the selected directory.')
 
     def mummiBot():
         #set up the browser runner, update the directory, get all the csv files within the folder of interest
@@ -2536,7 +2781,6 @@ class GUIUtils:
 
         #close out the current browser window
         browser.close()
-
 
 
     def externalCriteria(comp='rand'):

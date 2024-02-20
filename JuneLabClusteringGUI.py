@@ -895,8 +895,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 			self.normListBox.grid(column=3,row=4,columnspan=1)
 			self.submit.grid(column=3, row=8,sticky=(N),columnspan=1)
 
-
-
 		def submit(*args):
 			#submit the function output to the 
 			norm = normListBox.curselection()
@@ -1599,7 +1597,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 			# if the user selected something
 			if selected:
 				selected = options[selected[0]]
-				print(selected)
 				file = filedialog.askopenfilename()
 				GU.mfgUtil(fileName=file,variant=selected)
 			else:
@@ -1631,7 +1628,38 @@ class JuneLabClusteringGUI(ttk.Frame):
 	def metaboBot(self):
 		'''
 		'''
-		GU.metaboBot()
+		def submitMetabo(*args):
+			selection = analysisListBox.curselection()
+			selection = config.typeAnalysis[selection[0]]
+			#sending information to the bot
+			GU.metaboBot(analysis=selection)
+		
+		
+		#get rid of the objects that aren't needed for the external optimization.
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+		#Labels and a button to go back to the homepage. 
+		self.metaboBotLab = ttk.Label(self, text="MetaboAnalyst 6.0 Bot",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.metaboBotAnalysisLab = ttk.Label(self, text="Analysis Type",font=("TkHeadingFont",36)).grid(column=1,row=1,sticky=(N))
+		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=1)
+		
+		#get the metrics of interest
+		analysisListBox = Listbox(self,height=8)
+
+		#Create the lists of available options for selection 
+		analysisList = config.typeAnalysis
+
+		#input the linkage function values into the box
+		for i in range(len(analysisList)):
+			analysisListBox.insert(i,analysisList[i])
+
+		#setting up the binding and the locations.
+		analysisListBox.bind('<Double-1>',submitMetabo)
+		self.metricsListBox = analysisListBox
+		self.metricsListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
+
 
 	def mummiBot(self):
 		'''
@@ -1788,7 +1816,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_forget()
 
 		#create widgets for the clustergram function input. 
-		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.JuneLab = ttk.Label(self, text="Mono-clustering Optimization",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
 		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
 		self.Distance = ttk.Label(self, text="Distance Measure",font=("TkHeadingFont",12)).grid(column=2,row=1,sticky=(N))
 		self.Color = ttk.Label(self,text="Optimization metric", font=("TkHeadingFont",12)).grid(column=3,row=1,sticky=(N))
@@ -1797,9 +1825,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.Opt = ttk.Label(self,text="Upper # of clusters",font=('TkHeadingFont',12)).grid(column=3,row=3,sticky=(N))
 		self.homepage = ttk.Button(self,text="Return to Home",command=self.home).grid(column=2, row=8,sticky=(N),columnspan=1)
 		self.submit = ttk.Button(self,text="Submit", command=submit).grid(column=2, row=7,sticky=(N),columnspan=1)
-		self.gLab = ttk.Label(self,text="Group Order, normilization column first",font=('TkHeadingFont',12)).grid(column=1,row=5,columnspan=3)
-		inputGroupOrder = tk.StringVar()
-		self.inputGroups = ttk.Entry(self,textvariable=inputGroupOrder).grid(column=2,row=6,sticky=(N))
 		distListBox = Listbox(self,height=8)
 		sampleListBox = Listbox(self,height=8)
 		optListBox = Listbox(self,height=8)

@@ -9,7 +9,7 @@ colorList = ('viridis', 'plasma', 'inferno', 'magma', 'cividis','Greys', 'Purple
                       'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
                       'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn','PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu',
                       'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic','twilight', 'twilight_shifted', 'hsv')
-#transform list, scale list, linkage list, distance metric list, normarilization list
+#transform list, scale list, linkage list, distance metric list, normarilization list, optimization metrics, and metrics for cluster comparison
 transformList = ('None','Log transformation', 'Square root transformation', 'Cube root transformation')
 scaleList = ('None', 'Mean centering', 'Auto Scaling', 'Pareto Scaling', 'Range Scaling')
 linkageList = ('single','ward','complete','average')
@@ -17,6 +17,10 @@ distList = ('euclidean','seuclidean','sqeuclidean','cosine','chebyshev','correla
 normList = ('Normalize','Do not')
 optList = ('Silhouette','Davies-Bouldin','Calinski-Harabasz')
 metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison','Normalized Mutual Info.','Adjusted Mutual Info.')
+
+
+#list of the options for MetaboAnalyst
+typeAnalysis = ('Uni', 'Multi')
 
 #keyword arguments for grid, simply add more as need. 
 grid_kwargs = {
