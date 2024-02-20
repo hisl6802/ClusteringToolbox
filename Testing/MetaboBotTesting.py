@@ -137,8 +137,6 @@ try:
         #click on range-scaling
         driver.find_element(By.XPATH,'//*[@id="form1:j_idt100"]/div[2]').click()
 
-
-
     #make sure that the normalize button is present and selected each time. 
     element = WebDriverWait(driver,10).until(
         EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt104"]/span'))
@@ -148,9 +146,6 @@ except:
     driver.quit()
     #add message here.
     print('I quit on the data normalization page') 
-
-
-
 
 #proceed to next step after pre-processing
 try:

@@ -1738,7 +1738,52 @@ class JuneLabClusteringGUI(ttk.Frame):
 	def mummiBot(self):
 		'''
 		'''
-		GU.mummiBot()
+		def submit(*args):
+			#get the current selected mummi db and send to 
+			print(config.pval)
+			db = mummiDBsBox.curselection()
+			db = config.mummidbs[db[0]]
+
+			GU.mummiBot()
+
+		def modes(*args):
+			#get the selected mode
+			global selectedMode
+			selectedMode = modesListBox.curselection()
+			selectedMode = config.modes[selectedMode[0]]
+			#put mummi db options into list. 
+			for i in range(len(mummiDBs)):
+				mummiDBsBox.insert(i,mummiDBs[i])
+
+
+		#eliminating the objects from home page.
+		objects = self.grid_slaves()
+		for i in objects:
+			i.grid_forget()
+
+
+		self.header = ttk.Label(self,text="Mummichog Bot", font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.goHomePlease = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=2)
+
+
+		#get the metrics of interest
+		modesListBox = Listbox(self,height=8)
+		mummiDBsBox = Listbox(self,height=8) #variance filter list box
+
+		#Create the lists of available options for selection 
+		modesList = config.modes
+		mummiDBs = config.mummidbs
+
+		for i in range(len(modesList)):
+			modesListBox.insert(i,modesList[i])
+
+		#setting up the binding and the locations.
+		modesListBox.bind('<Double-1>',modes)
+		mummiDBsBox.bind('<Double-1>',submit)
+		self.modesListBox = modesListBox
+		self.mummiDBsBox = mummiDBsBox
+		self.mummiDBsBox.grid(column=2,row=2,sticky=(N),pady=5,padx=5)
+		self.modesListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
 
 	def externalOpt(self):
 		'''

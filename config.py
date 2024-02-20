@@ -18,6 +18,11 @@ normList = ('Normalize','Do not')
 optList = ('Silhouette','Davies-Bouldin','Calinski-Harabasz')
 metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison','Normalized Mutual Info.','Adjusted Mutual Info.')
 
+###mummichog DB's
+mummidbs = ('Human (MFN)','Mouse (KEGG)','Human (BioCyc)','Human (KEGG)','Mouse (BioCyc)','Rat (KEGG)','Cow (KEGG)')
+modes = ('Positive','Negative')
+pval = (0.05)
+
 
 #list of the options for MetaboAnalyst
 typeAnalysis = ('Uni', 'Multi')

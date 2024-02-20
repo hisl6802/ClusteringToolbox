@@ -2771,7 +2771,10 @@ class GUIUtils:
         logging.info(' Completed the analysis for the selected inputs. ')
         messagebox.showinfo(message='Successfully completed runs for all files in the files in the selected directory.')
 
-    def mummiBot():
+    def mummiBot(pval = 0.05,lcMode='Positive',db = 'Mouse (KEGG)'):
+        '''
+        
+        '''
         #set up the browser runner, update the directory, get all the csv files within the folder of interest
         directory = filedialog.askdirectory()
 
@@ -2780,7 +2783,7 @@ class GUIUtils:
         os.chdir(directory)
         files = glob.glob( '*.csv')
 
-        browser = webdriver.Chrome()
+        driver = webdriver.Chrome()
 
         for i in range(len(files)):
             #get file of interest and 
@@ -2789,72 +2792,124 @@ class GUIUtils:
             file = directory+'/'+file
 
             ## Navigate to the MetaboAnalyst Website for the one-factor stats analysis
-            browser.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/PeakUploadView.xhtml')
-            time.sleep(2)
-            browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19"]/div[3]').click()
-            time.sleep(2)
-            lcMode = 'Positive'
+            driver.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/PeakUploadView.xhtml')
+            
+            
+            #determine the machine mode used for analysis. 
             if lcMode == 'Positive':
-                browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19_0"]').click()
-            time.sleep(2)
+                try:
+                    #wait for the website to load and then select the Peak Intensities radio button. 
+                    element = WebDriverWait(driver,10).until(
+                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac:form2:j_idt19"]/div[2]'))
+                    )
+                    #click on the drop down menu
+                    driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19"]/div[2]').click()
+                    driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19_0"]').click() #click on the wanted mode, currently this is positive.
+
+                except:
+                    messagebox.showinfo(message='Failed to select the correct mode')
+                    return
+
 
             #upload the files you would like to have analyzed
-            browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt46_input"]').send_keys(file)
-            browser.find_element(By.XPATH,'//*[@id="ac:form2:j_idt48"]').click()
-            time.sleep(2)
-            #submit the file to be analyzed
-            browser.find_element(By.XPATH,'//*[@id="form1:j_idt17"]').click()
-            time.sleep(2)
+            driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt46_input"]').send_keys(file)
+            #submit the file for analysis
+            driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt48"]').click()
 
-            #Clear the p-value to ensure 0.05 is value.
-            browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt24"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').clear()
-            browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt24"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').send_keys(0.05)
-            time.sleep(2)
 
-            #selected database
-            db = 'Mouse_KEGG'
+            #proceed after data sanity check
+            try:
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="form1:j_idt18"]'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="form1:j_idt18"]').click()
 
-            if db == 'Human_BioCyc':
-                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt123"]/div[2]/span').click()
-            elif db == 'Human_KEGG':
-                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt125"]/div[2]/span').click()
-            elif db == 'Mouse_BioCyc':
-                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt127"]/div[2]/span').click()
-            elif db == 'Mouse_KEGG':
-                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt129"]/div[2]/span').click()
-            elif db == 'Rat_KEGG':
-                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt131"]/div[2]/span').click()
-            elif db == 'Cow_KEGG':
-                browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt133"]/div[2]/span').click()
+            except:
+                messagebox.showerror(message='Failed to get past the data sanity check, check input sheet.')
+                return
 
-            #proceed to the pathway analysis.
-            browser.find_element(By.XPATH,'//*[@id="j_idt12:j_idt246"]').click()
-            time.sleep(5)
-            #select the download tab
-            browser.find_element(By.XPATH,'//*[@id="treeForm:j_idt75:4"]/div').click()
-            time.sleep(2)
-            browser.find_element(By.XPATH,'//*[@id="ac:form1:j_idt18_data"]/tr[1]/td[1]/a').click()
-            time.sleep(10)
+            
+            
+            try:
+                #verify that the p-value cutoff is present and set it to 0.05
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt13:j_idt25"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input'))
+                )
+                #clear out the p-value and verify that it is 0.05
+                driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt25"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').clear()
+                driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt25"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').send_keys(pval)
+                
+                #determine the database and click on the correct one. 
+                if db == 'Mouse (KEGG)':
+                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt110"]/div[2]/span').click()
+                elif db == 'Human (BioCyc)':
+                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt98"]/div[2]/span').click()
+                elif db == 'Human (KEGG)':
+                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt100"]/div[2]/span').click()
+                elif db == 'Mouse (BioCyc)':
+                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt108"]/div[2]/span').click()
+                elif db == 'Rat (KEGG)':
+                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt112"]/div[2]/span').click()
+                elif db == 'Cow (KEGG)':
+                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt120"]/div[2]/span').click()
 
-            #Rename files such that they save to their own directories
+                driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt439"]').click()
+            except:
+                messagebox.showerror(message='Failed to input the wanted database, and p-value.')
+                return
+
+
+            try:
+                #making sure the download tab is available
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt77:4"]/div'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt77:4"]/div').click()
+
+            except:
+                messagebox.showerror(message='No download tab')
+                return
+
+            try:
+                time.sleep(2)
+                element = WebDriverWait(driver,10).until(
+                    EC.presence_of_element_located((By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a'))
+                )
+                driver.find_element(By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a').click()
+
+            except:
+                messagebox.showerror(message='File did not start to download')
+                return
+
+            #rename zip file, but first check that it has downloaded.
             rename = name+'.zip'
-            #get the user information, and give the appropriate extensions to the Download folder
             basepath = os.path.expanduser('~')
-            if platform.system() == 'Darwin':
-                basepath +='/Downloads/Download.zip'
-                os.rename(basepath,rename)
-            elif platform.system() == 'Windows':
-                basepath +='\\Downloads\\Download.zip'
-                os.rename(basepath,rename)
+            basepath +='/Downloads/Download.zip'
+            #get the start time to give plenty of time for the download to occur. 
+            downloadTime = 0
+            downloaded = False
+            start = time.time()
+            while downloadTime < 60:
+                #checking for download.
+                downloadTime = time.time() - start
+                if os.path.exists(basepath):
+                    #file has downloaded
+                    downloaded = True
+                    break
 
-            zip_dir = directory + '/'+ name
-            with zipfile.ZipFile(rename,'r') as zip_ref:
-                zip_ref.extractall(zip_dir)
-            #remove the zip file
-            os.remove(rename)
+            if downloaded:
+                time.sleep(2)
+                #rename the file and unzip into the appropriate folder
+                os.rename(basepath,rename)
+                directory = os.getcwd()
+                zip_dir = directory + '/'+ name
+                with zipfile.ZipFile(rename,'r') as zip_ref:
+                    zip_ref.extractall(zip_dir)
+                #remove the downloaded and renamed zip file. 
+                os.remove(rename)
 
         #close out the current browser window
-        browser.close()
+        driver.close()
 
 
     def externalCriteria(comp='rand'):
