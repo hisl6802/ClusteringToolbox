@@ -47,13 +47,30 @@ except:
     print('I quit on data processing page')
 
 #check for the correct button then move on.
+varianceFilter ='SD'
 try:
-    #wait for element to show up
+    #look for standard deviation filter... if it is present the rest will be as well. 
     element = WebDriverWait(driver,10).until(
         EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span'))
     )
-    #standard deviation filtering into pre-processing
-    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span').click()
+    if varianceFilter == 'SD':
+        #standard deviation filtering into pre-processing
+        driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span').click()
+
+    elif varianceFilter == 'MAD':
+        #select the median absolute deviation (MAD)
+        driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[3]/div/div/div[2]/span').click()
+
+    elif varianceFilter == 'RSD':
+        #Relative standard deviation
+        driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[4]/div/div/div[2]/span').click()
+
+    elif varianceFilter == 'MAD_m':
+        #Relative standard deviation
+        driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[5]/div/div/div[2]/span').click()
+
+
+    #always need to submit and proceed. 
     driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt41"]').click()
     driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt42"]').click()
 
@@ -62,21 +79,67 @@ except:
     #add message box here if you end up here.
     print('I quit on the standard deviation page')
 
+
+
 #get the data normalized
+sampNorm = ('None','Sum','Median','Quantile')
+sampleNorm = sampNorm[0]
+dataTrans = ('None','Log10','Sqrt','Cube')
+trans = dataTrans[0]
+scale = 'Mean-Center'
 try:
-    #wait for element to show up
+    #check for the log-transformation button
     element = WebDriverWait(driver,10).until(
         EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span'))
     )
-    #click on log-transformation
-    driver.find_element(By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span').click()
 
-    #wait for element to show up
-    element = WebDriverWait(driver,10).until(
-        EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span'))
-    )
-    driver.find_element(By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span').click()
-    #wait for element to show up
+    #select the correct button should the user select a sample normalization
+    if sampleNorm == 'Sum':
+        #click on the normalization by sum 
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt41"]/div[2]/span').click()
+
+    elif sampleNorm == 'Median':
+        #click on the normalization by median
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt44"]/div[2]/span').click()
+    
+    elif sampleNorm =='Quantile':
+        #click on the Quantile Normalization 
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt56"]/div[2]/span').click()
+
+
+    #select the correct data transformation.
+    if trans == 'Log10':
+        #click on log transformation
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span').click()
+
+    elif trans == 'Sqrt':
+        #click on square-root tranformation
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt78"]/div[2]/span').click()
+
+    elif trans == 'Cube':
+        #click on the cube-root transformation
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt82"]/div[2]/span').click()
+
+    #select the dataScale = ('None','Mean-Center','Auto-scale','Pareto-scale','Range-scale')correct data scaling
+    if scale == 'Mean-Center':
+        #click on mean centering
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt91"]/div[2]/span').click()
+
+    elif scale == 'Auto-scale':
+        #click on auto-scaling
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span').click()
+
+    elif scale == 'Pareto-scale':
+        #click on paret-scaling
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt97"]/div[2]/span').click()
+
+    elif scale =='Range-scale':
+        #click on range-scaling
+        driver.find_element(By.XPATH,'//*[@id="form1:j_idt100"]/div[2]').click()
+
+
+
+    #make sure that the normalize button is present and selected each time. 
     element = WebDriverWait(driver,10).until(
         EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt104"]/span'))
     )
@@ -85,6 +148,9 @@ except:
     driver.quit()
     #add message here.
     print('I quit on the data normalization page') 
+
+
+
 
 #proceed to next step after pre-processing
 try:

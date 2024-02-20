@@ -21,6 +21,8 @@ metrics = ('Rand-index', 'Adjusted Rand-index', 'Mono-clustering comparison','No
 
 #list of the options for MetaboAnalyst
 typeAnalysis = ('Uni', 'Multi')
+varianceFilters = ('IQR', 'SD', 'MAD','RSD','MAD_m')
+sampNorm = ('None','Sum','Median','Quantile')
 
 #keyword arguments for grid, simply add more as need. 
 grid_kwargs = {

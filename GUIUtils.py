@@ -2287,7 +2287,7 @@ class GUIUtils:
         logging.info(":Completed")
         return 
 
-    def metaboBot(analysis='Uni'):
+    def metaboBot(analysis='Uni',varianceFilter='SD',sampleNorm='None',trans='Log transformation',scale='Auto Scaling'):
         '''
 
         '''
@@ -2301,6 +2301,14 @@ class GUIUtils:
         driver = webdriver.Chrome()#options=chrome_options
 
         for i in range(len(files)):
+
+
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################### Pre-processing before univariate or multi-variate analysis #################################
             #get file of interest and 
             file = files[i]
             # loc, name = os.path.split(file)
@@ -2310,17 +2318,20 @@ class GUIUtils:
             driver.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/StatUploadView.xhtml')
 
 
-            #wait the homepage loads, if it doesn't load in 10 seconds quit.  
+            #wait the homepage loads, if it doesn't load in 10 seconds quit, the expected file input should be a row (unpaired file) 
             try:
-                #wait for element to show up
+                #wait for the website to load and then select the Peak Intensities radio button. 
                 element = WebDriverWait(driver,10).until(
                     EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12:j_idt20"]/div[3]/div'))
                 )
-                #with element detected click it.
+                #select the radio button peak intensities
                 driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt20"]/div[3]/div').click()
+                #sent the selected file to the website
                 driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt26_input"]').send_keys(file)
+                #click the submit button. 
                 driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt27"]').click()
             except:
+                #quit the website, should the bot not work. 
                 driver.quit()
                 messagebox.showerror(message='I quit on homepage')
                 return
@@ -2331,44 +2342,99 @@ class GUIUtils:
                 element = WebDriverWait(driver,10).until(
                     EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt18"]'))
                 )
-                #proceed with data analysis
+                #click proceed, it is the onus of the user to ensure that the files are correct for metaboanalyst.
                 driver.find_element(By.XPATH,'//*[@id="form1:j_idt18"]').click()
             except:
+                #quit the website, should the bot not work.
                 driver.quit()
                 messagebox.showerror(message='I quit on data processing page')
                 return
 
-            #check for the correct button then move on.
+            #check for the correct button, and the appropriate filtering then move on. 
             try:
-                #wait for element to show up
+                #look for standard deviation filter... if it is present the rest will be as well. 
                 element = WebDriverWait(driver,10).until(
                     EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span'))
                 )
-                #standard deviation filtering into pre-processing
-                driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span').click()
+                if varianceFilter == 'SD':
+                    #standard deviation filtering into pre-processing
+                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span').click()
+
+                elif varianceFilter == 'MAD':
+                    #select the median absolute deviation (MAD)
+                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[3]/div/div/div[2]/span').click()
+
+                elif varianceFilter == 'RSD':
+                    #Relative standard deviation
+                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[4]/div/div/div[2]/span').click()
+
+                elif varianceFilter == 'MAD_m':
+                    #Relative standard deviation
+                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[5]/div/div/div[2]/span').click()
+                
+                #submit
                 driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt41"]').click()
+                #proceed
                 driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt42"]').click()
 
             except:
+                #quit the website, should the bot not work.
                 driver.quit()
                 #add message box here if you end up here.
                 messagebox.showerror(message='I quit on the pre-processing page')
 
             #get the data normalized
             try:
-                #wait for element to show up
+                #check for the log-transformation button
                 element = WebDriverWait(driver,10).until(
                     EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span'))
                 )
-                #click on log-transformation
-                driver.find_element(By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span').click()
 
-                #wait for element to show up
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span').click()
-                #wait for element to show up
+                #select the correct button should the user select a sample normalization
+                if sampleNorm == 'Sum':
+                    #click on the normalization by sum 
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt41"]/div[2]/span').click()
+
+                elif sampleNorm == 'Median':
+                    #click on the normalization by median
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt44"]/div[2]/span').click()
+                
+                elif sampleNorm =='Quantile':
+                    #click on the Quantile Normalization 
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt56"]/div[2]/span').click()
+
+
+                #select the correct data transformation.
+                if trans == 'Log transformation':
+                    #click on log transformation
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span').click()
+
+                elif trans == 'Square root transformation':
+                    #click on square-root tranformation
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt78"]/div[2]/span').click()
+
+                elif trans == 'Cube root transformation':
+                    #click on the cube-root transformation
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt82"]/div[2]/span').click()
+
+                #select the dataScale = ('None','Mean-Center','Auto-scale','Pareto-scale','Range-scale')correct data scaling
+                if scale == 'Mean centering':
+                    #click on mean centering
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt91"]/div[2]/span').click()
+
+                elif scale == 'Auto Scaling':
+                    #click on auto-scaling
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span').click()
+
+                elif scale == 'Pareto Scaling':
+                    #click on paret-scaling
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt97"]/div[2]/span').click()
+
+                elif scale =='Range Scaling':
+                    #click on range-scaling
+                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt100"]/div[2]').click()
+
+                #make sure that the normalize button is present and selected each time. 
                 element = WebDriverWait(driver,10).until(
                     EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt104"]/span'))
                 )
@@ -2395,6 +2461,12 @@ class GUIUtils:
                 messagebox.showerror(message='I quit on the preprocessing page')
                 return
 
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ###########################################Univariate or multi-variate analysis ################################################
             if analysis == 'Uni':
                 #perform fold-change
                 try:
@@ -2443,7 +2515,7 @@ class GUIUtils:
 
                 #principal components analysis.
                 try:
-                    time.sleep(3)
+                    time.sleep(4)
                     #wait for element
                     element = WebDriverWait(driver,10).until(
                         EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt112:3_7"]/div'))
@@ -2526,10 +2598,8 @@ class GUIUtils:
                     element = WebDriverWait(driver,10).until(
                         EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div'))
                     )
-                    print('I detected the download button.')
                     time.sleep(3)
                     driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div').click()
-                    print('I clicked')
 
                 except:
                     driver.quit()
@@ -2649,8 +2719,12 @@ class GUIUtils:
                     messagebox.showerror(message='I didn''t make it to the download page' )
                     return
                 
-            
-
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ################################################################################################################################
+            ########################################### Downloading and saving results. ####################################################
 
             ##### After analysis trying to download the data.  
             #download results

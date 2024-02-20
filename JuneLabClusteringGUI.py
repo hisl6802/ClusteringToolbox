@@ -1632,7 +1632,55 @@ class JuneLabClusteringGUI(ttk.Frame):
 			selection = analysisListBox.curselection()
 			selection = config.typeAnalysis[selection[0]]
 			#sending information to the bot
-			GU.metaboBot(analysis=selection)
+			GU.metaboBot(analysis=selection,varianceFilter=varSelect,sampleNorm=sampleNormSelect,trans=transSelect,scale=scaleSelect)
+
+			return
+
+		def varFilt(*args):
+			#get the variance filter selection
+			global varSelect
+			varSelect = varFiltListBox.curselection()
+			varSelect = config.varianceFilters[varSelect[0]]
+
+			#input the sample normalization lists
+			for i in range(len(sampleNormList)):
+				sampleNormListBox.insert(i,sampleNormList[i])
+
+			return
+		
+		def sampNorm(*args):
+			#get the sampleNormalization selection
+			global sampleNormSelect
+			sampleNormSelect = sampleNormListBox.curselection()
+			sampleNormSelect = config.sampNorm[sampleNormSelect[0]]
+
+			#input the linkage function values into the box
+			for i in range(len(transList)):
+				transListBox.insert(i,transList[i])
+
+			return
+		
+		def transform(*args):
+			#get the sampleNormalization selection
+			global transSelect
+			transSelect = transListBox.curselection()
+			transSelect = config.transformList[transSelect[0]]
+
+			#input the linkage function values into the box
+			for i in range(len(scaleList)):
+				scaleListBox.insert(i,scaleList[i])
+
+		def scale(*args):
+			#get the scale that was selected
+			global scaleSelect
+			scaleSelect = scaleListBox.curselection()
+			scaleSelect = config.scaleList[scaleSelect[0]]
+
+			#input the analysis types
+			for i in range(len(analysisList)):
+				analysisListBox.insert(i,analysisList[i])
+
+			return
 		
 		
 		#get rid of the objects that aren't needed for the external optimization.
@@ -1642,23 +1690,49 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 		#Labels and a button to go back to the homepage. 
 		self.metaboBotLab = ttk.Label(self, text="MetaboAnalyst 6.0 Bot",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
-		self.metaboBotAnalysisLab = ttk.Label(self, text="Analysis Type",font=("TkHeadingFont",36)).grid(column=1,row=1,sticky=(N))
-		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=1)
+		self.metaboBotVarFiltLab = ttk.Label(self, text="Variance Filter",font=("TkHeadingFont",20)).grid(column=1,row=1,sticky=(N))
+		self.metaboBotSampNormLab = ttk.Label(self, text="Sample Normalization",font=("TkHeadingFont",20)).grid(column=2,row=1,sticky=(N))
+		self.metaboBotTransLab = ttk.Label(self, text="Data Transformation",font=("TkHeadingFont",20)).grid(column=3,row=1,sticky=(N))
+		self.metaboBotScaleLab = ttk.Label(self, text="Data Scaling",font=("TkHeadingFont",20)).grid(column=1,row=3,sticky=(N))
+		self.metaboBotAnalysisLab = ttk.Label(self, text="Analysis Type",font=("TkHeadingFont",20)).grid(column=2,row=3,sticky=(N))
+		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=4,sticky=(N))
 		
 		#get the metrics of interest
 		analysisListBox = Listbox(self,height=8)
+		varFiltListBox = Listbox(self,height=8) #variance filter list box
+		sampleNormListBox = Listbox(self,height=8) #sample normaliation list box.
+		transListBox = Listbox(self,height=8) #transformation list box
+		scaleListBox = Listbox(self,height=8) #set up the scale list box
 
 		#Create the lists of available options for selection 
 		analysisList = config.typeAnalysis
+		varianceFiltList = config.varianceFilters
+		sampleNormList = config.sampNorm
+		transList = config.transformList
+		scaleList =config.scaleList
 
 		#input the linkage function values into the box
-		for i in range(len(analysisList)):
-			analysisListBox.insert(i,analysisList[i])
+		for i in range(len(varianceFiltList)):
+			varFiltListBox.insert(i,varianceFiltList[i])
 
 		#setting up the binding and the locations.
 		analysisListBox.bind('<Double-1>',submitMetabo)
-		self.metricsListBox = analysisListBox
-		self.metricsListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
+		varFiltListBox.bind('<Double-1>',varFilt)
+		sampleNormListBox.bind('<Double-1>',sampNorm)
+		transListBox.bind('<Double-1>',transform)
+		scaleListBox.bind('<Double-1>',scale)
+		self.sampleNormListBox = sampleNormListBox
+		self.analysisListBox = analysisListBox
+		self.varFiltListBox = varFiltListBox
+		self.transListBox = transListBox
+		self.scaleListBox = scaleListBox
+		##### Need to update the location
+		self.varFiltListBox.grid(column=1, row=2,sticky=(N),pady=5,padx=5)
+		self.sampleNormListBox.grid(column=2, row=2,sticky=(N),pady=5,padx=5)
+		self.transListBox.grid(column=3, row=2,sticky=(N),pady=5,padx=5)
+		self.scaleListBox.grid(column=1, row=4,sticky=(N),pady=5,padx=5)
+		self.analysisListBox.grid(column=2,row=4,sticky=(N),pady=5,padx=5)
+
 
 
 	def mummiBot(self):
@@ -1674,8 +1748,9 @@ class JuneLabClusteringGUI(ttk.Frame):
 			'''
 			selection = metricsListBox.curselection()
 			selection = config.metrics[selection[0]]
-			print(selection)
 			GU.externalCriteria()
+
+			return
 
 		#get rid of the objects that aren't needed for the external optimization.
 		objects = self.grid_slaves()
