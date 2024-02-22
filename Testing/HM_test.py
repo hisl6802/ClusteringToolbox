@@ -69,5 +69,5 @@ for i in range(data.shape[1]):
         #going through the metabolites
         dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
 
-sns.heatmap(dataFinal, annot=True,fmt='float', cmap="viridis",yticklabels=False)
+sns.heatmap(dataFinal, fmt='0.2f',cmap="viridis",yticklabels=False)
 plt.show()
