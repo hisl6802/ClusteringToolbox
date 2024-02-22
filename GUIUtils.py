@@ -1440,46 +1440,67 @@ class GUIUtils:
         Heatmap of the subset of metabolites given as input.
 
         '''
-        fileI = filedialog.askopenfilename()
-        
-        try:
-            if norm == 0:
-                data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC")
 
-            elif norm == 1:
-               data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC",first=colOrder[0])
-        except:
-            logging.error(': No file selected or issue with connecting to drive!')
-            messagebox.showerror(title='Error loading Data',message='File was not selected or trouble connecting to drive')
-            return
+        #read in the file
+        messagebox.showinfo(message='Input file you would like to have heatmap of.')
+        file = filedialog.askopenfilename()
+        #send the data off to the readAndPreProcess function for analysis. 
+        data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func="CC")
 
-        #set out color options and map to the groups. 
-        colorOpts = ('b','y','m','r','k','#929292')
-        
-        #find the unique groups
-        col_groupsUni = col_groups.unique()
+        del(col_groups)
+        #create messagebox explaining to users how they need to select clusters.
+        print('Select clusters of interest, cluster and peak to pathway files will be automatically generated!')
 
-        #create a dictionary for mapping color options
-        colRefDict = {}
-        for i in range(len(col_groupsUni)):
-            colRefDict[col_groupsUni[i]] = colorOpts[i]
+        #Create the appropriate plt figure to allow for the comparison of linkage functions
+        fig, axes = plt.subplots(1,1,figsize=(8,8))
 
-        colSeries = col_groups.map(colRefDict)
-        col_groups = colSeries.to_list()
+        #find the linkages
+        linkageOne = linkage(data,linkFunc,metric=distMet)
+
+        if len(linkageOne[:,2]) == len(np.unique(linkageOne[:,2])):
+            logging.info('No need to jitter data!')
+
+        else:
+            logging.info(': Matching distance need to jitter distances')
+            values, counts = np.unique(linkageOne[:,2],return_counts=True)
+
+            #get the locations where the counts are greater than 1 (i.e., the distances are matching)
+            matchingDists = np.where(counts>1)
+
+            for j in range(len(matchingDists[0])):
+                #find the location of the values which have matching distances
+                curLinkListLoc = np.where(linkageOne[:,2]==values[matchingDists[0][j]])
+                curLinkListLoc = curLinkListLoc[0]
+                for k in range(len(curLinkListLoc)):
+                    if k > 0:
+                        linkageOne[curLinkListLoc[k],2] += (k*0.000001)+0.000001
+
         groupCluster = np.transpose(data)
+        linkageG = linkage(groupCluster,linkFunc,metric=distMet)
+        #create the dendrogram
+        dend = dendrogram(linkageOne,ax=axes,above_threshold_color='y',orientation='left',no_labels=True)
+        dendG = dendrogram(linkageG,ax=axes,above_threshold_color='y',orientation='left',no_labels=True)
+        #Rework the data to create the clustergram
+        metaboliteDendLeaves = dend['leaves']
+        #find the maximum leaf to know what the index must be larger than for filling in the color
+        maxLeaf = np.array(metaboliteDendLeaves)
+        maxLeaf = np.amax(maxLeaf)
+        groupDendLeaves = dendG['leaves']
+        plt.close()
+        fig, axes = plt.subplots(1,1,figsize=(8,8))
+        dataFinal = np.zeros((data.shape[0],data.shape[1]))
 
-        if norm == 0:
-            g = sns.clustermap(data, method=linkFunc,metric=distMet, figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=cmap,yticklabels=False,xticklabels=True)
-        elif norm == 1:
-            colOrder = [int(i) for i in colOrder]
-            colOrder = [i-1 for i in colOrder]
-            col_groups = [col_groups[i] for i in colOrder]
+        for i in range(data.shape[1]):
+            #rearranging the data for heatmap
+            for j in range(data.shape[0]):
+                #going through the metabolites
+                dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
 
-            data[:,:] = data[:,colOrder]
-            g = sns.clustermap(data, method=linkFunc,metric=distMet, figsize=(7, 5), col_cluster=False,col_colors=col_groups,cmap=cmap,yticklabels=False,xticklabels=True)
-        
-        plt.savefig('HeatMap.png',dpi=600,transparent=True)
+        #build
+        sns.heatmap(dataFinal,fmt='0.2f', cmap=cmap, yticklabels=False)
         plt.show()
+
+        return
         
 
 
@@ -2803,7 +2824,7 @@ class GUIUtils:
         driver.close()
 
 
-    def externalCriteria(comp='rand'):
+    def externalCriteria(comp='rand',trans ='None',scale='None'):
         '''
 
         '''
@@ -2827,7 +2848,7 @@ class GUIUtils:
         #read in the data file of interest.
         messagebox.showinfo(message='Select the input file of interest.')
         dataFile = filedialog.askopenfilename()
-        data, col_groups = GB.readAndPreProcess(dataFile,transform='None',scale='None',func="CC")
+        data, col_groups = GB.readAndPreProcess(dataFile,transform=trans,scale=scale,func="CC")
 
         #ask the user for the clustering parameters they would like to use.
         #read in the csv, for ensemble creation
@@ -2897,12 +2918,12 @@ class GUIUtils:
                 best_labels[i]= optClust[1]    
 
         #check for what is what and send labels. 
-        if comp =='rand':
+        if comp =='Rand-index':
             #send to the rand index function
             GB.randComp(best_labels,distLink)
             messagebox.showinfo(title='Completed',message='Successfully saved the output of the Rand-Index comparison.')
 
-        elif comp =='adjRand':
+        elif comp =='Adjusted Rand-index':
             #send to the adjusted rand function
             GB.adjRandComp(best_labels,distLink)
             messagebox.showinfo(title='Completed',message='Successfully saved the output of the Adjusted Rand-Index comparison.')
@@ -2917,4 +2938,4 @@ class GUIUtils:
 
         else:
             #eventually add here so that I can support this functionality. 
-            messagebox.showinfo(title='Currently not supporting the comparison between mono-clustering and ensemble clustering solutions.')
+            messagebox.showinfo(message='Currently not supporting the comparison between mono-clustering and ensemble clustering solutions.')

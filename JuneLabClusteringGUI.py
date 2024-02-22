@@ -1791,9 +1791,31 @@ class JuneLabClusteringGUI(ttk.Frame):
 			'''
 			selection = metricsListBox.curselection()
 			selection = config.metrics[selection[0]]
-			print(selection)
-			GU.externalCriteria()
+			GU.externalCriteria(comp=selection,trans=transSelection,scale=scaleSelection)
 
+			return
+		
+		def transformation(*args):
+			'''
+			'''
+			global transSelection
+			transSelection = transformListBox.curselection()
+			transSelection = config.transformList[transSelection[0]]
+
+			#input scale values to list 
+			for i in range(len(scaleList)):
+				scaleListBox.insert(i,scaleList[i])
+
+			return
+		
+		def scaling(*args):
+			global scaleSelection
+			scaleSelection = scaleListBox.curselection()
+			scaleSelection = config.scaleList[scaleSelection[0]]
+
+			#input the metrics
+			for i in range(len(metricsList)):
+				metricsListBox.insert(i,metricsList[i])
 			return
 
 		#get rid of the objects that aren't needed for the external optimization.
@@ -1802,21 +1824,35 @@ class JuneLabClusteringGUI(ttk.Frame):
 			i.grid_forget()
 
 		#button to go home in the UI
-		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=1,row=4,sticky=(N),columnspan=1)
+		self.ecLab = ttk.Label(self, text="External Criteria Evaluation",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.transLab = ttk.Label(self, text="Transformation",font=("TkHeadingFont",20)).grid(column=1,row=1,sticky=(N))
+		self.scaleLab = ttk.Label(self, text="Scale",font=("TkHeadingFont",20)).grid(column=2,row=1,sticky=(N))
+		self.scaleLab = ttk.Label(self, text="Criteria",font=("TkHeadingFont",20)).grid(column=3,row=1,sticky=(N))
+		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=4,sticky=(N))
 		
 		#get the metrics of interest
 		metricsListBox = Listbox(self,height=8)
+		transformListBox = Listbox(self,height=8)
+		scaleListBox = Listbox(self,height=8)
 
 		#Create the lists of available options for selection 
 		metricsList = config.metrics
+		transformList = config.transformList
+		scaleList = config.scaleList
 
 		#input the linkage function values into the box
-		for i in range(len(metricsList)):
-			metricsListBox.insert(i,metricsList[i])
+		for i in range(len(transformList)):
+			transformListBox.insert(i,transformList[i])
 
+		transformListBox.bind('<Double-1>',transformation)
+		scaleListBox.bind('<Double-1>',scaling)
 		metricsListBox.bind('<Double-1>',submitExternal)
+		self.transformListBox = transformListBox
+		self.scaleListBox = scaleListBox
 		self.metricsListBox = metricsListBox
-		self.metricsListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
+		self.transformListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
+		self.scaleListBox.grid(column=2,row=2,sticky=(N),pady=5,padx=5)
+		self.metricsListBox.grid(column=3,row=2,sticky=(N),pady=5,padx=5)
 
 	def monoVal(self):
 		'''
