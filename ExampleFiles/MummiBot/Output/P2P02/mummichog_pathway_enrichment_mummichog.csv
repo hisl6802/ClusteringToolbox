@@ -1,0 +1,5 @@
+"","Pathway total","Hits.total","Hits.sig","Expected","P(Fisher)","P(EASE)","P(Gamma)","Emp.Hits","Empirical","AdjP.Fisher","AdjP.EASE","AdjP.Gamma","Pathway Number","cpd.hits"
+"Purine metabolism","71","7","2","0.32547","0.041184","0.27262","0.010663","7","0.07","0.164736","1","0.042652","P1","C00104;C01228"
+"Steroid biosynthesis","41","1","1","0.18795","0.050725","1","1","9","0.09","0.164736","1","1","P2","C03428"
+"Cysteine and methionine metabolism","33","6","1","0.15128","0.27262","1","1","9","0.09","0.54524","1","1","P3","C04582;C04188;C15650"
+"Porphyrin metabolism","31","13","1","0.14211","0.50784","1","1","37","0.37","0.54524","1","1","P4","C02191"

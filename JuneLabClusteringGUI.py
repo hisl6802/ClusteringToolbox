@@ -119,22 +119,20 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.tTestCIs = ttk.Button(self,text="CIs for t-tests", style="RW.TButton",command=self.CIsTtest).grid(**config.grid_kwargs[14])
 		#create a button for the user to ask for help.
 		self.Help = ttk.Button(self, text="Help/Documentation", style="RW.TButton", command=self.helpOut).grid(**config.grid_kwargs[15])
-		#create a button for the user to match the mz to rt for "improved" mummichog results
-		self.mzToRT = ttk.Button(self,text="MZ to RT", style="RW.TButton",command=self.MZ_RT).grid(**config.grid_kwargs[16])
 		#create a button for the user to compare different inputs for normalization
-		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(**config.grid_kwargs[17])
+		self.normalityCheck = ttk.Button(self, text='Check Normality', style ="RW.TButton", command=self.normalityC).grid(**config.grid_kwargs[16])
 		#create a button for metaboanalyst file generation
-		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(**config.grid_kwargs[18])
+		self.metaboFileGen = ttk.Button(self,text="Metaboanalyst File Gen",style = "RW.TButton",command=self.mfg).grid(**config.grid_kwargs[17])
 		#create a button for using the MetaboAnalystBot
-		self.mBot = ttk.Button(self,text="MetaboBot",style="RW.TButton",command=self.metaboBot).grid(**config.grid_kwargs[19])
+		self.mBot = ttk.Button(self,text="MetaboBot",style="RW.TButton",command=self.metaboBot).grid(**config.grid_kwargs[18])
 		#create a button for using the MummichogBot
-		self.mumBot = ttk.Button(self,text="MummiBot",style="RW.TButton",command=self.mummiBot).grid(**config.grid_kwargs[20])
+		self.mumBot = ttk.Button(self,text="MummiBot",style="RW.TButton",command=self.mummiBot).grid(**config.grid_kwargs[19])
 		#Create a button to allow the user to create a minimum spanning tree on data
-		self.mst = ttk.Button(self,text='MST Optimization', style="RW.TButton", command=self.mst).grid(**config.grid_kwargs[21])
+		self.mst = ttk.Button(self,text='MST Optimization', style="RW.TButton", command=self.mst).grid(**config.grid_kwargs[20])
 		#create a button for mono-clustering validation
-		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(**config.grid_kwargs[22])
+		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(**config.grid_kwargs[21])
 		#create a button for full optimized 
-		self.progenesis = ttk.Button(self,text="VIP (MS/MS Comp.)",style="RW.TButton",command=self.progen).grid(**config.grid_kwargs[23])
+		self.progenesis = ttk.Button(self,text="VIP (MS/MS Comp.)",style="RW.TButton",command=self.progen).grid(**config.grid_kwargs[22])
 
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
@@ -919,7 +917,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		
 
 		#create widgets for the clustergram function input. 
-		self.JuneLab = ttk.Label(self, text="Clustergram Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
+		self.JuneLab = ttk.Label(self, text="Heatmap Input",font=("TkHeadingFont",36)).grid(column=1,row=0,sticky=(N),columnspan=3)
 		self.Linkage = ttk.Label(self, text="Linkage",font=("TkHeadingFont",12)).grid(column=1,row=1,sticky=(N))
 		self.Distance = ttk.Label(self, text="Distance Measure",font=("TkHeadingFont",12)).grid(column=2,row=1,sticky=(N))
 		self.Color = ttk.Label(self,text="Color-Map", font=("TkHeadingFont",12)).grid(column=3,row=1,sticky=(N))
@@ -1476,7 +1474,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
 
 	def helpOut(self):
-		webbrowser.open('https://montanaedu.sharepoint.com/:w:/s/June_Lab_Research/EUPwFv5NFZJNs2zdvl0Eso8BnFlCKnI8OqI301wcL8tlOg?e=sB1zcj')
+		webbrowser.open('https://github.com/hisl6802/ClusteringToolbox/wiki')
 
 	def CIsTtest(self):
 		'''
@@ -1695,7 +1693,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.metaboBotTransLab = ttk.Label(self, text="Data Transformation",font=("TkHeadingFont",20)).grid(column=3,row=1,sticky=(N))
 		self.metaboBotScaleLab = ttk.Label(self, text="Data Scaling",font=("TkHeadingFont",20)).grid(column=1,row=3,sticky=(N))
 		self.metaboBotAnalysisLab = ttk.Label(self, text="Analysis Type",font=("TkHeadingFont",20)).grid(column=2,row=3,sticky=(N))
-		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=4,sticky=(N))
+		self.backHome = ttk.Button(self,text="Return to Home", command=self.home).grid(column=2,row=5,sticky=(N))
 		
 		#get the metrics of interest
 		analysisListBox = Listbox(self,height=8)
@@ -1793,6 +1791,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 			'''
 			selection = metricsListBox.curselection()
 			selection = config.metrics[selection[0]]
+			print(selection)
 			GU.externalCriteria()
 
 			return
@@ -1816,7 +1815,6 @@ class JuneLabClusteringGUI(ttk.Frame):
 			metricsListBox.insert(i,metricsList[i])
 
 		metricsListBox.bind('<Double-1>',submitExternal)
-		# linkNames = StringVar(value=linkageList)
 		self.metricsListBox = metricsListBox
 		self.metricsListBox.grid(column=1,row=2,sticky=(N),pady=5,padx=5)
 

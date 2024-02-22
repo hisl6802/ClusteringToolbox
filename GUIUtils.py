@@ -130,7 +130,7 @@ class GUIUtils:
         volcano.to_excel(output,index=False)
         del(volcano)
         #save the excel sheet
-        output.save()
+        output.close()
         logOut = 'Updated file saved as: ' + file
         logging.info(logOut)
         #log that the data integrity function has been sucessfully completed. 
@@ -568,7 +568,7 @@ class GUIUtils:
         logging.info(': Starting exact mass comparison against KEGG compounds, and glycans!')
         filename = filedialog.askopenfilename()
         data = pd.read_excel(filename)
-        lookUpList = pd.read_excel('C:/Users/Public/Documents/ClusteringGUI-develop/KEGG_Compound_Glycans.xlsx')
+        lookUpList = pd.read_excel('/Users/bradyhislop/Documents/GitHub/ClusteringGUI/KEGG_Compound_Glycans.xlsx')
 
         #create a numpy array of just the masses
         lookUpMasses = lookUpList['Masses']
@@ -1037,7 +1037,7 @@ class GUIUtils:
             #input the values of each matrix element to the numpy array for saving to csv file.
             dataMST[i,0] = mstOutInd[0][i]
             dataMST[i,1] = mstOutInd[1][i]
-            dataMST[i,2] = mstOut[dataMST[i,0],dataMST[i,1]]
+            dataMST[i,2] = mstOut[int(dataMST[i,0]),int(dataMST[i,1])]
 
         #Input the dataMST into the dataframe to save the results of the MST for future use if needed
         mstOut = pd.DataFrame(dataMST, columns=['index1','index2','dist'])
@@ -1862,28 +1862,26 @@ class GUIUtils:
         return
 
 
-    def normalityCheck(transform=config.curTrans,scale=config.curScale):
+    def normalityCheck(transform='None',scale='None'):
         '''
         '''
 
         #have user input the wanted file
         file =filedialog.askopenfilename()
 
-        #read in the metabolites file
-        data = GB.readAndPreProcess(file=file,transform=transform,scale=scale)
-        dataOrig = GB.readAndPreProcess(file)
-
-        #reformat both datasets to incorporate the appropriate data format for kdeplots
-        data = data.reshape(int(data.shape[0]*data.shape[1]),1)
-        data = pd.DataFrame(data,columns=['mz'])
-        dataOrig = dataOrig.reshape(int(dataOrig.shape[0]*dataOrig.shape[1]),1)
-        dataOrig = pd.DataFrame(dataOrig,columns=['mz'])
+        #read in the metabolites file, and reshape for the analysis
+        data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='CC')
+        dataOrig,cols =  GB.readAndPreProcess(file=file,transform='None',scale='None',func='CC')
+        data = np.reshape(data,(data.size,1))
+        dataOrig = np.reshape(dataOrig,(dataOrig.size,1))
 
         fig, axes = plt.subplots(1, 2, figsize=(10,5))
-        go = sns.kdeplot(data=dataOrig,x='Intensity',ax=axes[0])
+        go = sns.kdeplot(data=dataOrig,ax=axes[0])
         axes[0].set_title("Raw Data")
-        g = sns.kdeplot(data=data,x='Intensity',ax=axes[1])
+        axes[0].set_xlabel('Intensities')
+        g = sns.kdeplot(data=data,ax=axes[1])
         axes[1].set_title("Transform and/or Scaled")
+        axes[1].set_xlabel('Intensities')
         plt.savefig("Normalized.png",dpi=600,transparent=True)
         plt.show()
 
@@ -1986,113 +1984,6 @@ class GUIUtils:
 
         return
     
-    def mzrt():
-        '''
-        '''
-        #show messagebox telling user which files to select first
-        messagebox.showinfo(title="File selection order",message="Please select the XCMS file, then select file made for peaks to pathways that does not contain retention times.")
-
-        #get the file name for the XCMS workbook, and the file name for the peaks to pathway files
-        xcmsFile = filedialog.askopenfilename()
-        p2pFile = filedialog.askopenfilename()
-
-        #read in the data
-        data = pd.read_excel(xcmsFile)
-        #reading in the p2pfile
-        dataP2P = pd.read_csv(p2pFile)
-
-        # new dataframe containing the rtmed and corresponding retention times
-        mzRT = data[['mzmed', 'rtmed']]
-
-        # numpy array of mzmed and rtmed for ease of comparison
-        mzRT = mzRT.to_numpy()
-
-        # data frame containing just the mzmed, converted to numpy, and to numpy astype str.
-        mzSearch = data[['mzmed']]
-        mzSearch = mzSearch.to_numpy()
-
-        #converting immediately to a numpy array
-        dataP2P = dataP2P.to_numpy()
-
-        #get the number of mz values given in the p2p file and add a column of zeros
-        shapeA = np.shape(dataP2P)
-        shapeA = shapeA[0]
-        rtColumn = np.zeros((shapeA,1))
-        #adding the retention time column to the peaks to pathways file
-        dataP2P = np.append(dataP2P,rtColumn, axis=1)
-
-
-        ######### Matching mz values to the associated retention times
-        for i in range(shapeA):
-            #first get the mz of interest
-            curMZ = dataP2P[i,0]
-            
-            #check the data type of numpy array, if not a string just compare, otherwise
-            #check for double decimals
-            if isinstance(curMZ,str):
-                #count the number of decimals
-                decimalCount = curMZ.count('.')
-                
-                #check # of decimals
-                if decimalCount > 1:
-                    # check the value after the 6th entry of the string
-                    ddLoc = curMZ.rindex('.')
-                    
-                    # truncate intial string and convert to float
-                    origMZ = curMZ
-                    curMZ = curMZ[0:ddLoc]
-            
-                    # correct mz... value 
-                    correctMZ = int(origMZ[ddLoc+1:len(origMZ)])
-                    curMZ = float(curMZ)
-                    
-                    # create a current numpy array in which you subtract the current mz value from the value
-                    curDiff = np.subtract(mzSearch,curMZ);curDiff = np.absolute(curDiff)
-                    
-                    # find the minimum value in the numpy array
-                    minDiff = np.amin(curDiff)
-                    
-                    #find the number of locations from minDiff that have the minValue
-                    locMins = np.where(curDiff==minDiff)
-                    
-                    #determine the number of values in which match with the intended output
-                    if len(locMins[0]) > 1:
-                        #Use the index from the after decimal to identify the correct rt value
-                        dataP2P[i,2] = mzRT[locMins[0][correctMZ],1]
-                        dataP2P[i,0] = curMZ
-                        
-                        
-                else:
-                    #create a numpy array in which you subtract the current mz value from the value
-                    curMZ = float(curMZ)
-                    
-                    # create a current numpy array in which you subtract the current mz value from the value
-                    curDiff = np.subtract(mzSearch,curMZ);curDiff = np.absolute(curDiff)
-                    
-                    # find the minimum value in the numpy array
-                    minDiff = np.amin(curDiff)
-                    
-                    #find the number of locations from minDiff that have the minValue
-                    locMins = np.where(curDiff==minDiff)
-
-                    #determine the number of values in which match with the intended output
-                    
-                    #Use the index from the after decimal to identify the correct rt value
-                    dataP2P[i,2] = mzRT[locMins[0][0],1]
-                    dataP2P[i,0] = curMZ
-                    
-                        
-            else:
-                #create a numpy array in which you subtract the current mz value from the value
-                messagebox.showinfo(message='work in progress')
-                logging.info('You have entered a state that currently doesnt do anything.')
-
-            
-        dataP2P = pd.DataFrame(dataP2P,columns=["m.z","p.value","r.t"])
-
-        dataP2P.to_csv('Update_p2pFile.csv',index=False)
-
-        return
     
     def mfgUtil(fileName,variant):
         '''
@@ -2934,11 +2825,13 @@ class GUIUtils:
         #In this functionality I need to read in the data, and ask for a .csv of the clustering parameters of interest similar to ensemble. 
 
         #read in the data file of interest.
+        messagebox.showinfo(message='Select the input file of interest.')
         dataFile = filedialog.askopenfilename()
         data, col_groups = GB.readAndPreProcess(dataFile,transform='None',scale='None',func="CC")
 
         #ask the user for the clustering parameters they would like to use.
         #read in the csv, for ensemble creation
+        messagebox.showinfo(message='Select clustering parameters file.')
         clustsFile = filedialog.askopenfilename()
         clusts = pd.read_csv(clustsFile)
         clusts_s = clusts[['Distance','Linkage']]

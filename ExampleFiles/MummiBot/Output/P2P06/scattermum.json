@@ -1,0 +1,5 @@
+{
+ "pval": [ 0.9469984, 0.9469984, 0.9469984, 0.9469984, 0.7799966, 0.4584208, 0.2133763 ],
+"enr": [ 4.894283, 4.894283, 10.60412, 5.023106, 12.31451, 2.688389,  4.43892 ],
+"pathnames": [ "Fatty acid elongation", "Fatty acid degradation", "Ubiquinone and other terpenoid-quinone biosynthesis", "Drug metabolism - other enzymes", "Porphyrin metabolism", "Purine metabolism", "Arachidonic acid metabolism" ] 
+}

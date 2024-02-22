@@ -1,0 +1,5 @@
+{
+ "pval": [  1.42151, 1.060695, 1.060695, 1.058161, 0.7774656, 0.5115198, 0.115913 ],
+"enr": [ 5.532657, 3.103662, 7.952919, 12.31477, 15.90634, 7.069636, 3.221494 ],
+"pathnames": [ "Primary bile acid biosynthesis", "Steroid biosynthesis", "Retinol metabolism", "Porphyrin metabolism", "Taurine and hypotaurine metabolism", "Terpenoid backbone biosynthesis", "Steroid hormone biosynthesis" ] 
+}

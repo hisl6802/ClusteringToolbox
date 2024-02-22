@@ -1,0 +1,5 @@
+"","Pathway total","Hits.total","Hits.sig","Expected","P(Fisher)","P(EASE)","P(Gamma)","Emp.Hits","Empirical","AdjP.Fisher","AdjP.EASE","AdjP.Gamma","Pathway Number","cpd.hits"
+"Porphyrin metabolism","31","13","3","0.10151","0.0059523","0.044317","0.0060752","0","0","0.0238092","0.177268","0.0243008","P1","C01079;C05770;C05791"
+"Arginine biosynthesis","14","1","1","0.045842","0.036232","1","1","0","0","0.108696","1","1","P2","C03406"
+"Alanine, aspartate and glutamate metabolism","28","4","1","0.091683","0.13867","1","1","5","0.05","0.27734","1","1","P3","C03406"
+"Metabolism of xenobiotics by cytochrome P450","64","8","1","0.20956","0.26152","1","1","7","0.07","0.27734","1","1","P4","C14853"

@@ -1,0 +1,8 @@
+"","Pathway total","Hits.total","Hits.sig","Expected","P(Fisher)","P(EASE)","P(Gamma)","Emp.Hits","Empirical","AdjP.Fisher","AdjP.EASE","AdjP.Gamma","Pathway Number","cpd.hits"
+"Cysteine and methionine metabolism","33","6","2","0.1945","0.049668","0.30594","0.020136","0","0","0.347676","1","0.140952","P1","C04582;C04188;C15650;C00506"
+"Primary bile acid biosynthesis","46","4","1","0.27112","0.2388","1","1","13","0.13","0.7164","1","1","P2","C05467"
+"Steroid hormone biosynthesis","79","29","1","0.46562","0.88875","1","1","25","0.25","0.88875","1","1","P3","C18044"
+"Purine metabolism","71","7","1","0.41847","0.38311","1","1","22","0.22","0.76622","1","1","P4","C00104"
+"Tyrosine metabolism","42","1","1","0.24754","0.065217","1","1","4","0.04","0.391302","1","1","P5","C02465"
+"Taurine and hypotaurine metabolism","8","2","1","0.047151","0.12663","1","1","6","0.06","0.63315","1","1","P6","C00506"
+"Pantothenate and CoA biosynthesis","20","2","1","0.11788","0.12663","1","1","8","0.08","0.63315","1","1","P7","C04352"

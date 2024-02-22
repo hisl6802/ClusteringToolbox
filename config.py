@@ -24,6 +24,10 @@ modes = ('Positive','Negative')
 pval = (0.05)
 
 
+###Look-up list location (Glycan's)
+
+
+
 #list of the options for MetaboAnalyst
 typeAnalysis = ('Uni', 'Multi')
 varianceFilters = ('IQR', 'SD', 'MAD','RSD','MAD_m')
@@ -54,7 +58,6 @@ grid_kwargs = {
     20: {'column': 2, 'row': 7, 'sticky': 'nsew'},
     21: {'column': 3, 'row': 7, 'sticky': 'nsew'},
     22: {'column': 1, 'row': 8, 'sticky': 'nsew'},
-    23: {'column': 2, 'row': 8, 'sticky': 'nsew'},
 }
 
 #parameters for bootstrapping

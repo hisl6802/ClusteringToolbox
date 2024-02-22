@@ -1,0 +1,19 @@
+Unnamed: 0,Pathway total,Hits.total,Hits.sig,Expected,FET,EASE,Gamma,Emp.Hits,Empirical,Pathway Number,Cpd.Hits
+Glycolysis / Gluconeogenesis,23,2,1,0.28705,0.20784,1,1,9,0.09,P1,"[['Oxaloacetate', 'Oxalacetic acid', 'Oxaloacetic acid', '2-Oxobutanedioic acid', '2-Oxosuccinic acid', 'keto-Oxaloacetate']]"
+Citrate cycle (TCA cycle),16,2,1,0.19969,0.20784,1,1,9,0.09,P2,"[['Oxaloacetate', 'Oxalacetic acid', 'Oxaloacetic acid', '2-Oxobutanedioic acid', '2-Oxosuccinic acid', 'keto-Oxaloacetate']]"
+Fructose and mannose metabolism,18,3,1,0.22465,0.29586,1,1,15,0.15,P3,"[['L-Fucose 1-phosphate', '6-Deoxy-L-galactose 1-phosphate', 'beta-L-Fucose 1-phosphate']]"
+Primary bile acid biosynthesis,46,4,1,0.5741,0.37464,1,1,24,0.24,P4,"[['Glycocholate', 'Glycocholic acid', '3alpha,7alpha,12alpha-Trihydroxy-5beta-cholan-24-oylglycine']]"
+Steroid hormone biosynthesis,77,29,1,0.961,0.97682,1,1,51,0.51,P5,"[['11beta-Hydroxyandrost-4-ene-3,17-dione', 'Androst-4-ene-3,17-dione-11beta-ol', '4-Androsten-11beta-ol-3,17-dione'], ['2-Methoxy-17beta-estradiol', '2-Methoxyestradiol-17beta'], ['19-Hydroxyandrost-4-ene-3,17-dione', '19-Hydroxyandrostenedione'], ['19-Oxotestosterone'], ['16alpha-Hydroxyandrost-4-ene-3,17-dione', '4-Androsten-16alpha-ol-3,17-dione']]"
+Purine metabolism,66,6,1,0.82371,0.50807,1,1,40,0.4,P6,"[[""Guanosine 3'-diphosphate 5'-triphosphate"", ""Guanosine 5'-triphosphate,3'-diphosphate""]]"
+"Alanine, aspartate and glutamate metabolism",28,4,1,0.34945,0.37464,1,1,19,0.19,P7,"[['Oxaloacetate', 'Oxalacetic acid', 'Oxaloacetic acid', '2-Oxobutanedioic acid', '2-Oxosuccinic acid', 'keto-Oxaloacetate']]"
+Amino sugar and nucleotide sugar metabolism,35,3,1,0.43682,0.29586,1,1,15,0.15,P8,"[['L-Fucose 1-phosphate', '6-Deoxy-L-galactose 1-phosphate', 'beta-L-Fucose 1-phosphate']]"
+Inositol phosphate metabolism,21,3,1,0.26209,0.29586,1,1,8,0.08,P9,"[['1D-myo-Inositol 1,3,4,5,6-pentakisphosphate', 'D-myo-Inositol 1,3,4,5,6-pentakisphosphate', 'Inositol 1,3,4,5,6-pentakisphosphate']]"
+Glycerophospholipid metabolism,13,2,1,0.16225,0.20784,1,1,7,0.07,P10,"[['sn-Glycero-3-phosphocholine', 'Glycerophosphocholine']]"
+Pyruvate metabolism,19,2,1,0.23713,0.20784,1,1,9,0.09,P11,"[['Oxaloacetate', 'Oxalacetic acid', 'Oxaloacetic acid', '2-Oxobutanedioic acid', '2-Oxosuccinic acid', 'keto-Oxaloacetate']]"
+Glyoxylate and dicarboxylate metabolism,31,4,1,0.3869,0.37464,1,1,13,0.13,P12,"[['Oxaloacetate', 'Oxalacetic acid', 'Oxaloacetic acid', '2-Oxobutanedioic acid', '2-Oxosuccinic acid', 'keto-Oxaloacetate']]"
+Pantothenate and CoA biosynthesis,17,2,1,0.21217,0.20784,1,1,12,0.12,P13,"[['Pantetheine', '(R)-Pantetheine']]"
+Folate biosynthesis,24,2,1,0.29953,0.20784,1,1,6,0.06,P14,"[['4a-Hydroxytetrahydrobiopterin', '4a-Hydroxy-5,6,4,8-tetrahydrobiopterin', '(6R)-6-(L-erythro-1,2-Dihydroxypropyl)-5,6,7,8-tetrahydro-4a-hydroxypterin', '6-[(1R,2S)-1,2-Dihydroxypropyl]-5,6,7,8-tetrahydro-4a-hydroxypterin']]"
+Porphyrin and chlorophyll metabolism,27,13,1,0.33697,0.79381,1,1,80,0.8,P15,[['Bilirubin']]
+Metabolism of xenobiotics by cytochrome P450,64,8,1,0.79875,0.61445,1,1,26,0.26,P16,"[['(1aalpha,2beta,3alpha,11calpha)-1a,2,3,11c-Tetrahydro-6,11-dimethylbenzo[6,7]phenanthro[3,4-b]oxirene-2,3-diol']]"
+Drug metabolism - other enzymes,27,1,1,0.33697,0.10959,1,1,3,0.03,P17,[['NPC']]
+Phosphatidylinositol signaling system,17,3,1,0.21217,0.29586,1,1,8,0.08,P18,"[['1D-myo-Inositol 1,3,4,5,6-pentakisphosphate', 'D-myo-Inositol 1,3,4,5,6-pentakisphosphate', 'Inositol 1,3,4,5,6-pentakisphosphate']]"

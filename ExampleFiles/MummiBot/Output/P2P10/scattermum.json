@@ -1,0 +1,5 @@
+{
+ "pval": [ 0.9094245, 0.9094245, 0.6345307, 0.6345307, 0.6345307, 0.6345307, 0.6345307, 0.4841394, 0.4841394, 0.2144566, 0.179884, 0.05748598, 0.03885428 ],
+"enr": [  2.19082, 2.041441, 2.303192, 2.303192, 4.990269, 5.988383, 3.326791, 2.303192, 4.990269, 1.265118, 1.403489, 2.088904, 2.274019 ],
+"pathnames": [ "Steroid biosynthesis", "Glycosphingolipid biosynthesis - lacto and neolacto series", "Fatty acid elongation", "Fatty acid degradation", "Ubiquinone and other terpenoid-quinone biosynthesis", "Glycosylphosphatidylinositol (GPI)-anchor biosynthesis", "Drug metabolism - cytochrome P450", "Pyrimidine metabolism", "Glycosphingolipid biosynthesis - globo and isoglobo series", "Purine metabolism", "Metabolism of xenobiotics by cytochrome P450", "Arachidonic acid metabolism", "Steroid hormone biosynthesis" ] 
+}

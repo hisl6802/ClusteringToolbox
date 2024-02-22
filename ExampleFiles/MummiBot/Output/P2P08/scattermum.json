@@ -1,0 +1,5 @@
+{
+ "pval": [ 1.185639, 0.8974634, 0.734192, 0.734192, 0.6219657, 0.6219657, 0.6219657, 0.05122039 ],
+"enr": [ 3.856091, 11.31107, 9.425959, 9.425959, 3.688404, 4.039751, 9.425959, 2.147674 ],
+"pathnames": [ "Glycosphingolipid biosynthesis - lacto and neolacto series", "Glycosylphosphatidylinositol (GPI)-anchor biosynthesis", "Fructose and mannose metabolism", "Glycosphingolipid biosynthesis - globo and isoglobo series", "Primary bile acid biosynthesis", "Amino sugar and nucleotide sugar metabolism", "Terpenoid backbone biosynthesis", "Steroid hormone biosynthesis" ] 
+}

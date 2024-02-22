@@ -1,0 +1,5 @@
+{
+ "pval": [ 1.790887, 1.083478, 0.8846225, 0.6114015, 0.6114015, 0.6114015, 0.6114015, 0.6114015, 0.4626217, 0.4626217, 0.4626217, 0.3644861, 0.3644861, 0.3644861, 0.1987061, 0.1653949, 0.06977965, 0.004509594 ],
+"enr": [ 4.464884,  4.03967, 5.655469, 3.262856, 4.241602, 3.688404, 4.241602, 3.141986,  4.71298, 2.827814, 3.141986, 1.844202, 3.029752, 2.651043, 1.194829, 1.325522, 2.736577, 1.073837 ],
+"pathnames": [ "Drug metabolism - other enzymes", "Amino sugar and nucleotide sugar metabolism", "D-Amino acid metabolism", "Glycolysis / Gluconeogenesis", "Citrate cycle (TCA cycle)", "Pyruvate metabolism", "Pantothenate and CoA biosynthesis", "Drug metabolism - cytochrome P450", "Fructose and mannose metabolism", "Inositol phosphate metabolism", "Folate biosynthesis", "Primary bile acid biosynthesis", "Alanine, aspartate and glutamate metabolism", "Glyoxylate and dicarboxylate metabolism", "Purine metabolism", "Metabolism of xenobiotics by cytochrome P450", "Porphyrin metabolism", "Steroid hormone biosynthesis" ] 
+}
