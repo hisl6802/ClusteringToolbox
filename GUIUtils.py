@@ -568,7 +568,7 @@ class GUIUtils:
         logging.info(': Starting exact mass comparison against KEGG compounds, and glycans!')
         filename = filedialog.askopenfilename()
         data = pd.read_excel(filename)
-        lookUpList = pd.read_excel('/Users/bradyhislop/Documents/GitHub/ClusteringGUI/KEGG_Compound_Glycans.xlsx')
+        lookUpList = pd.read_excel(config.keggGlycanLoc)
 
         #create a numpy array of just the masses
         lookUpMasses = lookUpList['Masses']

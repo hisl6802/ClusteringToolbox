@@ -1,3 +1,9 @@
+import inspect
+import os
+import GuiBackground as GB
+
+
+
 #default number of threads for 
 numThreads = 1
 curUser = "Someone"
@@ -25,8 +31,9 @@ pval = (0.05)
 
 
 ###Look-up list location (Glycan's)
-
-
+module_file_path = inspect.getfile(GB)
+directory = os.path.dirname(module_file_path)
+keggGlycanLoc = (directory+'/KEGG_Compound_Glycans.xlsx')
 
 #list of the options for MetaboAnalyst
 typeAnalysis = ('Uni', 'Multi')
