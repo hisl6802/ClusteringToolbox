@@ -2939,3 +2939,123 @@ class GUIUtils:
         else:
             #eventually add here so that I can support this functionality. 
             messagebox.showinfo(message='Currently not supporting the comparison between mono-clustering and ensemble clustering solutions.')
+
+
+    def geneToPathway():
+        '''
+        '''
+
+
+        #give the user the input that tells them what to submit
+        messagebox.showinfo(message="Select a csv file of genes, Fold-change, and p-values")
+
+        file = filedialog.askopenfilename()
+
+        #read in the input parameters
+        genes = pd.read_csv(file)
+
+        #add 10 columns to genes data frame
+        pathIndex = [f"P{i}" for i in range(1, 11)]
+        newCols = pd.DataFrame(np.zeros((genes.shape[0],10)),columns=pathIndex)
+
+        #add columns for 
+        genes = pd.concat([genes, newCols],axis=1)
+        genes = genes.replace(0, np.nan)
+
+        # Specify the file path and name
+        file_path = 'Results.xlsx'
+
+        # Use ExcelWriter with the openpyxl engine
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            genes.to_excel(writer, index=False, sheet_name='Sheet1')
+            
+            # Load the openpyxl workbook object
+            workbook = writer.book
+            sheet = writer.sheets['Sheet1']
+            columnN = 3
+            count = 0
+            for j in range(genes.shape[0]):
+                request = REST.kegg_find("mmu",genes['Gene'][j])
+
+                #write the file to the wanted location
+                txtFCur = 'Testing'+ '.txt'
+                open(txtFCur,'w').write(request.read())
+
+                #open the file and read, parse out to search names
+                geneSearch = open(txtFCur,"r")
+                geneMatches = geneSearch.read()
+
+                #start parsing
+                geneList = geneMatches.split("\n")
+                for i in range(len(geneList)):
+                    #check the current gene_i for the name, removing tab
+                    curCheck = geneList[i].split("\t")
+                    if len(curCheck) == 1:
+                        continue
+                    #hello
+                    curCheck1 = curCheck[1].split(",")
+
+                    if genes['Gene'][j] in curCheck1:
+                        count +=1  
+                        requestGene = REST.kegg_get(curCheck[0])
+                        #write the file to the wanted location
+                        txtFCur = 'TestingGet'+ '.txt'
+                        open(txtFCur,'w').write(requestGene.read())
+
+
+                        #open the txtFCur,read split then look for start and end
+                        check = open(txtFCur,"r")
+                        check1 = check.read()
+                        pathwayStart = check1.split("\n")
+                        #get the starting and ending positions for pathway then get pathways. 
+                        pathway = False
+                        pathwayStartI = None
+                        pathwayEndI = None
+                        #search for start and end positions of pathway
+                        for k in range(len(pathwayStart)):
+                            if pathway == False:
+                                #figure out where the start of the pathway is 
+                                if 'PATHWAY' in pathwayStart[k]:
+                                    pathway = True
+                                    pathwayStartI = k 
+                                else:
+                                    continue
+
+                            else:
+                                if pathwayStart[k][0].isalpha():
+                                    #keep as the wrong index for easy input to the range function
+                                    pathwayEndI = k
+                                    break
+
+                        if pathwayEndI == None:
+                            continue
+
+
+                        #get out the pathways of interest
+                        pathList = 10*[None]
+                        count2 = -1
+
+                        for m in range(pathwayStartI,pathwayEndI):
+                            count2 +=1
+                            if count2 == 10:
+                                break
+                            
+                            if m == pathwayStartI:
+                                #removing pathway and getting the list
+                                pathList[count2] = pathwayStart[m].strip('PATHWAY').strip()
+                            
+                            else:
+                                pathList[count2] = pathwayStart[m].strip()
+            
+                #save the hyperlinks to the appropriate location.
+                columnN = 3
+                for l in range(len(pathList)):
+                    if pathList[l] == None:
+                        continue
+                    columnN += 1
+                #go through each pathway and add to the spreadsheet.
+                    # Use openpyxl to add a hyperlink
+                    # Note: Excel uses 1-based indexing, adjust cell accordingly
+                    sheet.cell(row=j+2, column=columnN).hyperlink = "https://www.genome.jp/pathway/" + pathList[l][:8]
+                    sheet.cell(row=j+2, column=columnN).value = pathList[l]
+                    sheet.cell(row=j+2, column=columnN).style = "Hyperlink"

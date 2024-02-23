@@ -65,6 +65,7 @@ grid_kwargs = {
     20: {'column': 2, 'row': 7, 'sticky': 'nsew'},
     21: {'column': 3, 'row': 7, 'sticky': 'nsew'},
     22: {'column': 1, 'row': 8, 'sticky': 'nsew'},
+    23: {'column': 2, 'row': 8, 'sticky': 'nsew'},
 }
 
 #parameters for bootstrapping

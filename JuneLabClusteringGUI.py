@@ -133,6 +133,8 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.extVal = ttk.Button(self,text="External Metrics",style="RW.TButton",command=self.externalOpt).grid(**config.grid_kwargs[21])
 		#create a button for full optimized 
 		self.progenesis = ttk.Button(self,text="VIP (MS/MS Comp.)",style="RW.TButton",command=self.progen).grid(**config.grid_kwargs[22])
+		#create a button for the gene->pathways
+		self.geneToPath = ttk.Button(self,text="Gene->Pathways",style="RW.TButton",command=self.gene2path).grid(**config.grid_kwargs[23])
 
 		# pad each widget with 5 pixels on each side to ensure that the buttons do not stay together. 
 		for child in self.winfo_children(): child.grid_configure(padx=5, pady=5)
@@ -1854,6 +1856,12 @@ class JuneLabClusteringGUI(ttk.Frame):
 		self.scaleListBox.grid(column=2,row=2,sticky=(N),pady=5,padx=5)
 		self.metricsListBox.grid(column=3,row=2,sticky=(N),pady=5,padx=5)
 
+	def gene2path(self):
+		'''
+		'''
+
+		GU.geneToPathway()
+	
 	def monoVal(self):
 		'''
 		'''
