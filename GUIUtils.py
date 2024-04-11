@@ -773,7 +773,7 @@ class GUIUtils:
         coOcc1 = pd.DataFrame(coOcc)
         try:
             #try to save the large .csv file of the CoOccurence matrix.
-            coOcc1.to_csv('EnsembleCoOcc.csv',index=False)
+            coOcc1.to_excel('EnsembleCoOcc.xlsx',index=False)
         except:
             logging.info('Issue saving the co-occurence matrix as .csv. This error should not occur, should have been caught earlier')
 

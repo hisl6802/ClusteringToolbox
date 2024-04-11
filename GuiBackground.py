@@ -1308,7 +1308,6 @@ def recClustersPostVal(coOcc,ax,metab_data,inds):
         argsMulti.append((coOcc, link_mat, i))
 
     if __name__ == 'GuiBackground':
-        print(config.numThreads)
         with Pool(config.numThreads) as p:
             scores = p.starmap(validationSil,argsMulti)
     scores = np.array(scores)
@@ -1324,7 +1323,7 @@ def recClustersPostVal(coOcc,ax,metab_data,inds):
     #search the list of where the best clustering solution is, 
     # optClustCoOcc = np.where(scores[1,:] == np.max(scores[1,:]))[0][0] + 2
     optClustCoOcc = np.where(scores == np.max(scores))[0][0] + 2
-    print(optClustCoOcc)
+    messagebox.showinfo(message="The optimal number of clusters is: " + str(optClustCoOcc) +" clusters")
     #labels for the solution. 
     labels = fcluster(link_mat,optClustCoOcc,criterion='maxclust')-1
 
