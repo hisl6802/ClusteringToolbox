@@ -1,49 +1,45 @@
+# Libraries
 import numpy as np
 import itertools
 import statistics as stat
-from scipy.cluster.hierarchy import dendrogram,linkage,fcluster
-from scipy.spatial.distance import pdist,squareform
-from scipy.stats import spearmanr,pearsonr
-from scipy.sparse import csr_matrix
-from matplotlib import pyplot as plt
 import matplotlib as mpl
-from matplotlib import colors as mcolors
 import pandas as pd
 import seaborn as sns
 import tkinter as tk
+import logging, time, glob, sys, os, math, config,warnings
+
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from scipy.spatial.distance import pdist, squareform
+from scipy.stats import spearmanr, pearsonr
+from scipy.sparse import csr_matrix
+from matplotlib import pyplot as plt
+from matplotlib import colors as mcolors
 from tkinter import HORIZONTAL, filedialog, messagebox
-import logging, time, glob,sys,os,ast
 from PIL import Image
-from seaborn.matrix import clustermap
-import math
-import config
-import warnings
 from multiprocessing import Pool
-
 from fpdf import FPDF
-
-from Bio.KEGG import REST
-from Bio.KEGG import Compound
-from Bio.KEGG import Enzyme
-from tqdm import tqdm
 from sklearn import metrics
 
-
+#------------------------------------------------------------------------------
+#-------------------------- FUNCTIONS -----------------------------------------
+#------------------------------------------------------------------------------
 def fileCheck(file=''):
     '''
-    Check that the selected file is of the appropriate file extension and is able to be read in. 
+    Check that the selected file is of the appropriate file extension and 
+    is able to be read in. 
 
     Input:
-
-    Does not require an input, but does accept a full file path which can be used to check for an excel sheet with 'Medians' as 
-    the sheet name. 
+        Does not require an input, but does accept a full file path which 
+        can be used to check for an excel sheet with 'Medians' as 
+        the sheet name. 
 
     Output:
-    
-    Returns the data from the excel file. 
+        Returns the data from the excel file. 
     '''
+    
     #log that the user called the Create Clustergram function
     logging.warning(': Checking file for the appropriate input.')
+    
     #ask the user to select the file that they would like to create a clustergram for.
     if file =='':
         file = filedialog.askopenfilename()
@@ -53,117 +49,412 @@ def fileCheck(file=''):
         messagebox.showerror(title ='Error' ,message='Please select file to continue!')
         return
 
-    #Open the excel file that the user to looking to use for their clustering analysis
+    # Open the file the user selected.
+    # Many toolbox functions assume an Excel workbook, but on Windows/Python 3.12
+    # pandas may require an explicit engine and will raise a helpful ImportError.
     try:
-        data = pd.read_excel(file)
+        ext = os.path.splitext(str(file))[1].lower()
+        if ext in ('.xlsx', '.xlsm', '.xltx', '.xltm'):
+            raw_data = pd.read_excel(file, sheet_name=0, engine='openpyxl')
+        elif ext == '.xls':
+            raw_data = pd.read_excel(file, sheet_name=0, engine='xlrd')
+        elif ext in ('.csv', '.tsv', '.txt'):
+            sep = '\t' if ext == '.tsv' else None
+            raw_data = pd.read_csv(file, sep=sep)
+        else:
+            raw_data = pd.read_excel(file, sheet_name=0, engine='openpyxl')
         del(file)
-    except:
-        logging.error(': Failed to read in the excel sheet, it is recommended that an excel workbook with a single sheet is uploaded!')
-        messagebox.showerror(title='Error',message='Failed to read in the excel sheet, it is recommended that an excel workbook with a single sheet is uploaded!')
+    except Exception as e:
+        logging.exception(': Failed to read the input file.')
+        msg = (
+            "Failed to read the selected file.\n\n"
+            f"Reason: {e}\n\n"
+            "Tips:\n"
+            "- For .xlsx: ensure the 'openpyxl' package is installed.\n"
+            "- Ensure the workbook isn't open in Excel / locked.\n"
+            "- Use a single-sheet workbook when possible."
+        )
+        messagebox.showerror(title='Error', message=msg)
         return
+    
     logging.info(': User file opened and submitted to the function.')
 
+    return raw_data
 
-    #send the data to the data checker
+def readInColumns(raw_data):
+    '''
+    Robust excel reading in tool for the expected file types
 
-    # data = dataCheck(data)
-    return data
+    Input:
+        metab_data - raw excel file
 
+    Output:
+        Columns of metabolites, this goes with the convention that the 
+        submitted files contain the metabolite intensities in the 2->(N-1) columns.
+    '''
+    if isinstance(raw_data, np.ndarray):
+        raw_data = pd.DataFrame(raw_data)
+        
+    # Convention:
+    # - column 0: feature IDs (mz / feature)
+    # - columns 1..N-2: sample intensities
+    # - last column: rtmed
+    #
+    # Row 0 contains group labels for the sample columns.
+    data2 = raw_data.iloc[1:, 1:-1].astype(float)
+    column_ids = raw_data.columns
+    row_ids = raw_data.iloc[1:, 0]
+    group_ids = raw_data.iloc[0, :]
+    rt_med_col = raw_data.iloc[1:, -1]
+    
+    #creating a numpy array that is the size of the data that is being read in.
+    data = np.zeros((data2.shape[0], data2.shape[1]))
+    
+    for i, col_name in enumerate(data2.columns):
+            #try to add the values to array
+            try:
+                medianCur = data2[col_name].values
+            except:
+                logging.error(': Unable to read in column headers. ')
+                messagebox.showerror(title='Error',message='Program unable to read column headers, check submitted file!')
 
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-###-------------------------------------------------------------- Correlation metrics ---------------------------------------------------------------------------------------------------------
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def correlationNosqrt(data):
+            #add the medians data to the array to be clustered
+            data[:,i] = medianCur
+    
+    return data, rt_med_col, group_ids, column_ids, row_ids
+
+###------------------------- Read and Pre-process -----------------------------
+def readAndPreProcess(file='',transform = 'None', scale ='None',func='else',first ='1'):
+    '''
+    This function is designed to remove the reading in and pre-processing of 
+    the data from the beginning of each function which needs to read-in and 
+    pre-process the data, saying large amounts of lines in this program.
+
+    Input:
+        transform
+        scale
+        func
+
+    Output:
+        Pre-processed data
+    '''
+
+    #check that the file the user selects is appropriate
+    ###Should only be used when reading in excel files.
+    raw_data = fileCheck(file=file)
+    
+    if raw_data is None:
+        #log error message and return for soft exit.
+        logging.error(': Error loading in the Excel sheet.')
+        return
+
+    if func =='CC':
+        #read in data
+        data, rt_med_col, group_ids, column_ids, row_ids = readInColumns(raw_data)
+
+        col_groups = column_ids
+        col_groups = col_groups.to_list()
+        col_groups.pop(0)
+        col_groups.pop(len(col_groups)-1)
+        col_groups = pd.Series(col_groups, copy=False)
+        metab_data = raw_data.drop(0, axis=0)
+        
+        #put the data through the appropriate transformations. 
+        data = transformations(data, transform=transform, scale=scale, first=first)
+
+        return data, col_groups
+
+    elif func == 'ANHM':
+        data, rt_med_col, group_ids, column_ids, row_ids = readInColumns(raw_data)
+        data = transformations(data,transform=transform,scale=scale,first=first)
+        return data
+
+    elif func =='Raw':
+        data = raw_data.drop(0,axis=0)
+        data.reset_index(inplace=True,drop=True)
+        return data
+
+    else:
+        #read in data
+        # data = readInColumns(metab_data)
+        data, rt_med_col, group_ids, column_ids, row_ids = readInColumns(raw_data)
+        #transform the data
+        data = transformations(data,transform=transform,scale=scale,first=first)
+        return data
+    
+def dataCheck(raw_data):
+    '''
+    This function is responsible for checking for matching values within the input data, 
+    and reducing matching values down to a single value
+
+    Input:
+        original raw data
+    
+    Output:
+        Corrected data.
+    '''   
+ 
+    #read in the data from fileCheck and look for matching values
+    data, rt_med_col, group_ids, column_ids, row_ids = readInColumns(raw_data)
+
+    dataMatches = {}
+    toDelete = []
+    dists = pdist(data)
+    zerosL = dists==0
+
+    indicies =list(itertools.combinations(range(data.shape[0]),2))
+  
+    #zeros checking
+    zeros = ()
+    zerosL = np.where(zerosL==True)[0].tolist()
+
+    logging.warning(': Starting check for multiple duplicate values.')
+   
+    # create reporting interval 
+    report = np.linspace(0, len(zerosL), num=200, dtype=int)
+    for i in range(len(zerosL)):
+        if len(np.where(report==i)[0]) > 0:
+            print((i/len(zerosL))*100)
+        zeros += indicies[zerosL[i]]
+
+    # create a numpy array of zeros
+    zeros = np.array(zeros)
+    # get the unique values of the array
+    zeros = np.unique(zeros)
+
+    #indicies of function, remove indicies if they do not match up with the unique values of the zeros 
+    ind = list(range(data.shape[0]))
+    
+    for i in range(zeros.shape[0]):
+        ind.remove(zeros[i])
+
+    dataZeros = np.delete(data,ind,axis=0)
+
+    for i in range(dataZeros.shape[0]):
+        curMatch = []
+        #skip the iteration if the value is already flagged to be deleted due to matching.
+        if i in toDelete:
+            continue
+
+        for j in range(i+1,dataZeros.shape[0]):
+            #skip the iteration if the value is already flagged to be deleted due to matching. 
+            if j in toDelete:
+                continue
+
+            #check the current array v. the other arrays
+            curCheck = dataZeros[i,:] == dataZeros[j,:]
+
+            if np.all(curCheck):
+                if len(curMatch) == 0:
+                    #inputting the matched indicies to a list to be input to a dictionary.
+                    curMatch.append(i)
+                    curMatch.append(j)
+                    toDelete.append(j)
+                else:
+                    curMatch.append(j)
+                    toDelete.append(j)
+        
+        #if the length of list curMatch is non-zero add to the dictionary
+        if len(curMatch)>0:
+            #get dictionary of matching intensities and input to the dictionary using current length as key
+            dictLen = len(dataMatches)
+
+            #if this gives trouble automatically update the dictionary with each found match for each i
+            dataMatches[dictLen] = curMatch
+    
+    #map to the appropriate indicies of the zeros then delete these indicies
+    for i in range(len(toDelete)):
+        toDelete[i] = zeros[toDelete[i]]
+
+    #delete the extraneous matching rows.
+    data = np.delete(data,toDelete,axis=0)
+    
+    dataMessage = str(len(toDelete))
+    removedIndicies = pd.DataFrame(toDelete)
+    removedIndicies.to_excel('RemovedIndicies.xlsx',index=False)
+    messagebox.showwarning(title="Matching Values removed",message=dataMessage + " matching values found and removed")
+
+    return data, toDelete
+
+###------------------------- Excel Writer ---------------------------------
+def safeToExcel(df, path, sheet_name='Sheet1', index=False):
+    '''
+    pandas >= 2.0 requires ExcelWriter to be used 
+    
+    Input:
+        data
+        file path to save to
+    
+    Output:
+        excel workbooks saved to path of choice
+        
+    '''
+
+    with pd.ExcelWriter(path, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name=sheet_name, index=index)
+
+###------------------------- Column detection ---------------------------------
+def detectColumns(data):
+    '''
+    Detect mz and rt columns from a DataFrame regardless of which pipeline
+    path produced it.  Returns (mzCol, rtCol).
+    '''
+    
+    cols = list(data.columns)
+    non_index = [c for c in cols if 'Unnamed' not in str(c)]
+
+    mz_candidates = ['m/z', 'mz', 'features', 'ID']
+    rt_candidates = ['rtmed', 'rt_med', 'rt']
+
+    mz_col = next((c for c in mz_candidates if c in non_index),
+                  non_index[0] if non_index else cols[0])
+    rt_col = next((c for c in rt_candidates if c in non_index),
+                  non_index[-1] if non_index else cols[-1])
+    
+    return mz_col, rt_col
+
+def sample_labels_for_coocc_group_medians(metab_data, mz_col, rt_col):
+    '''
+    Group names for CoOcc heatmap columns when the data file is a group-medians
+    matrix: Excel row 1 is read as pandas column headers, and those headers are
+    the group names (not a second label row under the header).
+    '''
+    labels = []
+    k = 0
+    for c in metab_data.columns:
+        if c in (mz_col, rt_col):
+            continue
+        k += 1
+        name = str(c).strip()
+        if (
+            not name
+            or name.lower() in ('nan', 'none')
+            or name.lower().startswith('unnamed')
+        ):
+            labels.append(f'Group_{k}')
+        else:
+            labels.append(name)
+    return labels
+
+###------------------------- Distance metrics ------------------------------
+# scipy >= 1.11: SpearmanrResult uses .statistic (not .correlation)
+def _spearman_matrix(data):
+    '''
+    Return the full NxN spearman correlation matrix, compatible with all
+    scipy versions that the toolbox targets (>= 1.17).
+    '''
+    #create the initial spearmanr correlation matrix. 
+    res = spearmanr(data.T)
+    
+    # 1. Try modern 'statistic' attribute
+    if hasattr(res, 'statistic'):
+        return res.statistic
+    
+    # 2. Try older 'correlation' attribute
+    if hasattr(res, 'correlation'):
+        return res.correlation
+    
+    # 3. Fallback to index 0 (works for tuples/arrays)
+    return res[0]         
+
+def correlationNosqrt(data, **_kwargs):
     '''
     calculate the distance matrix for the equation
 
     1-|r(Y,Y')|
 
-    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
-
-    
+    This currently uses only the spearman correlation for r, 
+    future iterations should consider adding pearson
     '''
+    
+    # spearman
+    out = _spearman_matrix(data)
 
-    out = spearmanr(data.T)
+    return np.around(1 - abs(out), decimals=5)
 
-    return np.around(1-abs(out.statistic),decimals=5)
 
-def correlationSqrt(data):
+def correlationSqrt(data, **_kwargs):
     '''
     calculate the distance matrix for the equation
 
     (2*(1-|r(Y,Y')|))^1/2
 
-    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
+    This currently uses only the spearman correlation for r, 
+    future iterations should consider adding pearson
     '''
 
-    out = spearmanr(data.T)
+    # spearman
+    out = _spearman_matrix(data)
+    
+    return np.around((2 * (1 - abs(out))) ** 0.5, decimals=5)
 
-    return np.around((2*(1-abs(out.statistic)))**0.5,decimals=5)
+def pairWise(data,metric='euclidean'):
+    '''
+    Calculate the wanted distance matrix and ensure it is in the proper form 
+    for the agglomerative hiearchical clustering functionality. 
+    
+    Check the scipy.spatial.distance pdist for more information on the 
+    available distance metrics. 
+    '''
 
+    #use the pairwise distance function and return squareform as input
+    out = pdist(data, metric)
+    out = squareform(out)
 
+    return out
 
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-###-------------------------------------------------------------- DATA SCALING---------------------------------------------------------------------------------------------------------
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-#Standardizing the data that is input to python. (Auto-scaling in Metaboanalyst)
+###------------------------- Data scaling -------------------------------------
+# Standardizing the data that is input to python. (Auto-scaling in Metaboanalyst)
 def standardize(data):
     '''
-    Standardize the input data for best clustering results. This should be the same as Auto-scaling
-    
-    Input:
-
-    Single row of data.
-
-    Output:
-
-    Standardized single row of data. 
-
+    Standardize the input data for best clustering results.
+    This should be the same as Auto-scaling.
     '''
-    #I would like to add the ability to check for the number of rows or columns that are given in a numpy array.
-    #find the mean and standard deviation of the given row(eventually will need to move this to allow for the entire table to input.)
-    mean_data = stat.mean(data)
-    std_data = stat.stdev(data)
+    arr = np.asarray(data, float)
+    # ignore non-finite values when computing mean/std
+    finite_mask = np.isfinite(arr)
+    if not finite_mask.any():
+        return np.zeros_like(arr)
 
-    dataCur = np.zeros(data.shape[0])
-    if std_data == 0:
-        for i in range(data.shape[0]):
-            dataCur[i] = 0
+    finite_vals = arr[finite_mask]
+    mean_data = float(np.mean(finite_vals))
+    std_data = float(np.std(finite_vals, ddof=1)) if finite_vals.size > 1 else 0.0
+
+    if std_data == 0.0:
+        out = np.zeros_like(arr)
     else:
-        for i in range(data.shape[0]):
-            dataCur[i] = (data[i]-mean_data)/std_data
+        out = (arr - mean_data) / std_data
 
-    return dataCur
+    # replace any remaining non-finite with 0
+    out[~np.isfinite(out)] = 0.0
+    return out
 
-#standardizing data after it has been normalized to a specific biological profile
+# Standardizing data after it has been normalized to a specific biological profile
 def normStandardize(data,first):
     '''
     Normalize input data that has been standardized for normalized clustergrams.
 
     Input:
-
-    data - all data. 
-    leaves - leaves of the groups you would like to normalize. 
-
-    ***Currently the only possible normalization is the first column of data. Will be updated soon. 
+        data - all data. 
+        leaves - leaves of the groups you would like to normalize. 
+    
+        ***Currently the only possible normalization is the first column of data. 
 
     Output:
-    
-    Normlized standardardized data. 
-
+        Normlized standardardized data. 
     '''
 
-    first = int(first)-1
+    first = int(first) - 1
     first = int(first)
 
     logging.info(': Normalizing strandardized data.')
-    #The mean for a normalized data set should always be 1 for all of the metabolites.
+    
+    #The mean for a normalized data set should always be 1 for all features
     mean = data[first]
 
     #initialize the needed arrays
     dataCur = np.zeros(data.shape[0])
+    
     #Calculate the residuals of the data
     residuals = 0
     for j in range(data.shape[0]):
@@ -171,6 +462,7 @@ def normStandardize(data,first):
 
     #calculate the standard deviation
     std_data = (residuals/(data.shape[0]-1))**0.5
+    
     #standardize each row of data
     for i in range(data.shape[0]):
         #Input the data into an array of standardized (auto-scaling in metaboanalyst) values
@@ -178,18 +470,15 @@ def normStandardize(data,first):
 
     return dataCur
 
-
 def meanCentering(data):
     '''
     Mean centering the data, subtracting the mean from all data values
 
     Input:
-
-    data - raw data
+        data - mean raw data
 
     Output:
-
-    mean centered data
+        mean centered data
     '''
 
     logging.info(': Mean-centering the data.')
@@ -198,7 +487,7 @@ def meanCentering(data):
     dataCur = np.zeros(data.shape[0])
 
     for i in range(data.shape[0]):
-        dataCur[i] = (data[i]-mean_data)
+        dataCur[i] = (data[i] - mean_data)
     
     return dataCur
 
@@ -207,12 +496,10 @@ def paretoScaling(data):
     Pareto scaling is similar to Auto-scaling but with data divided by the square root of the standard deviation.
 
     Input:
-
-    data - raw data
+        data - raw data
 
     Output:
-
-    Pareto scaled data
+        Pareto scaled data
     '''
 
     logging.info(': Pareto scaling the data.')
@@ -223,10 +510,10 @@ def paretoScaling(data):
 
     if std_data == 0:
         for i in range(data.shape[0]):
-            dataCur[i] = data[i]-mean_data
+            dataCur[i] = data[i] - mean_data
     else:
         for i in range(data.shape[0]):
-            dataCur[i] = (data[i]-mean_data)/(std_data**.5)
+            dataCur[i] = (data[i] - mean_data) / (std_data**.5)
 
     return dataCur
 
@@ -235,13 +522,12 @@ def rangeScaling(data):
     Range scaling is similar to Auto-scaling but with the data divided by the range of the data.
 
     Input: 
-
-    data - raw data
+        data - raw data
 
     Output:
-
-    Range scaled data
+        Range scaled data
     '''
+    
     logging.info(': Range scaling the data.')
     mean_data = stat.mean(data)
     max = np.max(data)
@@ -258,32 +544,25 @@ def rangeScaling(data):
 
     return dataCur
 
-
-
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-###------------------------------------------------------------------------- DATA TRANSFORMATIONS -------------------------------------------------------------------------------------
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+###------------------------- Data transformations -----------------------------
 ### Log Transformation
 def logTrans(data):
     '''
-    Log transform
+    Log transform after adding a small amount to avoid zeros
 
     Input:
-
-    Required 
-    data - raw data
+        Required:
+        data - raw data
 
     Output:
-
-    Outputs the input data log transformed
+        Outputs the input data log transformed
     '''
-    #given a row of data from the data take a log transform 
-    #add small amount amount to get past zeros
-    data +=0.1
-    dataUpdate = np.log10(data) 
-
     
+    # Given a row of data from the data take a log transform.
+    data = np.asarray(data, float) + 0.1
+    # Ensure strictly positive before log10 to avoid -inf / nan
+    data[data <= 0] = 1e-6
+    dataUpdate = np.log10(data)
     return dataUpdate
 
 ### Square Root Transformation
@@ -292,13 +571,11 @@ def sqrtTrans(data):
     Square root transformation
 
     Input:
-
-    Require
-    data - raw data
+        Required:
+        data - raw data
 
     Output:
-
-    Outputs the input data square root transformed
+        Outputs the input data square root transformed
     '''
 
     dataUpdate = np.sqrt(data)
@@ -311,13 +588,11 @@ def cubeRtTrans(data):
     Cubic root transformation
 
     Input:
-
-    Required
-    data - raw data
+        Required:
+        data - raw data
 
     Output:
-
-    Outputs the input data cube root transformed
+        Outputs the input data cube root transformed
     '''
 
     dataUpdate = np.cbrt(data)
@@ -329,28 +604,26 @@ def createEnsemDendrogramNew(data, metab_data, orig_data, norm=1, minMetabs=0, n
     Create ensemble dendrogram
     
     Input:
-
-    Required:
-
-    data - co-occurence matrix
-    metab_data - original raw data
-
-    Optional:
-
-    norm - 0 or 1 for the normalization of ensemble (should always be zero)
-    link - input the linkage function you would like the program to use for the ensemble clustering (or final clustering)
-    dist - distance measure you would like to use in the final clustering of the data. 
-    func - should always be ensemble. 
-
+        Required:
+        data - co-occurence matrix
+        metab_data - original raw data
+    
+        Optional:
+        norm - 0 or 1 for the normalization of ensemble (should always be zero)
+        link - input the linkage function you would like the program to use for 
+               the ensemble clustering (or final clustering)
+        dist - distance measure you would like to use in the final clustering of the data. 
+        func - should always be ensemble. 
 
     Output:
-    
-    Outputs the ensemble clustergram and sends the output to the function which generates the output files. 
+        Outputs the ensemble clustergram and sends the output to the function 
+        which generates the output files. 
 
     '''
     #generate linkage function
     dissim = 1 - np.around(data,decimals=3)
     dissim = squareform(dissim)
+    
     #linkage where we calculate a linkage based upon calculating distance of co-occurrence
     # linkageMetabOut = linkage(data,link,dist)
     #linkage where we turn co-occurrence into the dissimilarity measure
@@ -358,10 +631,16 @@ def createEnsemDendrogramNew(data, metab_data, orig_data, norm=1, minMetabs=0, n
 
 
     #plot the ensemble clustering co-occurence matrix and the resulting clustergram of the original data but using the clustering of the ensemble clustering
-    g = sns.clustermap(data, figsize=(7, 5), xticklabels=False, yticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageMetabOut, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
-    plt.savefig('EnsembleClustergram01.png',dpi=600,transparent=True)
-    # ax = g.ax_heatmap
-    # axD = g.ax_row_dendrogram
+    g = sns.clustermap(data, 
+                       figsize=(7, 5), 
+                       xticklabels=False, 
+                       yticklabels=False, 
+                       row_linkage=linkageMetabOut, 
+                       col_linkage=linkageMetabOut, 
+                       cmap=colMap, 
+                       cbar_pos=(0.01, 0.8, 0.025, 0.175)
+                       )
+    plt.savefig('EnsembleClustergram.png', dpi=600, transparent=True)
 
     c = sns.clustermap(orig_data,figsize=(7, 5), xticklabels=False,yticklabels=False, row_linkage=linkageMetabOut, col_cluster=False, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
     ax = c.ax_heatmap
@@ -369,9 +648,10 @@ def createEnsemDendrogramNew(data, metab_data, orig_data, norm=1, minMetabs=0, n
 
     #getting to clusters
     #recClusters(dataFinal,ax,groupDendLeaves,metab_data,minMetabs,numClusts)
-    recClustersPostVal(data,ax,metab_data,inds)
-    plt.savefig('ClusteringOnOriginalData.png',dpi=600,transparent=True)
+    opt_clusters, out_dir = recClustersPostVal(data, ax, metab_data, inds, heatmap_data=orig_data)
+    plt.savefig('ClusteringOnOriginalData.png', dpi=600, transparent=True)
     plt.show()
+    return opt_clusters, out_dir
 
 #ensemble dendrogram function
 def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, link='ward',dist='euclidean',func="ensemble",colMap ='viridis'):
@@ -379,29 +659,27 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, li
     Create ensemble dendrogram
     
     Input:
-
-    Required:
-
-    data - co-occurence matrix
-    metab_data - original raw data
-
-    Optional:
-
-    norm - 0 or 1 for the normalization of ensemble (should always be zero)
-    link - input the linkage function you would like the program to use for the ensemble clustering (or final clustering)
-    dist - distance measure you would like to use in the final clustering of the data. 
-    func - should always be ensemble. 
-
+        Required:
+        data - co-occurence matrix
+        metab_data - original raw data
+    
+        Optional:
+        norm - 0 or 1 for the normalization of ensemble (should always be zero)
+        link - input the linkage function you would like the program to use for 
+               the ensemble clustering (or final clustering)
+        dist - distance measure you would like to use in the final clustering of the data. 
+        func - should always be ensemble. 
 
     Output:
-    
-    Outputs the ensemble clustergram and sends the output to the function which generates the output files. 
-
+        Outputs the ensemble clustergram and sends the output to the function 
+        which generates the output files. 
     '''
+    
     #generate linkage function
-    linkageMetabOut = linkage(data,link,dist)
+    linkageMetabOut = linkage(data, link, dist)
+   
     #create the dendrogram
-    metaboliteDend = dendrogram(linkageMetabOut, orientation='left',no_plot=True)
+    metaboliteDend = dendrogram(linkageMetabOut, orientation='left', no_plot=True)
     metaboliteDendLeaves = metaboliteDend['leaves']
 
     #tranpose the data and then run an analysis on the groups.
@@ -410,8 +688,10 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, li
 
     #Create a linkage matrix for the data
     linkageGroupOut = linkage(groupCluster,link,dist)
+    
     #create the dendrogram of the output
     groupDend = dendrogram(linkageGroupOut,orientation='top',no_plot=True)
+   
     #get the leaves of the dendrogram to allow for the appropriate regrouping of the data
     groupDendLeaves = groupDend['leaves']
 
@@ -423,15 +703,20 @@ def createEnsemDendrogram(data,metab_data,norm=1,minMetabs=0, numClusts = 13, li
             #going through the metabolites
             dataFinal[j,i] = data[metaboliteDendLeaves[j],groupDendLeaves[i]]
 
-
-
-    g = sns.clustermap(data, figsize=(7, 5), yticklabels=False, xticklabels=False, row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=colMap, cbar_pos=(0.01, 0.8, 0.025, 0.175))
+    g = sns.clustermap(data, 
+                       figsize=(7, 5), 
+                       yticklabels=False, 
+                       xticklabels=False, 
+                       row_linkage=linkageMetabOut, 
+                       col_linkage=linkageGroupOut, 
+                       cmap=colMap, 
+                       cbar_pos=(0.01, 0.8, 0.025, 0.175)
+                       )
     ax = g.ax_heatmap
     axD = g.ax_row_dendrogram
 
-    
-    recClusters(dataFinal,ax,groupDendLeaves,metab_data,minMetabs,numClusts)
-    plt.savefig('EnsembleClustergram01.png',dpi=600,transparent=True)
+    recClusters(dataFinal, ax, groupDendLeaves, metab_data, minMetabs, numClusts)
+    plt.savefig('EnsembleClustergram.png', dpi=600, transparent=True)
     plt.show()
 
 #dendrogram function
@@ -440,40 +725,40 @@ def create_dendrogram(data, col_groups, norm=1,colOrder =[], link='ward',dist='e
     Create dendrogram for either the ensemble or clustergram functions
 
     Input:
-
-    Required:
-
-    data - standardized data recommended. 
-
+        Required:
+        data - standardized data recommended. 
     
-    Optional:
-    norm - 0 or 1 (0 is for standard clustergram, 1 for normalized clustergram)
-    link - input string of wanted linkage function. 
-    dist - input string of wanted distance measure.
-    func - 'clustergram' -> do not change the argument. 
+        Optional:
+        norm - 0 or 1 (0 is for standard clustergram, 1 for normalized clustergram)
+        link - input string of wanted linkage function. 
+        dist - input string of wanted distance measure.
+        func - 'clustergram' -> do not change the argument. 
 
     Output:
-
-    This function outputs a clustergram using the seaborn clustermap function 
+        This function outputs a clustergram using the seaborn clustermap function 
     '''
+    
     #increase recursion limit
     sys.setrecursionlimit(10**8)
 
     #set out color options and map to the groups. 
-    colorOpts = ('b','y','m','r','k','#929292')
+    colorOpts = ('blue','yellow','magenta','green',
+                 'black','cyan', 'gray', 'orange')
     
     #find the unique groups
+    col_groups = col_groups.dropna()
     col_groupsUni = col_groups.unique()
 
     #create a dictionary for mapping color options
     colRefDict = {}
     for i in range(len(col_groupsUni)):
-        colRefDict[col_groupsUni[i]] = colorOpts[i]
+        colRefDict[col_groupsUni[i]] = colorOpts[i % len(colorOpts)]
+
 
     colSeries = col_groups.map(colRefDict)
+    col_groups_original = col_groups.to_list()
     col_groups = colSeries.to_list()
     
-
     #Create the linkage matrix
     linkageMetabOut = linkage(data,link,dist)
 
@@ -488,50 +773,130 @@ def create_dendrogram(data, col_groups, norm=1,colOrder =[], link='ward',dist='e
     #Create a linkage matrix for the data
     linkageGroupOut = linkage(groupCluster,link,dist)
 
-    
     if norm == 0:
-        #g = sns.clustermap(data, figsize=(7, 5), row_linkage=linkageMetabOut, col_linkage=linkageGroupOut, cmap=color, cbar_pos=(0.01, 0.8, 0.025, 0.175))
-        g = sns.clustermap(data, method=link,metric=dist, figsize=(7, 5), col_cluster=True,col_colors=col_groups,cmap=color,yticklabels=False,xticklabels=True)
-        plt.savefig('Clustergram.png',dpi=600,transparent=True)
+        # For non-normalized clustergram, drop group colors and let seaborn
+        # cluster both rows and columns; show sample labels.
+        g = sns.clustermap(
+            data,
+            method=link,
+            metric=dist,
+            figsize=(7, 5),
+            col_cluster=True,
+            cmap=color,
+            yticklabels=False,
+            xticklabels=True,
+        )
+        
+        plt.savefig('Clustergram.png', dpi=600, transparent=True)
         plt.show()
 
     elif norm == 1:
-        #reordering data for users based upon preference
-        colOrder = [int(i) for i in colOrder]
-        colOrder = [i-1 for i in colOrder]
-        col_groups = [col_groups[i] for i in colOrder]
+        if colOrder:
+            try:
+                # If user entered group labels, map labels to *all* matching columns
+                if not str(colOrder[0]).lstrip('-').isdigit():
+                    new_inds = []
+                    for g in colOrder:
+                        matches = [idx for idx, lab in enumerate(col_groups_original) if lab == g]
+                        if matches:
+                            new_inds.extend(matches)
+                        else:
+                            logging.warning(f': Group label {g!r} not found in column groups; ignoring.')
+                    if not new_inds:
+                        logging.warning(': No valid group labels found in colOrder; using original order.')
+                        colOrder = []
+                    else:
+                        colOrder = new_inds
+                else:
+                    # numeric indices (1-based)
+                    colOrder = [int(i)-1 for i in colOrder]
 
-        data[:,:] = data[:,colOrder]
-        g = sns.clustermap(data,method=link,metric=dist,figsize=(7,5), col_cluster=False,cmap=color,col_colors=col_groups,yticklabels=False,xticklabels=False)
-        plt.savefig('Clustergram.png',dpi=600,transparent=True)
+                # require integer indices; otherwise drop custom order
+                if not all(isinstance(i, int) for i in colOrder):
+                    logging.warning(f': Non-integer entries in colOrder={colOrder!r}; using original order.')
+                    colOrder = []
+
+                if colOrder:
+                    col_groups = [col_groups[i] for i in colOrder]
+                    data[:, :] = data[:, colOrder]
+            except Exception as e:
+                logging.warning(f': Failed to apply colOrder {colOrder!r} ({e}); using original order.')
+                colOrder = []
+        
+        # Normalized clustergram: if a valid colOrder was applied, we still
+        # honor that ordering but drop the color blocks and show no labels.
+        g = sns.clustermap(
+            data,
+            method=link,
+            metric=dist,
+            figsize=(7, 5),
+            col_cluster=False,
+            cmap=color,
+            col_colors=None,
+            yticklabels=False,
+            xticklabels=False,
+        )
+        
+        plt.savefig('Clustergram.png', dpi=600, transparent=True)
         plt.show()
 
     elif norm == 2:
-        #reordering the data for user based upon preference
-        colOrder = [int(i) for i in colOrder]
-        colOrder = [i-1 for i in colOrder]
-        col_groups = [col_groups[i] for i in colOrder]
+        if colOrder:
+            try:
+                if not str(colOrder[0]).lstrip('-').isdigit():
+                    new_inds = []
+                    for g in colOrder:
+                        matches = [idx for idx, lab in enumerate(col_groups_original) if lab == g]
+                        if matches:
+                            new_inds.extend(matches)
+                        else:
+                            logging.warning(f': Group label {g!r} not found in column groups; ignoring.')
+                    if not new_inds:
+                        logging.warning(': No valid group labels found in colOrder; using original order.')
+                        colOrder = []
+                    else:
+                        colOrder = new_inds
+                else:
+                    colOrder = [int(i)-1 for i in colOrder]
 
-        data[:,:] = data[:,colOrder]
-        g = sns.clustermap(data,method=link,metric=dist,figsize=(7,5), col_cluster=False,cmap=color,col_colors=col_groups,yticklabels=False,xticklabels=False)
-        plt.savefig('Clustergram.png',dpi=600,transparent=True)
-        plt.show()
+                if not all(isinstance(i, int) for i in colOrder):
+                    logging.warning(f': Non-integer entries in colOrder={colOrder!r}; using original order.')
+                    colOrder = []
 
+                if colOrder:
+                    col_groups = [col_groups[i] for i in colOrder]
+                    data[:,:] = data[:,colOrder]
+            except Exception as e:
+                logging.warning(f': Failed to apply colOrder {colOrder!r} ({e}); using original order.')
+                colOrder = []
+       
+        g = sns.clustermap(data,
+                           method=link,
+                           metric=dist,
+                           figsize=(7,5),
+                           col_cluster=False,
+                           cmap=color,
+                           col_colors=col_groups,
+                           yticklabels=False,
+                           xticklabels=False
+                           )
         
+        plt.savefig('Clustergram.png', dpi=600, transparent=True)
+        plt.show()
 
 def cooccurrence(data):
     '''
-    Creation of the cooccurrence matrix for the determination of the number times each set of metabolites is clustered together
-    in a set of N clusterings. 
+    Creation of the cooccurrence matrix for the determination of the number 
+    times each set of metabolites is clustered together in a set of N clusterings. 
     
     Input:
-    data - standardized data or data that in general you would like to have an ensemble clustering performed on. 
+        data - standardized data or data that in general you would like to have
+        an ensemble clustering performed on. 
 
     Output:
-
-    NxN numpy array of zeros for the initial cooccurrence matrix. 
-
+        NxN numpy array of zeros for the initial cooccurrence matrix. 
     '''
+    
     logging.info(': Creating the co-occurrence matrix.')
 
     #find the number of metabolites
@@ -548,18 +913,18 @@ def cooccurrence(data):
 
 def popCooccurrence(clusters,coOcc,numClusterings):
     '''
-    Populate the cooccurrence matrix with the connections for each matrix based upon the number of clusterings that occur. 
+    Populate the cooccurrence matrix with the connections for each matrix based 
+    upon the number of clusterings that occur. 
     
     Input:
-
-    clusters - dictionary containing the clusters from clustering (link-dist)
-    coOcc - pass the current version of the cooccurence matrix. 
-    numClusterings - pass integer of the optimal number clusters. 
+        clusters - dictionary containing the clusters from clustering (link-dist)
+        coOcc - pass the current version of the cooccurence matrix. 
+        numClusterings - pass integer of the optimal number clusters. 
 
     Output:
-    
-    Updated NxN cooccurence matrix. 
+        Updated NxN cooccurence matrix. 
     '''
+    
     logging.info(': Populating the co-occurrence matrix.')
     dictKeys = list(clusters.keys())
     dictKeys = len(dictKeys)
@@ -592,18 +957,18 @@ def clustConnectLink(linkageCheck):
     Determine the connections from the scipy linkage function output.
 
     Input:
-
-    linkageCheck - a scipy linkage output 
+        linkageCheck - a scipy linkage output 
 
     Output:
-
-    validationClusters, the metabolites (other identity) output into a dictionary with M keys (N(metabolites)-1) 
-
+        validationClusters, the metabolites (other identity) output into a dictionary with M keys (N(metabolites)-1) 
     '''
+    
     logging.info(': Starting to determine metabolite clusters.')
+   
     #determine the clusters using a new alogorithm based on linkage method.
     #create a dictonary to store the linkage functions. 
     metabolites = np.zeros((linkageCheck.shape[0]+1,2))
+   
     #fill the array with the metabolite identifiers
     for i in range(linkageCheck.shape[0]+1):
         metabolites[i,0] = i
@@ -611,6 +976,7 @@ def clustConnectLink(linkageCheck):
 
     metabolites = metabolites.astype(int)
     linkageCheck = linkageCheck.astype(int)
+    
     #set the limit for the metabolites such that if the metabolites match up with the 
     metabLimit = linkageCheck.shape[0]
     limit = linkageCheck.shape[0]
@@ -643,6 +1009,7 @@ def clustConnectLink(linkageCheck):
 
             #search the array for values of the array which are equal to the one plus the number of metabolites studied
             unClustered = np.where(metabolites[:,1] != (metabLimit+1))
+            
             for j in range(1,linkageCheck.shape[0]):
                 clusters[j] = unClustered[0][j-1]
   
@@ -667,6 +1034,7 @@ def clustConnectLink(linkageCheck):
                 connect1 = oneCon[0][0]
                 curCon1 = int(connect1)
                 curCon2 = int(curCon2)
+                
             elif curCon1 > metabLimit and curCon2 > metabLimit:
                 #search the second column of the reference list for the appropriate value.
                 oneCon = np.where(metabolites[:,1] == curCon1)
@@ -675,6 +1043,7 @@ def clustConnectLink(linkageCheck):
                 twoCon = np.where(metabolites[:,1] == curCon2)
                 connect2 = twoCon[0][0]
                 curCon2 = int(connect2)
+                
             elif curCon1 <= metabLimit and curCon2 > metabLimit:
                 #search the second column of the list for the appropriate value. 
                 twoCon = np.where(metabolites[:,1] == curCon2)
@@ -703,11 +1072,14 @@ def clustConnectLink(linkageCheck):
                     if curCon1Check == True and curCon2Check == False:
                         curCon1Connect = 1
                         curCon1Location = k
+                    
                     elif curCon1Check == False and curCon2Check == True:
                         curCon2Connect = 1
                         curCon2Location = k
+                    
                     elif curCon1Check == False and curCon2Check == False:
                         unchanged.append(k)
+                    
                     elif curCon1Check == True and curCon2Check == True:
                         logging.warning(': Issue clustering the data a duplication has been discovered.')
 
@@ -722,11 +1094,14 @@ def clustConnectLink(linkageCheck):
                     if curCon1Check == True and curCon2Check == False:
                         curCon1Connect = 1
                         curCon1Location = k
+                    
                     elif curCon1Check == False and curCon2Check == True:
                         curCon2Connect = 1
                         curCon2Location = k
+                    
                     elif curCon1Check == False and curCon2Check == False:
                         unchanged.append(k)
+                    
                     elif curCon1Check == True and curCon2Check == True:
                         logging.warning(': Issue clustering the data a duplication has been discovered.')
 
@@ -750,6 +1125,7 @@ def clustConnectLink(linkageCheck):
                         for m in newConnect:
                             metabolites[m,1] = limit
                         limit += 1
+                   
                     elif isinstance(newConnect1,list) and isinstance(newConnect2, np.integer):
                         newConnect = newConnect1
                         intList = newConnect[:] + [newConnect2]
@@ -757,6 +1133,7 @@ def clustConnectLink(linkageCheck):
                         for m in intList:
                             metabolites[m,1] = limit
                         limit += 1
+                   
                     elif isinstance(newConnect1,list) and isinstance(newConnect2, int):
                         newConnect = newConnect1
                         intList = newConnect[:] + [newConnect2]
@@ -764,6 +1141,7 @@ def clustConnectLink(linkageCheck):
                         for m in intList:
                             metabolites[m,1] = limit
                         limit += 1
+                   
                     elif isinstance(newConnect1,np.integer) and isinstance(newConnect2, list):
                         newConnect = newConnect2
                         intList = newConnect[:] + [newConnect1]
@@ -771,6 +1149,7 @@ def clustConnectLink(linkageCheck):
                         for m in intList:
                             metabolites[m,1] = limit
                         limit += 1
+                   
                     elif isinstance(newConnect1,int) and isinstance(newConnect2, list):
                         newConnect = newConnect2
                         intList = newConnect[:] + [newConnect1]
@@ -778,24 +1157,28 @@ def clustConnectLink(linkageCheck):
                         for m in intList:
                             metabolites[m,1] = limit
                         limit += 1
+                    
                     elif isinstance(newConnect1,np.integer) and isinstance(newConnect2,np.integer):
                         newConnect = [newConnect1, newConnect2]
                         clusters[0] = newConnect
                         for m in newConnect:
                             metabolites[m,1] = limit
                         limit += 1
+                    
                     elif isinstance(newConnect1,int) and isinstance(newConnect2,np.integer):
                         newConnect = [newConnect1, newConnect2]
                         clusters[0] = newConnect
                         for m in newConnect:
                             metabolites[m,1] = limit
                         limit += 1
+                    
                     elif isinstance(newConnect1,np.integer) and isinstance(newConnect2,np.integer):
                         newConnect = [newConnect1, newConnect2]
                         clusters[0] = newConnect
                         for m in newConnect:
                             metabolites[m,1] = limit
                         limit += 1
+                    
                     elif isinstance(newConnect1,int) and isinstance(newConnect2,int):
                         newConnect = [newConnect1, newConnect2]
                         clusters[0] = newConnect
@@ -812,13 +1195,13 @@ def clustConnect(dataMST,mstOutNp):
     Clustering connections determination from the minimum spanning tree output. 
 
     Input:
-    dataMST - direct output from the MST
-    mstOutNp - numpy array of the output. 
+        dataMST - direct output from the MST
+        mstOutNp - numpy array of the output. 
 
     Output:
-    dictionary of all possible clusterings combinations for the data. 
-
+        dictionary of all possible clusterings combinations for the data. 
     '''
+    
     logging.info(': Determining the metabolite cluster for MST.')
     #Create an empty dictionary that will contain the clusters
     clusters = {}
@@ -858,6 +1241,7 @@ def clustConnect(dataMST,mstOutNp):
             for j in range(1,dataMST.shape[0]):
                 #input the cluster values into the dictionary
                 clusters[j] = unClustered[0][j-1]
+       
         else:
             #save the previous dictionary 
             clusterPrevious = clusters
@@ -899,8 +1283,10 @@ def clustConnect(dataMST,mstOutNp):
                     elif curCon1Check == False and curCon2Check == True:
                         curCon2Connect = 1
                         curCon2Location = k
+                   
                     elif curCon1Check == False and curCon2Check == False:
                         unchanged.append(k)
+                   
                     elif curCon1Check == True and curCon2Check == True:
                         logging.warning(': Issue clustering the data a duplication has been discovered.')
 
@@ -918,8 +1304,10 @@ def clustConnect(dataMST,mstOutNp):
                     elif curCon1Check == False and curCon2Check == True:
                         curCon2Connect = 1
                         curCon2Location = k
+                   
                     elif curCon1Check == False and curCon2Check == False:
                         unchanged.append(k)
+                    
                     elif curCon1Check == True and curCon2Check == True:
                         logging.warning(': Issue clustering the data a duplication has been discovered.')
 
@@ -941,14 +1329,17 @@ def clustConnect(dataMST,mstOutNp):
                     if isinstance(newConnect1,list) and isinstance(newConnect2, list):
                         newConnect = newConnect1 + newConnect2
                         clusters[0] = newConnect
+                   
                     elif isinstance(newConnect1,list) and isinstance(newConnect2, np.integer):
                         newConnect = newConnect1
                         intList = newConnect[:] + [newConnect2]
                         clusters[0] = intList
+                    
                     elif isinstance(newConnect1,np.integer) and isinstance(newConnect2, list):
                         newConnect = newConnect2
                         intList = newConnect[:] + [newConnect1]
                         clusters[0] = intList
+                    
                     elif isinstance(newConnect1,np.integer) and isinstance(newConnect2,np.integer):
                         newConnect = [newConnect1, newConnect2]
                         clusters[0] =newConnect
@@ -963,15 +1354,16 @@ def plotting(link='',dist=''):
     Plotting the clustergram from the above create_dendrogram function. 
 
     Input:
-
-    link - list of the linkage functions used to cluster your data. ex. createClustergram calls plotting after performing a ward-euclidean clustering link accepts the ward argument in a string. 
-    dist - list of the distance measures used to cluster your data. See link for example. 
+        link - list of the linkage functions used to cluster your data. ex. 
+               createClustergram calls plotting after performing a ward-euclidean 
+               clustering link accepts the ward argument in a string. 
+        dist - list of the distance measures used to cluster your data. 
+               See link for example. 
 
     Output:
-    
-    plots the clustergram. 
-
+        lots the clustergram. 
     '''
+    
     logging.info(': Plotting Clustergram!')
     plt.xlabel('Clustered Metabolites')
     logging.info(': Saving...')
@@ -1020,13 +1412,12 @@ def timeConverter(runTime):
     Convert run time in seconds to a measure of Hours:Minutes:Seconds.
 
     Input:
-    runTime - seconds of run time. 
+        runTime - seconds of run time. 
 
     Output:
-
-    runTime a string in HH:MM:SS format. 
-
+        runTime a string in HH:MM:SS format. 
     '''
+    
     #immediately determine the number of full hours that were consumed
     hrs = runTime/3600
     hrs = int(hrs)
@@ -1068,14 +1459,12 @@ def Validate(data,dists,num_groups):
     Determine the appropriate number of clusters for the optimal clustering of a input data set. 
     
     Input:
-    data - dictionary of the clusters for validation.
-    dists - standardized or submitted non-standardized data. 
-    num_groups - number of groups in the data set. 
+        data - dictionary of the clusters for validation.
+        dists - standardized or submitted non-standardized data. 
+        num_groups - number of groups in the data set. 
 
     Output:
-
-    Array of the number of clusters and the validation index measure. 
-
+        Array of the number of clusters and the validation index measure. 
     '''
 
     #grab the input dictionary size
@@ -1090,10 +1479,8 @@ def Validate(data,dists,num_groups):
     initTime = time.time()
 
     for i in range(startPoint,clusterings):
-        #**********************************************************************************************************
-        #**********************************Threading should occur here*********************************************
-        #**********************************************************************************************************
-        #**********************************************************************************************************
+
+        #*********************Threading should occur here**********************
         
         startTime = time.perf_counter()
         #grab the current set of metabolite clusters
@@ -1102,8 +1489,8 @@ def Validate(data,dists,num_groups):
         #from the current clusters determine the length in order to determine the next step
         curClustersLength = len(curClusters)
 
-        #sum of intra cluster distances
-        sumIntra = 0
+        #sum of intra cluster distances (keep as scalar float)
+        sumIntra = 0.0
 
         #create a numpy array for that contains the cluster centers for calculation of the inter cluster distance.
         centersNum = np.zeros((curClustersLength,num_groups))
@@ -1140,7 +1527,8 @@ def Validate(data,dists,num_groups):
                     curMetab = clustCoordinates[k,:]
                     curDistIntra[0,:] = curMetab
                     curDistIntra[1,:] = center
-                    sumIntra += pdist(curDistIntra)
+                    # pdist returns a length-1 array here; store its scalar value.
+                    sumIntra += float(pdist(curDistIntra)[0])
 
             elif isinstance(cluster, np.integer) or isinstance(cluster,int):
                 #find the center and put it into the dictionary
@@ -1149,10 +1537,10 @@ def Validate(data,dists,num_groups):
                 centersNum[j,:] = center
 
         #calculate the average compactness of the clusters
-        intraDist = sumIntra/(dists.shape[0])
+        intraDist = float(sumIntra / dists.shape[0])
         
         # find the distance between the centers
-        interDist = 1000
+        interDist = float("inf")
         centerDists = pdist(centersNum)
         for j in range(len(centerDists)):
             #determine the minimum non-zero value in the distance array
@@ -1161,14 +1549,14 @@ def Validate(data,dists,num_groups):
                 interDist = centerDists[j]
 
         #calculate the inter-cluster distance for the current cluster set-up
-        if len(centerDists) > 0:
+        if len(centerDists) > 0 and np.isfinite(interDist) and interDist != 0:
             #calculate the validation index
-            val_index[0,i] = intraDist/interDist
+            val_index[0,i] = float(intraDist / interDist)
             val_index[1,i] = clusterings - (i)
             val_index[1,i] = len(data[0])
 
         # elif len(dataMST[:,0]) == 0:
-        elif len(centerDists) == 0:
+        elif len(centerDists) == 0 or not np.isfinite(interDist) or interDist == 0:
             interDist = 0
             #set the validation index to a large number since denominator would be zero in current config.
             val_index[0,i] = 1
@@ -1179,35 +1567,12 @@ def Validate(data,dists,num_groups):
 
     return val_index
 
-def who(curUser):
-    '''
-    Determines who is currently using the GUI for ease of saving of log files, and outputs. 
-
-    Input:
-    curUser - the current MSU NetID for current user. 
-
-    Output:
-
-    Name of current user. 
-    '''
-    #define dictionary of the NetID's for identification of the user for the naming of PDF
-    file = open('C:/Users/Public/Documents/June_Lab_ClusteringGUI-master/Users.txt','r')
-    contents = file.read()
-    users = ast.literal_eval(contents)
-    
-    try:
-        curUser = users[curUser]
-    except:
-        logging.error(': Unknown User')
-        messagebox.showinfo(title='New User?', message = 'Are you a new user on the server? Contact Brady to have your name added!')
-        curUser = 'Anonyomous'
-    return curUser 
-
 def files(directory):
     #******************* Do we need this or should we update this? 
     '''
     Checks input directory for pngs.
     '''
+    
     #checks the given path for files ending in .png
     directory = '*.png'
     chk_buffer = glob.glob(directory)
@@ -1219,17 +1584,17 @@ def imageSize(file):
     Function checks for image size ratio for appropriate sizing in the pdf generator. 
 
     Input:
-    file - either .png/.jpg/.jpeg (make sure to include full path)
+        file - either .png/.jpg/.jpeg (make sure to include full path)
 
     Output:
-    ratio of the image size. 
-
+        ratio of the image size. 
     '''
+    
     #determines the size of the image being imported to a pdf document
     im = Image.open(file)
 
     size = im.size
-    ratio = size[0]/size[1]
+    ratio = size[0] / size[1]
 
     return ratio
 
@@ -1238,17 +1603,23 @@ def pdfHeader(file):
     Determine the appropriate header based upon the name of the file. 
 
     Input: 
-    file - input full file path to the .png/.jpg/.jpeg image
+        file - input full file path to the .png/.jpg/.jpeg image
 
     Output:
-
-    string containing the appropriate header for the image. 
+        string containing the appropriate header for the image. 
     '''
     #define a list with the shortened file names
-    identifiers = ['pca_pair','pca_scree','pca_loading','pca_biplot','pls_pair','pls_score2d','pls_score3d','pls_loading','pls_cv','pls_imp','tree','fc','tt','volcano','PCA','pca_score2d','Peak_Intensity']
+    identifiers = ['pca_pair','pca_scree','pca_loading','pca_biplot',
+                   'pls_pair','pls_score2d','pls_score3d','pls_loading',
+                   'pls_cv','pls_imp','tree','fc','tt','volcano','PCA',
+                   'pca_score2d','Peak_Intensity']
 
     #define a list with names for shortened file names
-    names = ['PCA pairs','PCA Scree plots','PCA Loading','PCA biplot','PLS-DA Pairs','PLS-DA 2D score','PLS-DA 3D plot','PLS-DA Loading','PLS-DA CV','PLS-DA Imp','Dendrogram','Fold Change','T-test','Volcano Plot','PCA','PCA 2D score','Peak Intensities']
+    names = ['PCA pairs','PCA Scree plots','PCA Loading','PCA biplot',
+             'PLS-DA Pairs','PLS-DA 2D score','PLS-DA 3D plot',
+             'PLS-DA Loading','PLS-DA CV','PLS-DA Imp','Dendrogram',
+             'Fold Change','T-test','Volcano Plot','PCA','PCA 2D score',
+             'Peak Intensities']
 
     for i in range(len(identifiers)):
         #find the length of the current evaluation list
@@ -1265,7 +1636,7 @@ def pdfHeader(file):
             header = names[i]
             return header
         if i == len(identifiers)-1 and check == False:
-            header = 'Unknown test, have Brady add the new test to the text file.'
+            header = 'Unknown test'
             return header
         
 def validationSil(coOcc, link_mat,numClusters):
@@ -1274,13 +1645,13 @@ def validationSil(coOcc, link_mat,numClusters):
     not give out the desired number of clusters. 
     
     Inputs: 
-    CoOcc - (N x N) co-occurrence matrix from the ensemble clustering
-    link_mat - (scipy linkage object) link matrix created by linkage in the clustering. 
-    numClusters - (integer) the number of clusters to determine before sending the labels to the metrics.silhouette_score(*args,**kwargs)
+        CoOcc - (N x N) co-occurrence matrix from the ensemble clustering
+        link_mat - (scipy linkage object) link matrix created by linkage in the clustering. 
+        numClusters - (integer) the number of clusters to determine before 
+                      sending the labels to the metrics.silhouette_score(*args,**kwargs)
 
     Output:
-    This function returns the Silhouette score. 
-
+        This function returns the Silhouette score. 
     '''
 
     #get the labels from the clustering.
@@ -1288,17 +1659,14 @@ def validationSil(coOcc, link_mat,numClusters):
 
     return metrics.silhouette_score(1-np.around(coOcc,decimals=3),labels_,metric='precomputed')
         
-def recClustersPostVal(coOcc,ax,metab_data,inds):
+def recClustersPostVal(coOcc,ax,metab_data,inds,heatmap_data=None):
     '''
     '''
-    print(coOcc)
 
     #calculate the linkage matrix
     #generate linkage function
-    dissim = 1 - np.around(coOcc,decimals=3)
-    dissim = squareform(dissim)
-    link_mat = linkage(dissim,'average')
-    
+    link_mat = linkage(coOcc, method = 'average')
+
     #create a multithreading version of the output.
     #create an empty list
     argsMulti = []
@@ -1311,51 +1679,77 @@ def recClustersPostVal(coOcc,ax,metab_data,inds):
         with Pool(config.numThreads) as p:
             scores = p.starmap(validationSil,argsMulti)
     scores = np.array(scores)
-    print(scores)
 
-    
-    # #get the validation scores out for the considered solution. 
-    # scores = np.zeros((2,9))
-    # for i in range(2,11):
-    #     scores[1,i-2] = validationSil(coOcc,link_mat,i);
-    #     scores[0,i-2] = i
-    # print(scores)
-    #search the list of where the best clustering solution is, 
-    # optClustCoOcc = np.where(scores[1,:] == np.max(scores[1,:]))[0][0] + 2
-    optClustCoOcc = np.where(scores == np.max(scores))[0][0] + 2
+    optClustCoOcc = int(np.where(scores == np.max(scores))[0][0] + 2)
     messagebox.showinfo(message="The optimal number of clusters is: " + str(optClustCoOcc) +" clusters")
+    
     #labels for the solution. 
-    labels = fcluster(link_mat,optClustCoOcc,criterion='maxclust')-1
+    labels = fcluster(link_mat, optClustCoOcc, criterion='maxclust')
+
+    # Ensure we have a consistent output folder and column names that downstream
+    # tools (e.g. PeaksToPathways) expect.
+    base_dir = os.getcwd()
+    out_dir = os.path.join(base_dir, 'EnsembleOutputFiles')
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Identify the feature id / rtmed columns from the original data.
+    mz_col, rt_col = detectColumns(metab_data)
 
     for i in np.unique(labels):
-        #get the list of elements which need to be discovered in the graph.
-        elements_to_find = list(np.where(np.unique(labels)[i-1]==labels)[0]) 
+        # elements belonging to this cluster label
+        elements_to_find = list(np.where(labels == i)[0])
+        
         #update the file name for the cluster number identified.
-        filename = 'Cluster' + str(i+1) +'.xlsx'
-        #save the element data to excel. sheet. 
-        metab_data.loc[elements_to_find].to_excel(filename)#,index=False)
+        filename = os.path.join(out_dir, 'Cluster' + str(i+1) + '.xlsx')
+        
+        # Save in the standard cluster-file format:
+        # - Identities: feature id (mz/feature)
+        # - M1..Mn: sample intensities (for convenience)
+        # - rt_med: rtmed
+        cur = metab_data.iloc[elements_to_find].copy()
+        sample_cols = [c for c in cur.columns if c not in (mz_col, rt_col)]
+        out = cur[[mz_col] + sample_cols + [rt_col]].copy()
+        out = out.rename(columns={mz_col: 'Identities', rt_col: 'rt_med'})
+        safeToExcel(out, filename, index=False)
+       
         #use list comprehension to create a list of found items.
         indices = [i for i, value in enumerate(inds) if value in elements_to_find] 
 
-        #create red boxes around the clusters on a clustergram. 
-        ax.plot([0,metab_data.shape[1]],[min(indices),min(indices)],'r--')
-        ax.plot([0,metab_data.shape[1]],[max(indices)+1 ,max(indices)+1 ],'r--')
+        #create boxes around the clusters on a clustergram. 
+        ax.plot([0,metab_data.shape[1]],[min(indices),min(indices)],'k--')
+        ax.plot([0,metab_data.shape[1]],[max(indices)+1 ,max(indices)+1 ],'k--')
         ax.plot([0,0],[min(indices),max(indices)+1],'r--')
-        ax.plot([metab_data.shape[1]-2,metab_data.shape[1]-2],[min(indices),max(indices)+1],'r--')
-    return
+        ax.plot([metab_data.shape[1]-2,metab_data.shape[1]-2],[min(indices),max(indices)+1],'k--')
+
+    # ------------------------------------------------------------------
+    # Ensemble cluster-to-feature mapping (use CoOcc Heatmap tool for PDFs)
+    # ------------------------------------------------------------------
+    try:
+        labels_1based = labels + 1
+        mapping_df = metab_data.copy()
+        mapping_df.insert(0, 'EnsembleCluster', labels_1based)
+        map_path = os.path.join(out_dir, 'EnsembleClusterAssignments.xlsx')
+        safeToExcel(mapping_df, map_path, index=False)
+    except Exception as e:
+        logging.warning(
+            f": Failed to save EnsembleClusterAssignments Excel ({e})"
+        )
+
+    return optClustCoOcc, out_dir
 
 def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numClusts):
     '''
-    Determines the areas containing 100% clusters metabolites for the 13 separate clusterings performed. 
+    Determines the areas containing 100% clusters metabolites for 
+    the N separate clusterings performed. 
 
     Input:
-    dataFinal - final formatted data (reorganized into the ensemble heatmap)
-    heatmapAxes - input matplotlib axes for plotting of dashed lines.
-    groupDendLeaves - leaves of current dendrogram being studied.
-    metab_data - raw data.
+        dataFinal - final formatted data (reorganized into the ensemble heatmap)
+        heatmapAxes - input matplotlib axes for plotting of dashed lines.
+        groupDendLeaves - leaves of current dendrogram being studied.
+        metab_data - raw data.
 
     Output:
-    sends data to the ensembleClustersOut function to export ensemble clusters. 
+        sends data to the ensembleClustersOut function to export ensemble clusters. 
     '''
 
     #determine the appropriate number ensemble clusters and there location
@@ -1376,11 +1770,11 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
             arrays = {0:np.linspace(j, maxMetab+1, num=5),1:np.linspace(j, j, num=5),2:np.linspace(maxMetab+1, maxMetab+1, num=5)}
 
             if len(found[0]) >= minMetabs:
-                heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.plot(arrays[1], arrays[0], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.plot(arrays[2], arrays[0], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.text(j+0.5,j+0.5,"1",color='red',fontsize=7)
+                heatmapAxes.plot(arrays[0], arrays[1], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[0], arrays[2], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[1], arrays[0], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[2], arrays[0], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.text(j+0.5,j+0.5,"1",color='k',fontsize=7)
             j += 1
             del(arrays)
 
@@ -1392,15 +1786,16 @@ def recClusters(dataFinal,heatmapAxes,groupDendLeaves,metab_data,minMetabs,numCl
 
             if len(found[0]) >= minMetabs:
 
-                heatmapAxes.plot(arrays[0], arrays[1], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.plot(arrays[0], arrays[2], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.plot(arrays[1], arrays[0], 'r--', linewidth=3, markersize=3)
-                heatmapAxes.plot(arrays[2], arrays[0], 'r--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[0], arrays[1], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[0], arrays[2], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[1], arrays[0], 'k--', linewidth=3, markersize=3)
+                heatmapAxes.plot(arrays[2], arrays[0], 'k--', linewidth=3, markersize=3)
                 numMetabs = str(maxMetab - j + 1)
                 midPoint = ((maxMetab+1)+j)/2
-                heatmapAxes.text(midPoint,midPoint,numMetabs,color='red',fontsize=7)
+                heatmapAxes.text(midPoint,midPoint,numMetabs,color='k',fontsize=7)
             j = maxMetab + 1
             del(arrays)
+            
     messagebox.showinfo(title="Success",message="Successfully created ensemble clustergram and cluster files!!")
     return
 
@@ -1409,14 +1804,13 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     Intake the connected clusters of all ones and output a file with the appropriate title. This function should not be called on
     it's own but should be called through the recClusters function (which automatically recommends clusters for the user).
 
-
     Input:
-    found - metabolites which have clustred together all 13 times. 
-    groupDendLeaves - leaves of the current clustering of interest. 
-    metab_data - raw data
+        found - metabolites which have clustred together all 13 times. 
+        groupDendLeaves - leaves of the current clustering of interest. 
+        metab_data - raw data
 
     Output:
-    csv files of the found metabolite clusters. 
+        csv files of the found metabolite clusters. 
     '''
 
     logging.info(': Creating ensemble clusters output files.')
@@ -1447,7 +1841,6 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
     except:
         logging.warning(': Deleting variable prior to its creation is not advised!!')
 
-
     #check for an EnsembleOutputFiles directory in the current directory
     if os.path.isdir('EnsembleOutputFiles'):
         os.chdir('EnsembleOutputFiles')
@@ -1466,88 +1859,43 @@ def ensembleClustersOut(found,groupDendLeaves,metab_data,minMetabs):
 
         #create column headers for the data frame
         columns = []
-        for i in range(columnHeaders-1):
-            columns.append("M"+str(i+1))
-        columns.append("rt_med")
-
+        columns = [f'M{i + 1}' for i in range(foundMetabs.shape[1] - 1)] + ['rt_med']
+        
+        # turn into dataframe
         foundMetabs = pd.DataFrame(foundMetabs,columns=columns)
-
-        #add identities to the first column of the data that will be output
-        foundMetabs.insert(0, "Identities", idents, True)
-
+        foundMetabs.insert(0, 'Identities', idents, True)
+        
         chkBuffer = glob.glob("*.xlsx")
         count = 1
-        if 'EnsembleCluster01.xlsx' in chkBuffer:
-            checkVal = False
-            while checkVal == False:
-                count += 1
-                #search the "buffer" for ensemble cluster
-                if count < 10:
-                    #determine if the file has already been made
-                    curFileCheck = ensemPre + '0' + str(count) + ensemSuf
-                    if curFileCheck not in chkBuffer:
-                        checkVal = True
-                        ensemFile = curFileCheck
-                else:
-                    curFileCheck = ensemPre + str(count) + ensemSuf
-                    if curFileCheck not in chkBuffer:
-                        checkVal = True
-                        ensemFile = curFileCheck
-            foundMetabs.to_excel(ensemFile, index=False)
-        else:
-            ensemFile = ensemPre + '0'+ str(count) + ensemSuf 
-            foundMetabs.to_excel(ensemFile, index=False)
+        base  = 'EnsembleCluster'
+        while True:
+            fname = base + (f'0{count}' if count < 10 else str(count)) + '.xlsx'
+            if fname not in chkBuffer:
+                break
+            count += 1
+        safeToExcel(foundMetabs, fname, index=False)
         
 
     #change directory back to the original directory
     os.chdir('..')
     logging.info(':Success!')
-
-def readInColumns(metab_data):
-    '''
-    Robust excel reading in tool. 
-
-    Input:
-    metab_data -raw excel file
-
-    Output:
-    Columns of metabolites, this goes with the convention that the submitted files contain the metabolite intensities in the 2->(N-1) columns.
-    '''
-    #creating a numpy array that is the size of the data that is being read in.
-    data = np.zeros((metab_data.shape[0],metab_data.shape[1]-2))
-
-    columnsData = list(metab_data.columns)
-    
-    for i in range(len(columnsData)):
-        if i > 0 and i < len(columnsData)-1:
-            #try to add the values to the current medians values
-            try:
-                medianCur = metab_data[columnsData[i]]
-            except:
-                logging.error(': Unable to read in column headers. ')
-                messagebox.showerror(title='Error',message='Program unable to read column headers, check submitted file!')
-
-            #add the medians data to the array to be clustered
-            data[:,i-1] = medianCur
-    
-    return data
+    return
     
 def select(index,dend,link,linkDir,linkClust,data_orig):
     '''
-    Function responsible for the coloring clustergram based upon users selection. This function is also responsible for saving the selected cluster
+    Function responsible for the coloring clustergram based upon users selection. 
+    This function is also responsible for saving the selected cluster
     
-
     Input:
-    Index of dendrogram
-    dendrogram
-    linkage
-    linkage directory 
-    linkage clustering
-    original data
+        Index of dendrogram
+        dendrogram
+        linkage
+        linkage directory 
+        linkage clustering
+        original data
 
     Output:
-    excel workbook with selected values
-
+        excel workbook with selected values
     '''
     
     #getting the current color number
@@ -1569,8 +1917,10 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
     #grab the first value of the list. 
     dCord = -index[0]
     iCord = -index[1]
+   
     #value which needs to be subtracted from each of the indicies
     sub = linkDir[0][0]
+    
     try:
         countLink = 0
         curSelection = -1
@@ -1585,6 +1935,7 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
 
         colors = ['steelblue','darkkhaki','darkorchid']
         lenColors = len(colors)
+       
         if curSelection != -1:
             #if current selection is valid grab the curSelection list from the linkage directory
             curList = linkDir[curSelection]
@@ -1635,15 +1986,13 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
                 plt.draw()
     except:
         logging.error('Cannot select the side of a linkage!')
-        messagebox.showerror(title="Error",message='Make sure to select vertical lines only, selecting horizontal lines will continue to result in this error! YOU MAY NEED TO RESTART THE CLUSTER SELECTION!')
+        messagebox.showerror(title="Error",
+                             message='Make sure to select vertical lines only, selecting horizontal lines will continue to result in this error! YOU MAY NEED TO RESTART THE CLUSTER SELECTION!')
     
     
     with open('ClusterReference.txt') as f:
         lines = f.read()
 
-
-
-    
     #make the current selection into a .csv file to be submitted to the peaks to Pathways function.
     selectedMetabs = np.zeros([len(clustMetabs),data_orig.shape[1]])
     p2pMetabs = np.ones([data_orig.shape[0],3])
@@ -1712,24 +2061,26 @@ def select(index,dend,link,linkDir,linkClust,data_orig):
         p2pF = "P2P_"+ clustFile.rstrip('.xlsx') +'.csv'
         p2pFile.to_csv(p2pF,index=False)
     logging.info(':Success!')
+    return
 
-
-def linkDir(linkageOne,maxIndex):
+def linkDir(linkageOne, maxIndex):
     '''
-    Creates dictionary containing all of the indicies and corresponding parameter which goes with the index.
+    Creates dictionary containing all of the indicies and corresponding 
+    parameter which goes with the index.
 
     Input:
-
-    linkage function output
-    maxIndex??
+        linkage function output
+        maxIndex
 
     Output:
-
-    Dictionary containing all of the iterations of the creation of the clustering solution
+        Dictionary containing all of the iterations of the creation of 
+        the clustering solution
 
     '''
+    
     #initializing dictionary for storage of the linkage names.
     linkageDir = {}
+   
     #create list with the linkage names embedded. 
     linkNums = []
 
@@ -1769,109 +2120,43 @@ def linkDir(linkageOne,maxIndex):
 
     return linkageDir
 
-
-def readAndPreProcess(file='',transform = 'None', scale ='None',func='else',first ='1'):
-    '''
-    readAndPreProcess
-
-    This function is designed to remove the reading in and pre-processing of the data from the beginning of each function which needs to read-in and pre-process the data, saying large amounts of lines in this program.
-
-    Input:
-    transform
-    scale
-    func
-
-    Output:
-    Pre-processed data
-
-    '''
-
-    #check that the file the user selects is appropriate
-    ###Should only be used when reading in excel files.
-    metab_data = fileCheck(file=file)
-    if metab_data is None:
-        #log error message and return for soft exit.
-        logging.error(': Error loading in the Excel sheet.')
-        return
-
-   
-    if func =='CC':
-        metab_dataCol = list(metab_data.columns)
-        col_groups = metab_data.iloc[0]
-        col_groups = col_groups.to_list()
-        col_groups.pop(0)
-        col_groups.pop(len(col_groups)-1)
-        col_groups = pd.Series(col_groups,copy=False)
-        metab_data = metab_data.drop(0,axis=0)
-        #read in data
-        # data = readInColumns(metab_data)
-        data = readInColumns(metab_data)
-
-        #put the data through the appropriate transformations. 
-        data = transformations(data,transform=transform,scale=scale, first=first)
-
-        return data, col_groups
-
-    elif func == 'ANHM':
-        #remove the first row of data.
-        metab_data = metab_data.iloc[1:,:]
-        # data = readInColumns(metab_data)
-        data = readInColumns(metab_data)
-
-        data = transformations(data,transform=transform,scale=scale,first=first)
-        return data
-
-    elif func =='Raw':
-        metab_data = metab_data.drop(0,axis=0)
-        metab_data.reset_index(inplace=True,drop=True)
-        return metab_data
-
-    else:
-        #read in data
-        # data = readInColumns(metab_data)
-        data = readInColumns(metab_data)
-        #transform the data
-        data = transformations(data,transform=transform,scale=scale,first=first)
-        return data
-
-
-    
 def createHeatmapFig(clMap):
     '''
     This function is responsible for creating the heatmap that is submitted by the user. 
 
     Input: 
-    clMap: choosen color map scheme
+        clMap: choosen color map scheme
 
     Output:
-    editable pdf that with each of the selected clusters.
+        editable pdf that with each of the selected clusters.
     '''
 
-    #read in excel sheet of Heatmap.xlsx
+    # read in data (prefer the shared loader so Excel engine issues are consistent)
     fileName = filedialog.askopenfilename()
-    try:
-        data = pd.read_excel(fileName)
-    except:
-        logging.error(': Likely that no file was selected, or there was an issue connecting to the drive!')
-        messagebox.showerror(title="Error",message="Could not find file or no file was selected!")
+    if not fileName:
+        logging.error(': No file was selected for heatmap figure.')
+        messagebox.showerror(title="Error", message="No file was selected!")
+        return
+
+    data = fileCheck(file=fileName)
+    if data is None:
         return
             
     #input the dataframe into the heatmap function
-    g = sns.heatmap(data,yticklabels=False,cmap=clMap)
+    g = sns.heatmap(data, yticklabels=False, cmap=clMap)
 
     #save the heatmap of the data
-    plt.savefig('Heatmap.png',dpi=600)
+    plt.savefig('Heatmap.png', dpi=600, transparent=True)
     del(g)
 
     #create the pdf for publication
     pdf = FPDF('L','pt',(2880,3840))
     pdf.add_page()
     pdf.set_line_width(10)
-    pdf.set_font('Arial','B',54)
+    pdf.set_font('Arial', 'B', 54)
 
     #add image to pdf
-    pdf.image('Heatmap.png',0,0)
-
+    pdf.image('Heatmap.png', 0,0)
 
     #open the ClusterReference.txt file.
     with open('ClusterReference.txt') as f:
@@ -1909,7 +2194,6 @@ def createHeatmapFig(clMap):
                 #round using the floor no matter pixel fraction
                 boxHeights[i] = math.floor(boxHeights[i])
 
-
     startPointX = 177
     startPointY = 346
     boxWidth = 2687
@@ -1922,56 +2206,63 @@ def createHeatmapFig(clMap):
     diffY = startPointY - curY
 
     pdf.ln(317.65)
-    pdf.cell(149.65,h=100,ln=0)
+    pdf.cell(149.65, h=100, ln=0)
 
     firstMetab = 1
     for i in range(len(boxHeights)):
 
         if i == 0:
             #make a box with the appropriate height and width, and the correct starting position.
-            pdf.rect(startPointX,startPointY,boxWidth,boxHeights[i])
+            pdf.rect(startPointX, startPointY, boxWidth, boxHeights[i])
             f1 = str(i+1)
-            pdf.cell(300,h=math.floor(boxHeights[i]/2),txt=f1,ln=2,align='C')
+            pdf.cell(300, h=math.floor(boxHeights[i]/2), txt=f1, ln=2, align='C')
             eR = int((firstMetab-1) + int(lineNew[2]))
             rMetab = str(firstMetab) + ':' + str(eR)
-            pdf.cell(300,h=math.floor(boxHeights[i]/2),txt=rMetab,ln=2,align='C')
+            pdf.cell(300, h=math.floor(boxHeights[i]/2), txt=rMetab, ln=2, align='C')
 
 
         else:
             startPointY += boxHeights[i-1]
-            pdf.rect(startPointX,startPointY,boxWidth,boxHeights[i])
+            pdf.rect(startPointX, startPointY, boxWidth, boxHeights[i])
             #put the i + 1 value in as the text
             f1 =str(i + 1)
-            pdf.cell(300,h=math.floor(boxHeights[i]/2),txt =f1,ln=2,align='C')
+            pdf.cell(300, h=math.floor(boxHeights[i]/2), txt =f1, ln=2, align='C')
             sR = eR + 1
             eR += int(lineNew[i+2])
             rMetab = str(sR) + ':' + str(eR)
-            pdf.cell(300,h=math.floor(boxHeights[i]/2),txt=rMetab, ln=2,align='C')
+            pdf.cell(300, h=math.floor(boxHeights[i]/2), txt=rMetab, ln=2, align='C')
 
     
     pdf.output('SelectedClusters.pdf','F')
     messagebox.showinfo(title='Success', message='Success, the pdf has been created!')
     return
 
-
 def valPlotting(valIndex, mstOut, valMet = 'KMeansBased'):
-
     '''
     This function is responsible for plotting the validation outcome generated.
 
     Input:
-    validation Index: containing the number of clusters and the validation metric values
-    mstOut: containing the generated MST
-    valMet: the validation metric run
+        validation Index: containing the number of clusters and the 
+                          validation metric values
+        mstOut: containing the generated MST
+        valMet: the validation metric run
 
     Output:
-    Plot of the validation output
-    csv of the validation output
-    csv of the MST
+        Plot of the validation output
+        csv of the validation output
+        csv of the MST
     '''
+
+    valIndex = np.asarray(valIndex)
 
     #put the number of clusters in K and the validation metric in y
     if valMet == 'KMeansBased':
+        # Accept both (n,2) and (n,2,1) shapes; normalize to (n,2).
+        if valIndex.ndim == 3:
+            valIndex = np.asarray(
+                [np.reshape(np.asarray(v), (2, -1))[:, 0] for v in valIndex],
+                dtype=float
+            )
         K = valIndex[:,1]
         y = valIndex[:,0]
         y[y.shape[0]-1] = y[y.shape[0]-2]*2
@@ -2033,139 +2324,108 @@ def valPlotting(valIndex, mstOut, valMet = 'KMeansBased'):
     ax.spines['bottom'].set_linewidth(4)
     ax.tick_params(width=4,length=10)
 
-    ax.plot(K,y,linewidth=2.5)
-    ax.plot(K,y,'k.')
+    ax.plot(K, y, linewidth=2.5)
+    ax.plot(K, y, 'k.')
     ax.plot(K[indMin[0]],minValIndex,'r.',markersize=20)
     font = {'family': 'serif','color':  'black','weight': 'bold','size': 20}
-    ax.annotate(str(int(K[indMin[0]]))+' - Clusters!!',(K[indMin[0]]+0.1,minValIndex),xycoords='data',
-    xytext=(K[indMin[0]]+0.2,minValIndex), textcoords='data',
-                        horizontalalignment='left', verticalalignment='bottom',fontsize=18,fontname="Arial")
-    plt.xlabel('Clusters',fontsize=28,fontname="Arial")
-    plt.ylabel('Validation Index',fontsize=28,fontname="Arial")
-    plt.xticks(fontsize=24,fontname="Arial")
-    plt.yticks(fontsize=24,fontname="Arial")
+    ax.annotate(str(int(K[indMin[0]]))+' - Clusters',(K[indMin[0]]+0.1,minValIndex), xycoords='data',
+                        xytext=(K[indMin[0]]+0.2,minValIndex), textcoords='data',
+                        horizontalalignment='left', verticalalignment='bottom', 
+                        fontsize=18,fontname="Arial"
+                        )
+    plt.xlabel('Clusters', fontsize=28, fontname="Arial")
+    plt.ylabel('Validation Index', fontsize=28, fontname="Arial")
+    plt.xticks(fontsize=24, fontname="Arial")
+    plt.yticks(fontsize=24, fontname="Arial")
     if valMet == "KMeansBased":
         title = "K-Means Based Validation"
     else:
         title = valMet + " Validation"
-    plt.title(title,pad = 15,fontsize=36,fontname="Arial")
+    plt.title(title, pad = 15, fontsize=36, fontname="Arial")
     pltFileName = valMet+"Validation.png"
-    plt.savefig(pltFileName,bbox_inches='tight',dpi=600,transparent=True)
+    plt.savefig(pltFileName, bbox_inches='tight', dpi=600, transparent=True)
     plt.show()
 
-
-
-def dataCheck(data):
+def valPlottingAll(mstOut, results_list):
     '''
-    This function is responsible for checking for matching values within the input data, and reducing matching values down to a single value
+    Plot all MST validation metrics in one figure (5 panels), like mono-clustering
+    optimization. results_list: list of (valMet, valIndex) where valMet is
+    'KMeansBased','DBI','Dunn','PBM','Silhouette' and valIndex is the array from
+    the corresponding VM/GB call.
+    '''
+    metric_labels = {
+        'KMeansBased': 'K-Means Based',
+        'DBI': 'Davies-Bouldin',
+        'Dunn': 'Dunn',
+        'PBM': 'PBM',
+        'Silhouette': 'Silhouette',
+    }
+    mstOut.to_csv('MST_branches_All.csv', index=False)
 
-    Input:
-    original raw data
+    fig, axes = plt.subplots(2, 3, figsize=(14, 9))
+    axes = axes.flatten()
+    for idx, (valMet, valIndex) in enumerate(results_list):
+        if idx >= 5:
+            break
+        ax = axes[idx]
+        # Normalize to array: list of (2,1) -> (n,2,1); list of (1,2) -> (n,1,2)
+        if valMet == 'KMeansBased':
+            valIndex = np.stack([np.reshape(np.asarray(v), (2, -1)) for v in valIndex])
+        else:
+            valIndex = np.stack([np.reshape(np.asarray(v), (-1, 2)) for v in valIndex])
+        if valMet == 'KMeansBased':
+            K = valIndex[:, 1].flatten()
+            y = valIndex[:, 0].flatten().astype(float)
+            y[y.shape[0] - 1] = y[y.shape[0] - 2] * 2
+            y = 1.0 / y
+            for i in range(y.shape[0]):
+                if K[i] > 1:
+                    y[i] = (y[i] * K[i]) / (K[i] - 1)
+        else:
+            K = valIndex[:, 0, 1].flatten()
+            y = valIndex[:, 0, 0].flatten().astype(float)
+            if valMet == 'DBI':
+                y[y.shape[0] - 1] = y[y.shape[0] - 2] * 2
+                y = 1.0 / y
+            else:
+                y[y.shape[0] - 1] = y[y.shape[0] - 2] / 2
+            for i in range(y.shape[0]):
+                if K[i] > 1:
+                    y[i] = (y[i] * K[i]) / (K[i] - 1)
 
-    Output:
-    Corrected data.
-    '''   
- 
-    #read in the data from fileCheck and look for matching values
-    # data = readInColumns(data)
+        ax.plot(K, y, linewidth=2, marker='.')
+        indMin = np.argmax(y)
+        ax.plot(K[indMin], y[indMin], 'r.', markersize=14)
+        ax.set_xlabel('Clusters', fontsize=12)
+        ax.set_ylabel('Validation Index', fontsize=12)
+        ax.set_title(metric_labels.get(valMet, valMet), fontsize=14)
+        ax.grid(False, alpha=0.3)
+        valOut = np.column_stack([K, y])
+        pd.DataFrame(valOut, columns=['Clusters', 'Index']).to_csv(
+            'valIndex_' + valMet + '_All.csv', index=False
+        )
+    axes[5].set_visible(False)
+    plt.suptitle('MST validation – all metrics', fontsize=14, y=1.02)
+    plt.tight_layout()
+    plt.savefig('MST_All_Validation.png', bbox_inches='tight', dpi=300, transparent=True)
+    plt.show()
+    logging.info(': Successfully completed MST validation for all metrics.')
+    return
 
-    dataMatches = {}
-    toDelete = []
-    dists = pdist(data)
-    zerosL = dists==0
-
-    indicies =list(itertools.combinations(range(data.shape[0]),2))
-    #zeros checking
-    zeros = ()
-
-    zerosL = np.where(zerosL==True)[0].tolist()
-    print('Starting...')
-    # create reporting interval 
-    report = np.linspace(0, len(zerosL),num=200,dtype=int)
-    for i in range(len(zerosL)):
-        if len(np.where(report==i)[0])>0:
-            print((i/len(zerosL))*100)
-        zeros += indicies[zerosL[i]]
-
-    # create a numpy array of zeros
-    zeros = np.array(zeros)
-    # get the unique values of the array
-    zeros = np.unique(zeros)
-
-    #indicies of function, remove indicies if they do not match up with the unique values of the zeros 
-    ind = list(range(data.shape[0]))
-    
-    for i in range(zeros.shape[0]):
-        ind.remove(zeros[i])
-
-    dataZeros = np.delete(data,ind,axis=0)
-
-    for i in range(dataZeros.shape[0]):
-        curMatch = []
-        #skip the iteration if the value is already flagged to be deleted due to matching.
-        if i in toDelete:
-            continue
-
-        for j in range(i+1,dataZeros.shape[0]):
-            #skip the iteration if the value is already flagged to be deleted due to matching. 
-            if j in toDelete:
-                continue
-
-            #check the current array v. the other arrays
-            curCheck = dataZeros[i,:] == dataZeros[j,:]
-
-            if np.all(curCheck):
-                if len(curMatch) == 0:
-                    #inputting the matched indicies to a list to be input to a dictionary.
-                    curMatch.append(i)
-                    curMatch.append(j)
-                    toDelete.append(j)
-                else:
-                    curMatch.append(j)
-                    toDelete.append(j)
-        
-        #if the length of list curMatch is non-zero add to the dictionary
-        if len(curMatch)>0:
-            #get dictionary of matching intensities and input to the dictionary using current length as key
-            dictLen = len(dataMatches)
-
-            #if this gives trouble automatically update the dictionary with each found match for each i
-            dataMatches[dictLen] = curMatch
-    
-    #map to the appropriate indicies of the zeros then delete these indicies
-    for i in range(len(toDelete)):
-        toDelete[i] = zeros[toDelete[i]]
-
-
-    print(toDelete)
-    #delete the extraneous matching rows.
-    data = np.delete(data,toDelete,axis=0)
-    
-    dataMessage = str(len(toDelete))
-    removedIndicies = pd.DataFrame(toDelete)
-    removedIndicies.to_excel('RemovedIndicies.xlsx',index=False)
-    messagebox.showwarning(title="Matching Values removed",message=dataMessage + " matching values found and removed")
-
-    return data, toDelete
-
-        
 def transformations(data, transform='None', scale='None',first='1'):
     '''
     This function is responsible for taking inputs from the broad range of functions needed data transformed or scaled and updating the data
 
     Input:
-    data: raw data
-    transform: selected transformation
-    scale: selected data scaling
+        data: raw data
+        transform: selected transformation
+        scale: selected data scaling
 
     Output:
-    Pre-processed data
-
+        Pre-processed data
     '''
 
-    ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
-    ###------------------------------------------------------------- Transforming and Scaling Data -----------------------------------------------------------------
-    ###-------------------------------------------------------------------------------------------------------------------------------------------------------------
+    ###----------------- Transforming and scaling data ------------------------
 
     ### UPDATED THE RANGE FOR THE FOR LOOP TO DATA INSTEAD OF METAB_DATA
 
@@ -2334,338 +2594,200 @@ def transformations(data, transform='None', scale='None',first='1'):
 
     return data
 
+###---------------------- External optimization metrics -----------------------
 
-#############################################################################
-##################### External optimization metrics #########################
+def _bubble_matrix_plot(scores, distLink, filename, vmin=0, vmax=1,
+                        size_scale=4500, size_offset=500, adj=False):
+    """Generic lower-triangle bubble matrix plot."""
+    n    = scores.shape[0]
+    r    = scores.reshape(n * n, order='C')
+    x    = np.linspace(0.0, 1.0, 100)
+    rgb  = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
 
-def randComp(labels,distLink):
-    '''
-    Input:
+    upperInd = set()
+    for row, col in zip(*np.triu_indices(n, 1)):
+        upperInd.add(n * row + col + 1)
 
-    labels => list of labels for comparison
-    
-
-    '''
-    ## Calculating the Rand-index 
-    rand_scores = np.zeros((len(labels),len(labels)))
-    for i in range(len(labels)):
-        for j in range(i,len(labels)):
-            rand_scores[i,j] = metrics.rand_score(labels[i],labels[j])
-            rand_scores[j,i] = rand_scores[i,j]
-
-    ########################### Comparison plots for the clustering solution in the ensemble (Rand-index)
-    rand_scores_i = rand_scores.reshape(rand_scores.size,1,order='C')
-
-    #get a linspace vectore for storing the plotting range.
-    x = np.linspace(0.0, 1.0, 100)
-    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
-
-    #put rand scores into the form that allows to use with subplot
-    r =rand_scores_i
-
-    #get indices of upper matrix so they don't plot
-    upperMatInd = np.triu_indices(rand_scores.shape[0],1)
-    upperInds = []
-    for i in range(upperMatInd[0].shape[0]):
-        upperInds.append(rand_scores.shape[0]*upperMatInd[0][i] + upperMatInd[1][i] +1)
-
-    #create the plot objects for plotting the rand indices
-    fig, ax = plt.subplots(rand_scores.shape[0],rand_scores.shape[1],figsize=(12,12))
-
-    count=-1
-    for i in range(1,rand_scores.size+1):
-        ax = plt.subplot(rand_scores.shape[0],rand_scores.shape[1],i)
-        #remove the spines
-        ax.spines[['right', 'top','left','bottom']].set_visible(False)
-        #remove the tick markers
-        ax.tick_params(left = False,bottom=False,right=False,
-                    labelbottom=False,labelleft=False)
-        if i in upperInds:
+    fig, _ = plt.subplots(n, n, figsize=(12, 12))
+    count  = -1
+    for idx in range(1, n * n + 1):
+        ax = plt.subplot(n, n, idx)
+        ax.spines[['right', 'top', 'left', 'bottom']].set_visible(False)
+        ax.tick_params(left=False, bottom=False, right=False,
+                       labelbottom=False, labelleft=False)
+        if idx in upperInd:
             continue
-        
-        if (i-1)%(rand_scores.shape[0]+1) == 0:
-            #adding the hyperparameter set to the graph
-            count+=1
-            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
-            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
+        if (idx - 1) % (n + 1) == 0:
+            count += 1
+            ax.text(0.3, 0.4, distLink[count][0], fontsize=14, font='Arial')
+            ax.text(0.3, 0.2, distLink[count][1], fontsize=14, font='Arial')
         else:
-            #adding points to the graph based upon fit
-            ax.scatter(0.1,.1,s=(r[i-1]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(r[i-1]*100)-1,:]))
-            ax.text(0.098,0.09925,"{:.2f}".format(r[i-1][0]),fontsize=14,font="Arial")
-    
-    #plot the colorbar
-    cmap = mpl.cm.cool
-    norm = mpl.colors.Normalize(vmin=0, vmax=1)
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(rand_scores.shape[0],rand_scores.shape[1],rand_scores.shape[0]), cmap='Reds',
-                                    norm=norm,
-                                    orientation='vertical')
-    
-    #save the figure of the rand indicies
-    plt.savefig('ComparisonPlot_RandIndex.png',dpi=600)
+            val   = float(r[idx - 1])
+            cval  = np.clip(int(val * 49.5 + 49.5) if adj else int(val * 100) - 1, 0, 99)
+            sval  = val * size_scale + size_offset if not adj else val * 2250 + 2750
+            ax.scatter(0.1, 0.1, s=sval, alpha=0.7, c=tuple(rgb[0, cval, :]))
+            ax.text(0.098, 0.09925, f'{val:.2f}', fontsize=14, font='Arial')
+
+    # Colorbar in subplot index n (top-right): that cell is upper-triangle and
+    # intentionally left blank by the loop — same layout as JuneLabClusteringToolbox_org.
+    # Using n*n would overwrite the last diagonal (distance/linkage labels).
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    mpl.colorbar.ColorbarBase(
+        plt.subplot(n, n, n),
+        cmap='Reds',
+        norm=norm,
+        orientation='vertical',
+    )
+    plt.savefig(filename, dpi=600)
     return
 
+def randComp(labels, distLink):
+    '''
+    Input:
+        labels => list of labels for comparison
+    '''
+    
+    ## Calculating the Rand-index 
+    n = len(labels)
+    rand_scores = np.zeros((n, n))
 
+    for i in range(n):
+        for j in range(i, n):
+            rand_scores[i,j] = metrics.rand_score(labels[i],labels[j])
+            rand_scores[j,i] = rand_scores[i,j]
+            
+    _bubble_matrix_plot(rand_scores, distLink, 'ComparisonPlot_RandIndex.png')
 
 def adjRandComp(labels, distLink):
     '''
     Input:
-
-    labels => list of labels for comparison
+        labels => list of labels for comparison
     '''
+    
     ## Calculating the Rand-index and Adjusted Rand-index for each set of scores. 
-    adj_rand_scores = np.zeros((len(labels),len(labels)))
-    for i in range(len(labels)):
-        for j in range(i,len(labels)):
+    n = len(labels)
+    adj_rand_scores = np.zeros((n, n))
+    
+    for i in range(n):
+        for j in range(i, n):
             adj_rand_scores[i,j] = metrics.adjusted_rand_score(labels[i],labels[j])
             adj_rand_scores[j,i] = adj_rand_scores[i,j]
+    _bubble_matrix_plot(adj_rand_scores, distLink, 'ComparisonPlot_AdjustedRandIndex.png',
+                        vmin=-1, adj=True)
 
-
-    ########################### Comparison plots for the clustering solution in the ensemble (adjusted Rand-index)
-    adj_rand_scores_i = adj_rand_scores.reshape(adj_rand_scores.size,1,order='C')
-    x = np.linspace(0.0, 1.0, 100)
-    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
-
-    ########################### Comparison plots for the clustering solution in the ensemble (adjusted Rand-index)
-    r =adj_rand_scores_i 
-    fig, ax = plt.subplots(adj_rand_scores.shape[0],adj_rand_scores.shape[1],figsize=(12,12))
-
-    #getting the indicies that correspond to the upper triangle of the give matrix.
-    upperMatInd = np.triu_indices(adj_rand_scores.shape[0],1)
-    upperInds = []
-    for i in range(upperMatInd[0].shape[0]):
-        upperInds.append(adj_rand_scores.shape[0]*upperMatInd[0][i] + upperMatInd[1][i] +1)
-
-    count=-1
-    for i in range(1,adj_rand_scores.size+1):
-        ax = plt.subplot(adj_rand_scores.shape[0],adj_rand_scores.shape[1],i)
-        #remove the spines
-        ax.spines[['right', 'top','left','bottom']].set_visible(False)
-        #remove the tick markers
-        ax.tick_params(left = False,bottom=False,right=False,labelbottom=False,labelleft=False)
-
-        #go to the next iteration if the current iteration contains an upper triangle index. 
-        if i in upperInds:
-            continue
-        
-        if (i-1)%(adj_rand_scores.shape[0]+1)== 0:
-            #adding the hyperparameter set to the graph
-            count+=1
-            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
-            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
-        else:
-            #adding points to the graph based upon fit
-            ax.scatter(0.1,.1,s=(r[i-1]*(2250))+2750,alpha=0.7,c=tuple(rgb[0,int((r[i-1]*49.5)+49.5),:]))
-            ax.text(0.098,0.09925,"{:.2f}".format(r[i-1][0]),fontsize=14,font="Arial")
-    
-    cmap = mpl.cm.cool
-    norm = mpl.colors.Normalize(vmin=-1, vmax=1)
-
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(adj_rand_scores.shape[0],adj_rand_scores.shape[1],adj_rand_scores.shape[0]), cmap='Reds',
-                                    norm=norm,
-                                    orientation='vertical');
-
-    #save the figure as a publication quality figure. 
-    plt.savefig('ComparisonPlot_AdjustedRandIndex.png',dpi=600)
-    
-    return
-
-
-def mutualInfo(labels,distLink, score='norm'):
+def mutualInfo(labels, distLink, score='norm'):
     '''
     Input:
-
-    labels => list of labels for comparison
-    
-
+        labels => list of labels for comparison
     '''
+    
+    n = len(labels)
+    
     ## Calculating the Rand-index 
     if score == 'norm':
-        scores = np.zeros((len(labels),len(labels)))
-        for i in range(len(labels)):
-            for j in range(i,len(labels)):
+        scores = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i, n):
                 scores[i,j] = metrics.normalized_mutual_info_score(labels[i],labels[j])
                 scores[j,i] = scores[i,j]
     elif score == 'adj':
-        scores = np.zeros((len(labels),len(labels)))
-        for i in range(len(labels)):
-            for j in range(i,len(labels)):
+        scores = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i, n):
                 scores[i,j] = metrics.adjusted_mutual_info_score(labels[i],labels[j])
                 scores[j,i] = scores[i,j]
 
-    ########################### Comparison plots for the clustering solution in the ensemble (Rand-index)
-    rand_scores_i = scores.reshape(scores.size,1,order='C')
+    _bubble_matrix_plot(scores, distLink,
+                        f'ComparisonPlot_{score}_mutual_info.png')
 
-    #get a linspace vectore for storing the plotting range.
-    x = np.linspace(0.0, 1.0, 100)
-    rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
-
-    #put rand scores into the form that allows to use with subplot
-    r =rand_scores_i
-
-    #get indices of upper matrix so they don't plot
-    upperMatInd = np.triu_indices(scores.shape[0],1)
-    upperInds = []
-    for i in range(upperMatInd[0].shape[0]):
-        upperInds.append(scores.shape[0]*upperMatInd[0][i] + upperMatInd[1][i] +1)
-
-    #create the plot objects for plotting the rand indices
-    fig, ax = plt.subplots(scores.shape[0],scores.shape[1],figsize=(12,12))
-
-    count=-1
-    for i in range(1,scores.size+1):
-        ax = plt.subplot(scores.shape[0], scores.shape[1],i)
-        #remove the spines
-        ax.spines[['right', 'top','left','bottom']].set_visible(False)
-        #remove the tick markers
-        ax.tick_params(left = False,bottom=False,right=False,
-                    labelbottom=False,labelleft=False)
-        if i in upperInds:
-            continue
-        
-        if (i-1)%(scores.shape[0]+1) == 0:
-            #adding the hyperparameter set to the graph
-            count+=1
-            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
-            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
-        else:
-            #adding points to the graph based upon fit
-            ax.scatter(0.1,.1,s=(r[i-1]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(r[i-1]*100)-1,:]))
-            ax.text(0.098,0.09925,"{:.2f}".format(r[i-1][0]),fontsize=14,font="Arial")
-    
-    #plot the colorbar
-    cmap = mpl.cm.cool
-    norm = mpl.colors.Normalize(vmin=0, vmax=1)
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(scores.shape[0],scores.shape[1],scores.shape[0]), cmap='Reds',
-                                    norm=norm,
-                                    orientation='vertical')
-    
-    #save the figure of the rand indicies
-    filename = 'ComparisonPlot_' + score + '_mutual_info.png'
-    plt.savefig(filename,dpi=600)
-    return
-
-def coOccMonoComp(labels,labelsCoOcc,distLink):
+def coOccMonoComp(labels, labelsCoOcc, distLink):
     '''
     Comparison of generate ensemble clustering solution to the mono-clustering solutions that make up the ensemble.
     
-
     Input:
         labels - these are the labels for each of the mono-clustering solutions
         labelsCoOcc - labels for the ensemble clustering solution. 
 
     Output: 
-    Figure of the comparison of clustering solutions. 
+        Figure of the comparison of clustering solutions. 
     '''
 
-    #create the plot object for specific plotting. 
-    fig, ax = plt.subplots(len(labels),3,figsize=(8,12))
-    fig.tight_layout(pad=2)
+    n = len(labels)
+    n_rows = n + 1
+    plt.figure(figsize=(8, 12))
+
     x = np.linspace(0.0, 1.0, 100)
     rgb = mpl.colormaps['Reds'](x)[np.newaxis, :, :3]
 
-    #comparison of the clustering results
-    compCoOcc_orig = np.zeros((len(labels),2))
-    for i in range(len(labels)):
-        compCoOcc_orig[i,0] = metrics.rand_score(labelsCoOcc,labels[i])
-        compCoOcc_orig[i,1] = metrics.adjusted_rand_score(labelsCoOcc,labels[i])
+    compCoOcc_orig = np.zeros((n, 2))
+    for i in range(n):
+        compCoOcc_orig[i, 0] = metrics.rand_score(labelsCoOcc, labels[i])
+        compCoOcc_orig[i, 1] = metrics.adjusted_rand_score(labelsCoOcc, labels[i])
 
+    text_list = [(3 * i) + 1 for i in range(n)]
+    rand_list = [(3 * i) + 2 for i in range(n)]
+    adj_list = [(3 * i) + 3 for i in range(n)]
     count = -1
-    #create the labels list of interest for text, rand, and adj_rand comps
-    text_list = [(3*i)+1 for i in range(len(labels))]
-    rand_list = [(3*i)+2 for i in range(len(labels))]
-    adj_list =  [(3*i)+3 for i in range(len(labels))]
-    for i in range(1,(compCoOcc_orig.shape[0]*3)+2):
-        ax = plt.subplot(compCoOcc_orig.shape[0]+1,3,i)
-        #remove the spines
-        ax.spines[['right', 'top','left','bottom']].set_visible(False)
-        #remove the tick markers
-        ax.tick_params(left = False,bottom=False,right=False,labelbottom=False,labelleft=False)
 
-        if i in text_list:
-            #adding the hyperparameter set to the graph
-            count += 1
-            ax.text(0.3,0.4,distLink[count][0],fontsize=14,font="Arial")
-            ax.text(0.3,0.2,distLink[count][1],fontsize=14,font="Arial")
+    # Panels 1 .. 3n: bubble grid (no axes). Bottom row: blank | Rand colorbar | ARI colorbar only.
+    for i in range(1, n_rows * 3 + 1):
+        ax = plt.subplot(n_rows, 3, i)
+        if i <= n * 3:
+            ax.axis('off')
+            if i in text_list:
+                count += 1
+                ax.text(0.3, 0.4, distLink[count][0], fontsize=14, font='Arial')
+                ax.text(0.3, 0.2, distLink[count][1], fontsize=14, font='Arial')
+            elif i in rand_list:
+                ri = float(compCoOcc_orig[count, 0])
+                c_idx = int(np.clip(int(ri * 100) - 1, 0, 99))
+                ax.scatter(
+                    0.1, 0.1,
+                    s=ri * 4500 + 500,
+                    alpha=0.7,
+                    c=tuple(rgb[0, c_idx, :]),
+                )
+                ax.text(0.099, 0.09925, f'{ri:.2f}', fontsize=14, font='Arial')
+            elif i in adj_list:
+                ari = float(compCoOcc_orig[count, 1])
+                c_idx = int(np.clip(int(ari * 49.5 + 49.5), 0, 99))
+                ax.scatter(
+                    0.1, 0.1,
+                    s=ari * 2250 + 2750,
+                    alpha=0.7,
+                    c=tuple(rgb[0, c_idx, :]),
+                )
+                ax.text(0.099, 0.09925, f'{ari:.2f}', fontsize=14, font='Arial')
+        elif i == n * 3 + 1:
+            ax.axis('off')
+        elif i == n * 3 + 2:
+            norm_r = mpl.colors.Normalize(vmin=0, vmax=1)
+            mpl.colorbar.ColorbarBase(
+                ax, cmap='Reds', norm=norm_r, orientation='vertical',
+            )
+        elif i == n * 3 + 3:
+            norm_a = mpl.colors.Normalize(vmin=-1, vmax=1)
+            mpl.colorbar.ColorbarBase(
+                ax, cmap='Reds', norm=norm_a, orientation='vertical',
+            )
 
-        elif i in rand_list: #adding the rand-index comps
-            ax.scatter(0.1,.1,s=(compCoOcc_orig[count,0]*(4500))+500,alpha=0.7,c=tuple(rgb[0,int(compCoOcc_orig[count,0]*100)-1,:]));
-            ax.text(0.099,0.09925,"{:.2f}".format(compCoOcc_orig[count,0]),fontsize=14,font="Arial")
-
-        elif i in adj_list: #adding the adjusted rand-index comps
-            ax.scatter(0.1,.1,s=(compCoOcc_orig[count,1]*(2250))+2750,alpha=0.7,c=tuple(rgb[0,int((compCoOcc_orig[count,0]*49.5)+49.5),:]));
-            ax.text(0.099,0.09925,"{:.2f}".format(compCoOcc_orig[count,1]),fontsize=14,font="Arial")
-
-
-    #create the color maps for the scale bars for both the rand index and the adjusted rand index.  
-    cmap = mpl.cm.cool
-    norm = mpl.colors.Normalize(vmin=0, vmax=1)
-
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,(compCoOcc_orig.shape[0]+1)*3 - 1), cmap='Reds',
-                                    norm=norm,
-                                    orientation='vertical');
-
-    norm = mpl.colors.Normalize(vmin=-1, vmax=1)
-
-    cb1 = mpl.colorbar.ColorbarBase(plt.subplot(compCoOcc_orig.shape[0]+1,3,(compCoOcc_orig.shape[0]+1)*3), cmap='Reds',
-                                    norm=norm,
-                                    orientation='vertical');
-
-    #saving the plot of comparisons between mono-clustering solutions and the final ensemble solution. 
-    plt.savefig('ComparisonPlot_Ensem_monoClustSols.png',dpi=600)
-
+    plt.tight_layout(pad=2)
+    plt.savefig('ComparisonPlot_Ensem_monoClustSols.png', dpi=600)
+    plt.close()
     return
-
-
-def correlationNosqrt(data,metric = 'spearman'):
-    '''
-    calculate the distance matrix for the equation
-
-    1-|r(Y,Y')|
-
-    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
-    '''
-    
-    if metric== 'pearson':
-        #out defines the pearson correlation
-        out = np.corrcoef(data)
-        return 1-abs(np.around(out,decimals=5))
-    elif metric == 'spearman':
-        #out defines the correlation study in this case spearman 
-        out = spearmanr(data.T)
-        return np.around(1-abs(out.statistic),decimals=5)
-
-def correlationSqrt(data,metric='spearman'):
-    '''
-    calculate the distance matrix for the equation
-
-    (2*(1-|r(Y,Y')|))^1/2
-
-    This currently uses only the spearman correlation for r, future iterations should consider adding pearson
-    '''
-    if metric=='spearman':
-        #out defines the correlation study in this case spearman 
-        out = spearmanr(data.T)
-        return np.around((2*(1-abs(out.statistic)))**0.5,decimals=5)
-    elif metric=='pearson':
-        #get the pearson correlation
-        out = np.corrcoef(data)
-        return np.around((2*(1-abs(out)))**0.5,decimals=5)
-    
-def pairWise(data,metric='euclidean'):
-    '''
-    Calculate the wanted distance matrix and ensure it is in the proper form for the agglomerative hiearchical clustering functionality. 
-    Check the scipy.spatial.distance pdist for more information on the available distance metrics. 
-
-    '''
-
-    #use the pairwise distance function and return squareform as input
-    out = pdist(data,metric)
-    out = squareform(out)
-
-    return out
 
 def calinskiHarabasz_correlation(data, labels, dist):
     '''
+    Calculate the Calinski-Harabasz (CH) or Variance Ratio Criterion
+    Higher values are better-defined and compact clusters
+    
+    Input:
+        data
+        labels
+        dist
+    
+    Output
+        CH index
     '''
 
     #set up the dictionary for the distance measure.
@@ -2679,74 +2801,93 @@ def calinskiHarabasz_correlation(data, labels, dist):
 
     #get the unique cluster labels and use to create dictionary to store cluster info
     keys = np.unique(labels)
-    clusterSpreads = np.zeros((len(keys),1))
+    n_clust = len(keys)
+    clusterSpreads = np.zeros((n_clust,1))
+    
     #create a matrix of the cluster centroids
-    centroids = np.zeros((len(keys),data.shape[1]))
+    centroids = np.zeros((n_clust, data.shape[1]))
+   
     #number of data objects in clusters
     sizeClusts = np.zeros_like(clusterSpreads)
-    sizeClusts = sizeClusts.reshape(len(keys),)
+    sizeClusts = sizeClusts.reshape(n_clust,)
 
-    # #without the sum I get what?
-    for i in keys:
-        #get the squared spread in the cluster
-        if len(list(np.where(labels==i)[0])) ==1:
-            warnings.warn('Clusters of size 1 detected')
-            clusterSpreads[i-1] = 0
+    for i, k in enumerate(keys):
+        idx = np.where(labels == k)[0]
+        centroid = data[idx].mean(axis=0)
+        centroids[i] = centroid
+        sizeClusts[i] = len(idx)
+       
+        if len(idx) > 1:
+            d = distance[dist](np.vstack([centroid, data[idx]]))
+            clusterSpreads[i] = (d[0, :] ** 2).sum()
         else:
-            clusterSpreads[i-1] = (distance[dist](np.vstack([data[list(np.where(labels==i)[0]),:].mean(axis=0),data[list(np.where(labels==i)[0]),:]]))[0,:]**2).sum()
-        #save the centroids and the size of the clusters
-        centroids[i-1] = data[list(np.where(labels==i)[0]),:].mean(axis=0)
-        sizeClusts[i-1] = len(list(np.where(labels==i)[0]))
-
+            warnings.warn('Clusters of size 1 detected')
+            
     #calculating the numerator
     centDissim = ((distance[dist](np.vstack([dataCenter, centroids]))[0,1:]**2)*sizeClusts).sum()
     numer = centDissim/(len(np.unique(labels))-1)
     #calculating the denominator 
-    denom = clusterSpreads.sum()/(data.shape[0]-len(np.unique(labels)))
+    denom = clusterSpreads.sum() / (data.shape[0] - n_clust)
 
     #calculate the Calinski-Harabasz
     CH = numer/denom
 
     return CH
 
-
-def daviesBouldinScore_correlation(data,labels,dist):
+def daviesBouldinScore_correlation(data, labels, dist):
     '''
-    '''
-
+    Calculate the Davies-Bouldin (DBI) score.
+    Lower scores indate better clustering
     
+    Input:
+        data
+        labels
+        dist
+    
+    Output
+        CH index
+    '''
+
     #set up the dictionary for the distance measure.
     distance = {
         'CNS': correlationNosqrt,
         'CS': correlationSqrt
         }
+    
     #get the unique cluster labels and use to create dictionary to store cluster info
     keys = np.unique(labels)
+    n_clusters = len(keys)
     avgClusterSpread = dict.fromkeys(keys)
+   
     #create a matrix of the cluster centroids
-    centroids = np.zeros((len(keys),data.shape[1]))
+    centroids = np.zeros((n_clusters, data.shape[1]))
 
     #calculate the spread of each cluster, and place data into 
     for i in np.unique(labels):
+        
         #get the current clusters data, with that data np.vstack data, and get the average spread placing in dict
         if len(list(np.where(labels==i)[0])) ==1:
             avgClusterSpread[i] = 0
             warnings.warn('Clusters of size 1 were detected')
+        
         else:
             avgClusterSpread[i] = (distance[dist](np.vstack([data[list(np.where(labels==i)[0]),:].mean(axis=0),data[list(np.where(labels==i)[0]),:]]))[0,:].sum())/len(list(np.where(labels==i)[0]))
+        
         centroids[i-1] = data[list(np.where(labels==i)[0]),:].mean(axis=0)
 
     #get the centroid dissimilarities
     centDissim = distance[dist](centroids)
+    
     if isinstance(centDissim,np.float64):
+        
         #make the dissimilarity between cluster centers square
         centDissim = np.array([[0, centDissim],[centDissim, 0]])
 
     #create matrix of max scores
-    maxScores = np.zeros((len(np.unique(labels)),1))
+    maxScores = np.zeros((n_clusters, 1))
     
-    for i in np.unique(labels):
-        for j in np.unique(labels):
+    for i in keys:
+        for j in keys:
             if i == j:
                 continue
             #calculate Fc_h's for current cluster
@@ -2756,6 +2897,6 @@ def daviesBouldinScore_correlation(data,labels,dist):
                 maxScores[i-1] = Fch_cur
 
     #calculate the Davies-Bouldin metric
-    DBI = (maxScores.sum())/len(np.unique(labels))
+    DBI = maxScores.sum() / n_clusters
     
     return DBI

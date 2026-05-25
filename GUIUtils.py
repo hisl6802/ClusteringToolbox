@@ -1,58 +1,60 @@
 #Creating a class containing functions that will be used in GUI
-from numpy.lib.arraysetops import isin
+import time, glob, sys, logging, warnings, config, mplcursors
 import pandas as pd
 import numpy as np
-import time
-import platform
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
+import statistics as stat
+from multiprocessing import Pool
+import seaborn as sns
+import GuiBackground as GB
+import seaborn as sns
+import matplotlib.pyplot as plt
+import networkx as nx
+
+from numpy import isin
 from matplotlib import pyplot as plt
-import matplotlib as mpl
-from scipy.cluster.hierarchy import dendrogram
-from scipy.cluster.hierarchy import linkage, ward, fcluster
+from scipy.cluster.hierarchy import dendrogram, linkage, ward, fcluster
 from scipy.spatial.distance import pdist, squareform
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import t
-from sklearn.cluster import AgglomerativeClustering as AC
+from sklearn.cluster import AgglomerativeClustering as AC, KMeans
 from sklearn import metrics
-
-import glob,sys,logging,time,getpass,fpdf,os
-import statistics as stat
-from multiprocessing import Pool
-import seaborn as sns
-import config
-import random
-import math
 from itertools import combinations
-import zipfile
-import os
+from tkinter import filedialog, messagebox, simpledialog
+from Bio.KEGG import REST, Compound
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
 
-import GuiBackground as GB
-from tkinter import filedialog, messagebox
-import mplcursors
+try:
+    from pydeseq2.default_inference import DefaultInference
+except ImportError:
+    DefaultInference = None
 
-from Bio.KEGG import REST
-from Bio.KEGG import Compound
-
-from ValidationMetric import ValidationMetric as VM
+# Suppress a noisy OpenMP runtime warning emitted via threadpoolctl during
+# some sklearn calls on certain mixed runtime environments.
+warnings.filterwarnings(
+    "ignore",
+    message=r"(?s).*Found Intel OpenMP \('libiomp'\).*LLVM OpenMP \('libomp'\).*",
+    category=RuntimeWarning,
+    module=r"threadpoolctl",
+)
 
 class GUIUtils:
     def dataIntegrity(file):
         '''
-        The data integrity allows users to determine whether the first column of data in a dataframe contains double decimals. This error mostly arises when working with MetaboAnalyst results. 
+        The data integrity allows users to determine whether the first column 
+        of data in a dataframe contains double decimals. This error mostly 
+        arises when working with MetaboAnalyst results. 
 
         Input:
 
-        file - input full path to the file, use tkinter's filedialog for ease of getting file path. 
+        file - input full path to the file, use tkinter's filedialog for 
+        ease of getting file path. 
 
         Output: 
         
-        This function outputs an excel file with corrected values, the original file name has  _corrected appended to the end. 
+        This function outputs an excel file with corrected values, the original
+        file name has  _corrected appended to the end. 
 
         '''
         #log that the user called the data integrity function
@@ -62,23 +64,25 @@ class GUIUtils:
             #Read in Volcano Plot data
             if file[len(file)-1] == 'x':
                 volcano = pd.read_excel(file)
-            elif file[len(file)-1 == 'v']:
+                
+            elif file[len(file)-1] == 'v':
                 volcano = pd.read_csv(file)
         except:
             logging.error(': Failed to read in the excel file. Please put error in the Github issues tab.')
             messagebox.showerror(title='Error',message='Failed to read in the excel file. Please let Brady know!!')
             return
             
-        #grab the first row the volcano data
-        check = volcano['Unnamed: 0']
+        # grab the first row of the volcano data (treat as a plain sequence,
+        # ignoring the index labels to avoid KeyError on non-0-based indices)
+        check = volcano.iloc[0]
 
         #create array that can save the fixed data and the data that did not need to be fixed
         correctedArray = np.zeros(check.shape[0])
 
         #search each of the volcano data rows to determine if they have double decimals.
         for i in range(check.shape[0]):
-            #grab the row corresponding to the current run through the loop
-            curVal = check[i]
+            # grab the value by position, not by label
+            curVal = check.iloc[i]
 
             #reset the number of decimals to 0 before checking the string for decimal points
             decimal = 0
@@ -112,7 +116,7 @@ class GUIUtils:
                 correctedArray[i] = curVal
 
         #Replace the values in the dataframe with the appropriate values
-        volcano['Unnamed: 0'] = correctedArray
+        volcano.iloc[0] = correctedArray
         del(correctedArray,i,curVal,decimal,corrected)
 
         finalSlash = 0
@@ -121,24 +125,28 @@ class GUIUtils:
             if file[i] == '/':
                 finalSlash = i
         file = file[finalSlash+1:len(file)-5]
+       
         #Replace the file name with the appropriate rename
         file += '_corrected.xlsx'
+       
         #specify the file to write to
         output = pd.ExcelWriter(file)
 
         #write to excel file
         volcano.to_excel(output,index=False)
         del(volcano)
+       
         #save the excel sheet
         output.close()
         logOut = 'Updated file saved as: ' + file
         logging.info(logOut)
+       
         #log that the data integrity function has been sucessfully completed. 
         logging.info(': Data Integrity check sucessfully completed.')
         messagebox.showinfo(title="Success",message="Removed data integrity issues!!")
         return
 
-    def createClustergram(norm,linkFunc,distMet,cmap,colOrder=[], transform = 'None', scale ='None'):
+    def createClustergram(norm, linkFunc, distMet, cmap, colOrder=[], transform='None', scale='None', file=None):
         '''
         The function is responsible for generating the clustergrams for multivariate data. This function is capable of
         using all the linkage functions and distance measures currently implemented to the scipy.hierarchy method. Note the ward-euclidean distance is the only combination 
@@ -166,30 +174,26 @@ class GUIUtils:
         logMessage = ': Data Transform: ' + transform +'; Data Scaling: ' + scale
         logging.info(logMessage)
 
-        fileI = filedialog.askopenfilename()
+        fileI = file or filedialog.askopenfilename()
         
         try:
             if norm == 0 or norm == 2:
-                
                 data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC")
 
             elif norm == 1:
-                
                 data, col_groups = GB.readAndPreProcess(file=fileI,transform=transform,scale=scale,func="CC",first=colOrder[0]) 
         except TypeError:
             logging.error(': No file selected!')
             messagebox.showerror(title='Error',message='Error loading in the data, normilizing it or something else. Contact Brady if cannot figure out.')
             return
 
-        #create dendrogram and plot data        
+        #create dendrogram and plot data, remove the unneed data, log what the user has called and completed and return to the UI.        
         GB.create_dendrogram(data,col_groups, norm, link=linkFunc, dist=distMet,color = cmap,colOrder=colOrder)
-
         del(data,norm,linkFunc,distMet)
-
         logging.info(': Sucessfully created the wanted Clustergram')
         return
 
-    def groupMedians(rmZeros=0):
+    def groupMedians(rmZeros=0, file=None):
         '''
         Determine the number of groups and then create a list or array of the appropriate
         beginning and ending of each group. This assumes that the groups are all of equal size which should be
@@ -198,18 +202,16 @@ class GUIUtils:
         with out the same groups sizes can lead to incorrect analysis.
         
         Input:
-        
-        groupMedians does not accept any inputs, it will prompt you to select a file which you would like to have medians determined for. 
+        groupMedians will prompt you to select a file which you would like to have medians determined for. 
 
         Output:
-
         This function outputs a .csv file with _Medians appended to the end of the original file name. *** This will soon be updated to
         an excel file output for easy calling and input to the createClustergram, MST or Ensemble clustering functions. 
         '''
 
         #log that the user called the group medians function
         logging.info(': User called the Group Medians function.')
-        file = filedialog.askopenfilename()
+        file = file or filedialog.askopenfilename()
 
         #getting the needed data. 
         df = pd.read_excel(file)
@@ -220,7 +222,7 @@ class GUIUtils:
         df = df.T
         out = df.groupby([0]).median()
         out = out.T
-
+        #create a mz, and rtmed column
         out.insert(0,"mz",mz)
         out.insert(out.shape[1],"rtmed",rt)
 
@@ -384,8 +386,7 @@ class GUIUtils:
                 sameColor.append('k')
 
             dend1 = dendrogram(linkageOne,ax=axes,above_threshold_color='y',orientation='left',no_labels=True, link_color_func= lambda x: sameColor[x])
-                
-
+        #create the file prefixes and suffixes for saving the resulting comparisons.
         linkPre = 'LinkageComparison'
         linkSuf = '.png'
         sep = '_'
@@ -421,83 +422,222 @@ class GUIUtils:
         else:
             linkFile = firstCheck 
             plt.savefig(linkFile,dpi=600,transparent=True)
-
         plt.show()
 
         #log the completion of the linkage comparison
         logging.info(': Sucessfuly completed the comparison of the linkage functions!')
         return
             
-    def compoundMatchUp(typeFile = 'all'):
+    def compoundMatchUp(typeFile='all', file=None):
         '''
         The compoundMatchUp function is responsible for matching the output compounds from mummichog to compounds from the KEGG data base spreadsheet. 
 
         Input:
-
-        compoundMatchUp does not allow input. The file "mummichog_matched_compound_all.csv" needs to be updated prior to running this function. 
-
-        *** Stay tuned this function will be updated soon. 
+        compoundMatchUp expects the user to select the directory or the file they would like to run a compound match-up on. 
+        The file "mummichog_matched_compound_all.csv" needs to be updated prior to running this function. 
         '''
         
-
         logging.info(': Compound Match-Up function called!')
 
-        # Pulls in our matched compound data
-        #ask user for file input and read in the csv file. 
-        file = filedialog.askopenfilename()
-        my_data = pd.read_csv(file)
+        # Pull in matched-compound data from either:
+        #  - a single CSV file, or
+        #  - a directory containing many matched-compound CSV files (from MummiBot)
+        if file is None:
+            if typeFile == 'all':
+                # Ask for folder containing Mummichog output (from MummiBot), not P2P files
+                file = filedialog.askdirectory(
+                    title="Select folder containing Mummichog output (mummichog_matched_compound_*.csv)\nRun MummiBot on your P2P files first if you don't have these."
+                )
+            else:
+                file = filedialog.askopenfilename(
+                    title="Select Mummichog matched-compound CSV",
+                    filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+                )
+            if not file:
+                return
 
         if typeFile == 'all':
 
-            my_final_data = np.zeros((len(my_data["Matched.Compound"]),2))
-            my_final_data = pd.DataFrame(my_final_data,columns=['ID', 'Compound Name'])
-            #grab the compound ID of interest
-            lenCompounds = len(my_data['Matched.Compound'])
-            for i in range(len(my_data["Matched.Compound"])):
-                if (i+1)%100 ==0:
-                    x = ((i+1)/lenCompounds)*100
-                    x = float("{0:.2f}".format(x))
-                    logging.info(': ' + str(x)+'%' + ' completed!')
+            # ------------------------------------------------------------------
+            # CASE 1: user supplied a DIRECTORY -> batch mode
+            # ------------------------------------------------------------------
+            if os.path.isdir(file):
+                paths = [
+                    os.path.join(file, f)
+                    for f in os.listdir(file)
+                    if f.lower().endswith(".csv")
+                ]
+                if not paths:
+                    messagebox.showerror(
+                        title="Error",
+                        message="No CSV files were found in the selected folder."
+                    )
+                    return
 
-                #input the values into a request from KEGG API
-                if my_data['Matched.Compound'][i][0] == 'G':
-                    my_final_data['ID'][i] = my_data['Matched.Compound'][i]
-                    my_final_data['Compound Name'][i] = 'GAG subunits'
+                # Only process files that have Matched.Compound (Mummichog output)
+                processed = 0
+                # loop over each matched-compound CSV and write a corresponding
+                # CompoundMatchUps_<basename>.csv next to it
+                for path in paths:
+                    try:
+                        my_data = pd.read_csv(path)
+                    except Exception:
+                        logging.error(f": Failed to read Mummichog CSV: {path}")
+                        continue
 
-                elif my_data['Matched.Compound'][i][0] == 'C':
-                    if my_data['Matched.Compound'][i][1] == 'E':
-                        my_final_data['ID'][i] = my_data['Matched.Compound'][i]
-                        my_final_data['Compound Name'][i] = 'Not in KEGG, will update soon!'
+                    if "Matched.Compound" not in my_data.columns:
+                        logging.warning(f": Skipping file without 'Matched.Compound' column: {path}")
+                        continue
+
+                    processed += 1
+                    my_final_data = np.zeros((len(my_data["Matched.Compound"]), 2))
+                    my_final_data = pd.DataFrame(my_final_data, columns=['ID', 'Compound Name'])
+                    #grab the compound ID of interest
+                    lenCompounds = len(my_data['Matched.Compound'])
+                    for i in range(len(my_data["Matched.Compound"])):
+                        if (i+1)%100 ==0:
+                            x = ((i+1)/lenCompounds)*100
+                            x = float("{0:.2f}".format(x))
+                            logging.info(': ' + str(x)+'%' + ' completed!')
+
+                        cur_id = str(my_data['Matched.Compound'][i])
+
+                        #input the values into a request from KEGG API
+                        if cur_id and cur_id[0] == 'G':
+                            my_final_data.at[i, 'ID'] = cur_id
+                            my_final_data.at[i, 'Compound Name'] = 'GAG subunits'
+
+                        elif cur_id and cur_id[0] == 'C':
+                            if len(cur_id) > 1 and cur_id[1] == 'E':
+                                my_final_data.at[i, 'ID'] = cur_id
+                                my_final_data.at[i, 'Compound Name'] = 'Not in KEGG, will update soon!'
+
+                            else:
+                                try:
+                                    request = REST.kegg_get(cur_id)
+                                    txtFCur = cur_id + '.txt'
+                                    open(txtFCur,'w').write(request.read())
+                                    records = Compound.parse(open(txtFCur))
+                                    record = list(records)[0]
+                                    os.remove(txtFCur)
+                                    my_final_data.at[i, 'ID'] = cur_id
+                                    my_final_data.at[i, 'Compound Name'] = record.name
+
+                                except:
+                                    logging.error(": No KEGG match found! Check KEGG Website!")
+                                    logString = cur_id
+                                    logString = ': Failed to find-' + logString
+                                    logging.info(logString)
+                                    my_final_data.at[i, 'ID'] = cur_id
+                                    my_final_data.at[i, 'Compound Name'] = 'No match in KEGG, investigate this compound further.'
+                                    continue
+
+                        else:
+                            my_final_data.at[i, 'ID'] = cur_id
+                            my_final_data.at[i, 'Compound Name'] = 'Unknown'
+
+                    base, fname = os.path.split(path)
+                    root, _ = os.path.splitext(fname)
+                    out_name = f"CompoundMatchUps_{root}.csv"
+                    out_path = os.path.join(base, out_name)
+                    my_final_data.to_csv(path_or_buf=out_path, index=False)
+
+                if processed == 0:
+                    messagebox.showerror(
+                        title="No Mummichog output found",
+                        message="No CSV files in this folder contain a 'Matched.Compound' column.\n\n"
+                                "Compound ID requires Mummichog output (e.g. mummichog_matched_compound_all.csv), "
+                                "not Peaks-to-Pathways (P2P) files.\n\n"
+                                "Run MummiBot on your P2P files first, then select the folder where MummiBot saved the downloaded CSVs."
+                    )
+                    return
+                messagebox.showinfo(
+                    title="Success",
+                    message=f"Successfully generated CompoundMatchUps for {processed} file(s) in the folder."
+                )
+                return
+
+            # ------------------------------------------------------------------
+            # CASE 2: user supplied a SINGLE CSV -> keep legacy filename
+            # ------------------------------------------------------------------
+            else:
+                path = file
+                try:
+                    my_data = pd.read_csv(path)
+                except Exception:
+                    logging.error(f": Failed to read Mummichog CSV: {path}")
+                    messagebox.showerror(
+                        title="Error",
+                        message=f"Failed to read CSV file:\n{path}"
+                    )
+                    return
+
+                if "Matched.Compound" not in my_data.columns:
+                    messagebox.showerror(
+                        title="Wrong file type",
+                        message="This file is not a Mummichog matched-compound output.\n\n"
+                                "Compound ID needs the output from MummiBot (e.g. mummichog_matched_compound_all.csv), "
+                                "which has a 'Matched.Compound' column.\n\n"
+                                "Run MummiBot on your P2P (Peaks-to-Pathways) files first, then select the Mummichog CSV or its folder."
+                    )
+                    return
+
+                my_final_data = np.zeros((len(my_data["Matched.Compound"]), 2))
+                my_final_data = pd.DataFrame(my_final_data, columns=['ID', 'Compound Name'])
+                #grab the compound ID of interest
+                lenCompounds = len(my_data['Matched.Compound'])
+                for i in range(len(my_data["Matched.Compound"])):
+                    if (i+1)%100 ==0:
+                        x = ((i+1)/lenCompounds)*100
+                        x = float("{0:.2f}".format(x))
+                        logging.info(': ' + str(x)+'%' + ' completed!')
+
+                    cur_id = str(my_data['Matched.Compound'][i])
+
+                    #input the values into a request from KEGG API
+                    if cur_id and cur_id[0] == 'G':
+                        my_final_data.at[i, 'ID'] = cur_id
+                        my_final_data.at[i, 'Compound Name'] = 'GAG subunits'
+
+                    elif cur_id and cur_id[0] == 'C':
+                        if len(cur_id) > 1 and cur_id[1] == 'E':
+                            my_final_data.at[i, 'ID'] = cur_id
+                            my_final_data.at[i, 'Compound Name'] = 'Not in KEGG, will update soon!'
+
+                        else:
+                            try:
+                                request = REST.kegg_get(cur_id)
+                                txtFCur = cur_id + '.txt'
+                                open(txtFCur,'w').write(request.read())
+                                records = Compound.parse(open(txtFCur))
+                                record = list(records)[0]
+                                os.remove(txtFCur)
+                                my_final_data.at[i, 'ID'] = cur_id
+                                my_final_data.at[i, 'Compound Name'] = record.name
+
+                            except:
+                                logging.error(": No KEGG match found! Check KEGG Website!")
+                                logString = cur_id
+                                logString = ': Failed to find-' + logString
+                                logging.info(logString)
+                                my_final_data.at[i, 'ID'] = cur_id
+                                my_final_data.at[i, 'Compound Name'] = 'No match in KEGG, investigate this compound further.'
+                                continue
 
                     else:
-                        try:
-                            request = REST.kegg_get(my_data['Matched.Compound'][i])
-                            txtFCur = my_data['Matched.Compound'][i] + '.txt'
-                            open(txtFCur,'w').write(request.read())
-                            records = Compound.parse(open(txtFCur))
-                            record = list(records)[0]
-                            os.remove(txtFCur)
-                            my_final_data['ID'][i] = my_data['Matched.Compound'][i]
-                            my_final_data['Compound Name'][i] = record.name
+                        my_final_data.at[i, 'ID'] = cur_id
+                        my_final_data.at[i, 'Compound Name'] = 'Unknown'
 
-                        except:
-                            logging.error(": No KEGG match found! Check KEGG Website!")
-                            #messagebox.showerror(title="Error",message="ID not found in KEGG, as of 04.17.22, this is likely because it is a Glycan!!")
+                # For single-file usage, match the original behavior and
+                # write CompoundMatchUps.csv to the current working directory.
+                out_path = os.path.join(os.getcwd(), "CompoundMatchUps.csv")
+                my_final_data.to_csv(path_or_buf=out_path, index=False)
 
-                            logString = my_data['Matched.Compound'][i]
-                            logString = ': Failed to find-' + logString
-                            logging.info(logString)
-                            my_final_data['ID'][i] = my_data['Matched.Compound'][i]
-                            my_final_data['Compound Name'][i] = 'No match in KEGG, investigate this compound further.'
-                            continue
-
-                else:
-                    my_final_data['ID'][i] = my_data['Matched.Compound'][i]
-                    my_final_data['Compound Name'][i] = 'Unknown'
-            #save data frame as csv file for users
-            my_final_data.to_csv(path_or_buf="CompoundMatchUps.csv", index=False)
-            messagebox.showinfo(title="Success", message="Successfully generaterd CompoundMatchUps file!!")
-            return
+                messagebox.showinfo(
+                    title="Success",
+                    message=f"Successfully generated {os.path.basename(out_path)}."
+                )
+                return
 
         elif typeFile == 'enrich':
             
@@ -559,10 +699,10 @@ class GUIUtils:
         Input a list of exact monoisotopic masses and determine the compounds associated with the masses
 
         Input:
-        Excel sheet with exact masses. 
+        Excel sheet with exact monoisotopic masses. 
 
         Output:
-        Updated excel sheet with Compound matches
+        Updated excel sheet with KEGG Compound matches
 
         '''
         logging.info(': Starting exact mass comparison against KEGG compounds, and glycans!')
@@ -664,19 +804,38 @@ class GUIUtils:
         messagebox.showinfo(title="Success", message="Compound Matches has been generated!")
         return
     
-    def ensembleClusteringFullOpt(parameters, numClusts = 10, transform='None',scale='None'):
+    def ensembleClusteringFullOpt(numClusts=10, transform='None', scale='None', file=None,
+                                  colMap='viridis'):
         '''
+        colMap - matplotlib colormap name for ensemble clustermaps.
         '''
 
         #log that the user called ensemble clustering function
         logging.info(': User called Ensemble Clustering function.')
 
+        ENSEMBLE_PARAMS = [
+            {'Distance': 'CNS', 'Linkage': 'ward', 'Correlation': 'spearman', 'Optimizer': 'CH'},
+            {'Distance': 'CNS', 'Linkage': 'average', 'Correlation': 'spearman', 'Optimizer': 'SIL'},
+            {'Distance': 'CS', 'Linkage': 'ward', 'Correlation': 'spearman', 'Optimizer': 'CH'},
+            {'Distance': 'CS', 'Linkage': 'average', 'Correlation': 'spearman', 'Optimizer': 'SIL'},
+            {'Distance': 'CS', 'Linkage': 'complete', 'Correlation': 'spearman', 'Optimizer': 'DBI'},
+            {'Distance': 'CNS', 'Linkage': 'complete', 'Correlation': 'spearman', 'Optimizer': 'DBI'}
+                                ]
+            
+        parameters = pd.DataFrame(ENSEMBLE_PARAMS)
+                    
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8)
-        file = filedialog.askopenfilename()
+        file = file or filedialog.askopenfilename()
         data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='CC')
         metab_data = GB.readAndPreProcess(file=file,transform='None',scale='None',func='Raw')
         del(col_groups)
+
+        # remember the last file used for ensemble so GUI can reuse it
+        try:
+            config.last_ensemble_file = file
+        except Exception:
+            pass
 
         #determine whether data read in or not.
         if data is None:
@@ -700,7 +859,6 @@ class GUIUtils:
             'CS': GB.correlationSqrt,
             'PW': GB.pairWise
         }
-
 
         #create co-occurrence matrix.
         coOcc = GB.cooccurrence(data)
@@ -794,10 +952,285 @@ class GUIUtils:
         GB.coOccMonoComp(best_labels,labelsCoOcc,distLink)
 
         #create the ensemble dendrogram using ward-euclidean inputs. 
-        GB.createEnsemDendrogramNew(coOcc,metab_data,data,norm=0,minMetabs=0,numClusts=len(parameters),
-                                link='average',dist='euclidean',func="ensemble",colMap='viridis');
-    
-        return      
+        # This call generates the ensemble clustergram AND writes cluster files.
+        # recClustersPostVal now returns (opt_clusters, output_dir) for downstream use.
+        opt_clusters, out_dir = GB.createEnsemDendrogramNew(
+            coOcc, metab_data, data,
+            norm=0, minMetabs=0, numClusts=len(parameters),
+            link='average', dist='euclidean', func="ensemble", colMap=colMap,
+        )
+        return opt_clusters, out_dir
+
+    def cooccHeatmap(num_clusters, coocc_file, data_file, cmap='coolwarm',
+                     col_cluster=False, transform='None', scale='None'):
+        '''
+        Build clustermaps from EnsembleCoOcc.xlsx, user-chosen K, and a
+        group-medians matrix (.xlsx): row 1 = headers (group names in sample
+        columns), then one row per feature (same order as ensemble). If the
+        medians file has one extra row (Group Medians spacer under the header),
+        it is dropped automatically when N = CoOcc + 1.
+
+        transform / scale - same pipeline as ensemble clustering (applied to
+        the numeric group-median matrix for the heatmap only; Cluster*.xlsx
+        exports stay raw medians).
+
+        cmap - matplotlib colormap name (default coolwarm).
+        col_cluster - if True, seaborn also hierarchically clusters columns
+        (groups), adding a column dendrogram.
+
+        Each heatmap is shown in a matplotlib window after saving the PDF;
+        close the window to continue to the next plot, then the success dialog.
+        '''
+        logging.info(': User called CoOcc Heatmap.')
+
+        try:
+            num_clusters = int(num_clusters)
+        except (TypeError, ValueError):
+            messagebox.showerror(title='Error', message='Invalid number of clusters.')
+            return
+
+        if num_clusters < 1 or num_clusters > 10:
+            messagebox.showerror(
+                title='Error',
+                message='Number of clusters must be between 1 and 10.',
+            )
+            return
+
+        if not coocc_file or not os.path.isfile(coocc_file):
+            messagebox.showerror(
+                title='Error',
+                message='Select a valid EnsembleCoOcc.xlsx file.',
+            )
+            return
+
+        if not data_file or not os.path.isfile(data_file):
+            messagebox.showerror(
+                title='Error',
+                message='Select the group medians matrix (.xlsx) for the heatmap.',
+            )
+            return
+
+        cmap = (cmap or 'coolwarm').strip() or 'coolwarm'
+        try:
+            plt.get_cmap(cmap)
+        except Exception:
+            logging.warning(': Unknown colormap %r, using coolwarm.', cmap)
+            cmap = 'coolwarm'
+
+        try:
+            ext = os.path.splitext(str(coocc_file))[1].lower()
+            if ext in ('.xlsx', '.xlsm', '.xltx', '.xltm'):
+                co_occ_df = pd.read_excel(
+                    coocc_file, sheet_name=0, engine='openpyxl'
+                )
+            elif ext == '.xls':
+                co_occ_df = pd.read_excel(
+                    coocc_file, sheet_name=0, engine='xlrd'
+                )
+            else:
+                co_occ_df = pd.read_excel(coocc_file, sheet_name=0)
+            coOcc = np.asarray(co_occ_df.values, dtype=float)
+        except Exception as e:
+            logging.exception(': Failed to read co-occurrence file.')
+            messagebox.showerror(
+                title='Error',
+                message=f'Could not read the co-occurrence matrix:\n{e}',
+            )
+            return
+
+        if coOcc.ndim != 2 or coOcc.shape[0] != coOcc.shape[1]:
+            messagebox.showerror(
+                title='Error',
+                message='Co-occurrence matrix must be square (N × N).',
+            )
+            return
+
+        raw_data = GB.fileCheck(file=data_file)
+        if raw_data is None:
+            return
+
+        n_co = int(coOcc.shape[0])
+        base = raw_data.copy().reset_index(drop=True)
+
+        # Medians .xlsx: header row = group names; all following rows should be
+        # features. Group Medians output also inserts a spacer row (out.loc[0])
+        # so the sheet often has N+1 rows vs N×N CoOcc from ensemble.
+        variants = [base]
+        if len(base) == n_co + 1:
+            variants.append(base.iloc[1:].reset_index(drop=True))
+            variants.append(base.iloc[:-1].reset_index(drop=True))
+
+        metab_data = None
+        trim_note = None
+        for vi, cand in enumerate(variants):
+            if len(cand) != n_co:
+                continue
+            try:
+                mz_c, rt_c = GB.detectColumns(cand)
+                sc_try = [c for c in cand.columns if c not in (mz_c, rt_c)]
+                if not sc_try:
+                    continue
+                _ = cand[sc_try].astype(float)
+                metab_data = cand
+                if vi == 1:
+                    trim_note = 'top'
+                elif vi == 2:
+                    trim_note = 'bottom'
+                break
+            except Exception:
+                continue
+
+        if metab_data is None:
+            n_rows = len(base)
+            messagebox.showerror(
+                title='Error',
+                message=(
+                    f'Co-occurrence matrix is {n_co}×{n_co} (features) but the '
+                    f'medians sheet has {n_rows} data row(s).\n\n'
+                    'Those counts must match. Common cases:\n'
+                    '• Group Medians saves an extra spacer row under the header '
+                    '(first row is not a metabolite). If you see N+1 rows, '
+                    'delete that row in Excel or regenerate medians.\n'
+                    '• Use the same feature list as ensemble: CoOcc was built '
+                    'from the raw matrix (sample names in row 1, group labels '
+                    'in row 2, then features). Medians should be one row per '
+                    'feature after the header row only.\n'
+                    '• Wrong or mixed file (different dataset).'
+                ),
+            )
+            return
+
+        if trim_note:
+            logging.info(
+                ': CoOcc heatmap: dropped %s data row of medians file so row '
+                'count matches CoOcc (N=%s).',
+                trim_note,
+                n_co,
+            )
+
+        mz_col, rt_col = GB.detectColumns(metab_data)
+        sample_cols = [c for c in metab_data.columns if c not in (mz_col, rt_col)]
+        feature_names = metab_data[mz_col].astype(str).tolist()
+
+        sample_labels = GB.sample_labels_for_coocc_group_medians(
+            metab_data, mz_col, rt_col,
+        )
+        if len(sample_labels) != len(sample_cols):
+            sample_labels = [str(c) for c in sample_cols]
+
+        k_data = metab_data[sample_cols].astype(float)
+        k_data.index = pd.Index(feature_names, name=mz_col)
+        k_data.columns = sample_labels
+
+        transform = transform if transform else 'None'
+        scale = scale if scale else 'None'
+        vals = np.asarray(k_data.values, dtype=np.float64, order='C', copy=True)
+        try:
+            GB.transformations(vals, transform=transform, scale=scale, first='1')
+        except Exception as e:
+            logging.exception(': CoOcc heatmap transform/scale failed.')
+            messagebox.showerror(
+                title='Error',
+                message=(
+                    'Transform/scale failed on the median matrix.\n\n'
+                    f'{e}\n\n'
+                    'Try Transform/Scale = None, or match choices to ensemble.'
+                ),
+            )
+            return
+        k_vis = pd.DataFrame(
+            vals, index=k_data.index, columns=k_data.columns,
+        )
+
+        link_mat = linkage(coOcc, method='average')
+        labels = fcluster(link_mat, num_clusters, criterion='maxclust')
+
+        out_dir = os.path.dirname(os.path.abspath(coocc_file))
+        os.makedirs(out_dir, exist_ok=True)
+
+        uniq = np.unique(labels)
+        for i, lab in enumerate(uniq):
+            ind = np.where(labels == lab)[0]
+            cur = metab_data.iloc[ind].copy()
+            sc = [c for c in cur.columns if c not in (mz_col, rt_col)]
+            out = cur[[mz_col] + sc + [rt_col]].copy()
+            out = out.rename(columns={mz_col: 'Identities', rt_col: 'rt_med'})
+            cluster_path = os.path.join(out_dir, f'Cluster{i + 1}.xlsx')
+            GB.safeToExcel(out, cluster_path, index=False)
+
+        # Show x labels when few columns, or when column clustering is on
+        # (group order changes and labels are needed to read the dendrogram).
+        x_lbls = (len(sample_labels) <= 35) or col_cluster
+
+        # Full feature IDs (same as Identities in Cluster*.xlsx); explicit list
+        # so labels are not truncated like yticklabels='auto' can do.
+        feature_y_labels = metab_data[mz_col].astype(str).tolist()
+
+        try:
+            g_feat = sns.clustermap(
+                k_vis,
+                figsize=(8, 8),
+                row_linkage=link_mat,
+                col_cluster=col_cluster,
+                cmap=cmap,
+                linecolor='black',
+                yticklabels=feature_y_labels,
+                xticklabels=x_lbls,
+                cbar_pos=(0.01, 0.8, 0.025, 0.175),
+            )
+            g_feat.ax_heatmap.set_xlabel('')
+            feat_pdf = os.path.join(out_dir, 'feature_labels_heatmap.pdf')
+            g_feat.savefig(feat_pdf, dpi=600, transparent=True)
+            plt.show()
+            plt.close(g_feat.fig)
+        except Exception as e:
+            logging.warning(f': CoOcc feature-label heatmap failed ({e})')
+            messagebox.showerror(
+                title='Error',
+                message=f'Feature-label heatmap failed:\n{e}',
+            )
+            return
+
+        try:
+            labels_y = [str(x) for x in labels]
+            g_cl = sns.clustermap(
+                k_vis,
+                figsize=(8, 8),
+                row_linkage=link_mat,
+                col_cluster=col_cluster,
+                cmap=cmap,
+                linecolor='black',
+                yticklabels=labels_y,
+                xticklabels=x_lbls,
+                cbar_pos=(0.01, 0.8, 0.025, 0.175),
+            )
+            g_cl.ax_heatmap.set_xlabel('')
+            cl_pdf = os.path.join(out_dir, 'cluster_labels_heatmap.pdf')
+            g_cl.savefig(cl_pdf, dpi=600, transparent=True)
+            plt.show()
+            plt.close(g_cl.fig)
+        except Exception as e:
+            logging.warning(f': CoOcc cluster-label heatmap failed ({e})')
+            messagebox.showerror(
+                title='Error',
+                message=f'Cluster-label heatmap failed:\n{e}',
+            )
+            return
+
+        extra = ''
+        if trim_note == 'top':
+            extra = '\n\n(Top data row of the medians file was skipped so it matches CoOcc.)'
+        elif trim_note == 'bottom':
+            extra = '\n\n(Bottom data row of the medians file was skipped so it matches CoOcc.)'
+        messagebox.showinfo(
+            title='Success',
+            message=(
+                f'Saved 2 heatmaps + Cluster1–Cluster{len(uniq)}.xlsx next to:\n'
+                f'{coocc_file}\n\n'
+                f'(Plots were also shown in figure windows.)'
+                f'{extra}'
+            ),
+        )
 
     def ensembleClustering(optNum=2, minMetabs = 0, colorMap='viridis',linkParams=[],transform = 'None',scale='None', type='base'):
         '''
@@ -876,7 +1309,8 @@ class GUIUtils:
         
         return
     
-    def validateMono(self, upperLimClust=10, transform ='None',scale ='None',linkage='average',dissimilarity='euclidean', func = 'SIL'):
+    def validateMono(self, upperLimClust=10, transform='None', scale='None',
+                     linkage='average', dissimilarity='euclidean', func='All'):
         '''
         This functionality is designed to perform clustering optimization on a set of input data. Specifically this is designed to 
         generate agglomerative hierarchical clustering solutions to be optimized using a optimization metric.
@@ -904,17 +1338,12 @@ class GUIUtils:
         Recommended number of clusters given the optimization metric. 
 
         '''
-        
-
-
+        #create a dictionary of validation metrics the user can call for analysis. 
         valIndex = {
-        'Calinski-Harabasz':metrics.calinski_harabasz_score,
-        'Silhouette':metrics.silhouette_score,
-        'Davies-Bouldin':metrics.davies_bouldin_score
+            'Calinski-Harabasz': metrics.calinski_harabasz_score,
+            'Silhouette':        metrics.silhouette_score,
+            'Davies-Bouldin':    metrics.davies_bouldin_score,
         }
-
-        #message until this is fully implemented as I want. 
-        messagebox.showinfo(title='INFORMATION', message='Working to create mono-clustering validation functionality')
 
         #log that user called MST
         logging.info(': User called Cluster validation function.')
@@ -927,70 +1356,47 @@ class GUIUtils:
             messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
             return
         
-        #define the optimal cluster list for saving
-        optClust = [None]*2
-        optScores = np.ones((len(range(2,upperLimClust+1)),2))
+        # evaluate k from 2..upperLimClust for all three metrics
+        ks = list(range(2, upperLimClust + 1))
+
+        # calculate pairwise distances once
+        dist = pdist(data, dissimilarity)
         if linkage == 'ward':
-            #calculate the distance matrix, which in this from should give me the sparse form. So, I should not need to use squareform
-            dist = pdist(data, dissimilarity)
-
-            # dist = squareform(dist)
             link_mat = ward(dist)
-
-            #define the best score as 0 if Silhouette or Calinski-Harabasz
-            if func == 'Davies-Bouldin':
-                bestScore = 10**10
-                for j in range(2, upperLimClust+1):
-                    labels_ = fcluster(link_mat,j,criterion='maxclust')
-                                
-                    #update the best clustering solutions
-                    optScores[j-2,1] = valIndex[func](data,labels_-1)
-                    optScores[j-2,0] = j
-                    if optScores[j-2,1] < bestScore:
-                        optClust[0],optClust[1] = j, labels_-1
-                        bestScore = optScores[j-2,1]
-            else:
-                bestScore = -1
-                for j in range(2, upperLimClust+1):
-                    labels_ = fcluster(link_mat,j,criterion='maxclust')
-                                
-                    #update the best clustering solutions
-                    optScores[j-2,1] = valIndex[func](data,labels_-1)
-                    optScores[j-2,0] = j
-                    if optScores[j-2,1] > bestScore:
-                        optClust[0],optClust[1] = j, labels_-1
-                        bestScore = optScores[j-2,1]
+            cluster_func = lambda k: fcluster(link_mat, k, criterion='maxclust')
         else:
-            #calculate the distance matrix, which in this from should give me the sparse form. So, I should not need to use squareform
-            dist = pdist(data, dissimilarity)
-            # dist = distance[ensemble['Distance'][i]](data)
+            def cluster_func(k):
+                agg = AC(
+                    n_clusters=k,
+                    linkage=linkage,
+                    metric='precomputed'
+                ).fit(squareform(dist))
+                return agg.labels_ + 1
 
-            for j in range(2, upperLimClust+1):
-                #calculate the clustering solutions
-                agglo = AC(n_clusters=j,linkage=linkage,
-                        metric='precomputed').fit(dist)
-                
-                if func == 'Davies-Bouldin':
-                    bestScore = 10**10
-                    #update the best clustering solutions
-                    optScores[j-2,1] = valIndex[func](data,labels_-1)
-                    optScores[j-2,0] = j
-                    if optScores[j-2,1] < bestScore:
-                        optClust[0],optClust[1] = j, agglo.labels_
-                        bestScore = optScores[j-2,1]
-                else:
-                    bestScore = -1
-                    #update the best clustering solutions
-                    optScores[j-2,1] = valIndex[func](data,labels_-1)
-                    optScores[j-2,0] = j
-                    if optScores[j-2,1] < bestScore:
-                        optClust[0],optClust[1] = j, agglo.labels_
-                        bestScore = optScores[j-2,1]
-        plt.plot(optScores[:,0],optScores[:,1],'r-')
+        metrics_to_run = ['Silhouette', 'Davies-Bouldin', 'Calinski-Harabasz']
+        scores = {m: [] for m in metrics_to_run}
+
+        for k in ks:
+            labels_ = cluster_func(k)
+            for m in metrics_to_run:
+                s = valIndex[m](data, labels_)
+                scores[m].append(s)
+
+        # plot 3-panel summary (no red guideline lines)
+        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+        for ax, m in zip(axes, metrics_to_run):
+            y = np.asarray(scores[m])
+            ax.plot(ks, y, marker='o')
+            ax.set_title(m)
+            ax.set_xlabel('Number of clusters (k)')
+            #ax.grid(True, alpha=0.3)
+            
+        plt.figtext(1, 1, plt.figtext(0.5, 0.01, 'Optimal clusters: Silhouette & Calinski-Harabasz = max, Davies-Bouldin = min', ha='center', fontsize=9))
+        plt.tight_layout()
+        plt.savefig('MonoClust_Optimization.png', dpi=300, transparent=True)
         plt.show()
+        logging.info(': Successfully completed mono-clustering optimization for all metrics.')
         return
-
-
 
     def MST(self,transform ='None',scale ='None', func = 'k-means based'):
         '''
@@ -1018,180 +1424,182 @@ class GUIUtils:
             messagebox.showerror(title='Error',message='Unable to proceed, try again or return to homepage!')
             return
 
-        num_groups=data.shape[1]
+        # Keep true MST optimization behavior for the "MST Optimization" button.
+        # That button calls this function with func='ensemble'.
+        if func == 'ensemble':
+            num_groups = data.shape[1]
+            pairWise = squareform(pdist(data))
+            mstInput = csr_matrix(pairWise)
+            mstOut = minimum_spanning_tree(mstInput)
+            mstOutInd = mstOut.nonzero()
+            dataMST = np.zeros([data.shape[0] - 1, 3])
+            for i in range(data.shape[0] - 1):
+                dataMST[i, 0] = mstOutInd[0][i]
+                dataMST[i, 1] = mstOutInd[1][i]
+                dataMST[i, 2] = mstOut[int(dataMST[i, 0]), int(dataMST[i, 1])]
 
-        #find the distance matrix using the pairwise distance function, put into squareform, appropriate format for mst and submit. 
-        pairWise = pdist(data)
-        pairWise = squareform(pairWise)
-        mstInput = csr_matrix(pairWise)
-        mstOut = minimum_spanning_tree(mstInput)
+            mstOutDf = pd.DataFrame(dataMST, columns=['index1', 'index2', 'dist']).sort_values(by='dist')
+            validationClusters = GB.clustConnect(dataMST, mstOutDf.to_numpy())
+            argsMulti = [({0: validationClusters[i]}, data, num_groups)
+                         for i in range(len(validationClusters))
+                         if i >= max(0, len(validationClusters) - 101)]
 
-        #get out the non-zero indicies. 
-        mstOutInd = mstOut.nonzero()
+            valIndex = [GB.Validate(*a) for a in argsMulti]
+            valIndex = np.asarray(
+                [np.reshape(np.asarray(v), (2, -1))[:, 0] for v in valIndex],
+                dtype=float
+            )
+            K = valIndex[:, 1]
+            y = valIndex[:, 0].astype(float)
+            if y.shape[0] > 1:
+                y[y.shape[0] - 1] = y[y.shape[0] - 2] * 2
+            y = 1.0 / np.where(y == 0, np.nan, y)
+            for i in range(y.shape[0]):
+                if K[i] > 1 and np.isfinite(y[i]):
+                    y[i] = (y[i] * K[i]) / (K[i] - 1)
+            if np.all(np.isnan(y)):
+                messagebox.showerror(title='Error', message='MST optimization could not determine an optimal K.')
+                return
+            optK = int(K[int(np.nanargmax(y))])
+            messagebox.showinfo(message="MST suggests optimal number of clusters: " + str(optK))
+            GB.valPlotting(valIndex, mstOutDf)
+            return optK
 
-        #create the matrix containing the various connections of the mst
-        mstOutMat = mstOut.todense()
-        dataMST = np.zeros([data.shape[0]-1,3])
+        max_k = min(25, data.shape[0] - 1)
+        
+        if max_k < 2:
+            messagebox.showerror(title='Error', message='Need at least 3 samples to run cluster validation.')
+            return
 
-        for i in range(data.shape[0]-1):
-            #input the values of each matrix element to the numpy array for saving to csv file.
-            dataMST[i,0] = mstOutInd[0][i]
-            dataMST[i,1] = mstOutInd[1][i]
-            dataMST[i,2] = mstOut[int(dataMST[i,0]),int(dataMST[i,1])]
+        ks = list(range(2, max_k + 1))
 
-        #Input the dataMST into the dataframe to save the results of the MST for future use if needed
-        mstOut = pd.DataFrame(dataMST, columns=['index1','index2','dist'])
-        mstOut = mstOut.sort_values(by='dist')
-        mstOutNp = mstOut.to_numpy()
+        def _dunn_index(x, labels):
+            uniq = np.unique(labels)
+            if uniq.shape[0] < 2:
+                return np.nan
+            dm = squareform(pdist(x))
+            max_intra = 0.0
+            for c in uniq:
+                idx = np.where(labels == c)[0]
+                if idx.shape[0] < 2:
+                    continue
+                intra = dm[np.ix_(idx, idx)]
+                max_intra = max(max_intra, float(np.max(intra)))
+            if max_intra == 0:
+                return np.nan
+            min_inter = float("inf")
+            for a in range(len(uniq)):
+                ia = np.where(labels == uniq[a])[0]
+                for b in range(a + 1, len(uniq)):
+                    ib = np.where(labels == uniq[b])[0]
+                    inter = dm[np.ix_(ia, ib)]
+                    if inter.size > 0:
+                        min_inter = min(min_inter, float(np.min(inter)))
+            return np.nan if not np.isfinite(min_inter) else float(min_inter / max_intra)
 
-        mstOutMat = pd.DataFrame(mstOutMat)
- 
-        #determine how the minimum spanning tree was created for validation of clusters
-        validationClusters = GB.clustConnect(dataMST,mstOutNp)
+        def _pbm_index(x, labels):
+            uniq = np.unique(labels)
+            k = uniq.shape[0]
+            if k < 2:
+                return np.nan
+            center_all = np.mean(x, axis=0)
+            e1 = float(np.sum(np.linalg.norm(x - center_all, axis=1)))
+            ek = 0.0
+            centers = []
+            for c in uniq:
+                cl = x[labels == c]
+                ctr = np.mean(cl, axis=0)
+                centers.append(ctr)
+                ek += float(np.sum(np.linalg.norm(cl - ctr, axis=1)))
+            if ek == 0:
+                return np.nan
+            centers = np.asarray(centers)
+            dk = float(np.max(pdist(centers))) if centers.shape[0] > 1 else 0.0
+            return float(((e1 * dk) / (ek * k)) ** 2)
 
-        if func == 'k-means based':
-            #Validate the number of clusters that should be used in the clustering solutions.
-            #create a list of tuples containing the single cluster set, with the data and the num_groups
-            argsMulti = []
-            
-            logging.info(": Starting k-means based cluster validation!")
-            start = time.perf_counter()
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(GB.Validate,argsMulti)
-            
-            end = time.perf_counter()
-            logging.info(':'+str(end-start))
-            valIndex = np.asarray(valIndex)
-            GB.valPlotting(valIndex,mstOut)
+        scores = {
+            'k-means based': [],
+            'Silhouette': [],
+            'DBI': [],
+            'Dunn': [],
+            'PBM': [],
+        }
 
-        elif func=='DBI':
-            logging.info(": Starting Davies-Bouldin cluster validation!")
+        for k in ks:
+            km = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = km.fit_predict(data)
+            scores['k-means based'].append(float(km.inertia_))
+            scores['Silhouette'].append(float(metrics.silhouette_score(data, labels)))
+            scores['DBI'].append(float(metrics.davies_bouldin_score(data, labels)))
+            scores['Dunn'].append(_dunn_index(data, labels))
+            scores['PBM'].append(_pbm_index(data, labels))
 
-            #start tracking the performance of non-threaded DBI validation
-            start = time.perf_counter()
-            valIndex = np.zeros((len(validationClusters),2))
+        metric_meta = {
+            'k-means based': {'title': 'KMeans WCSS (Elbow)', 'better': 'min'},
+            'Silhouette': {'title': 'Silhouette', 'better': 'max'},
+            'DBI': {'title': 'Davies-Bouldin', 'better': 'min'},
+            'Dunn': {'title': 'Dunn', 'better': 'max'},
+            'PBM': {'title': 'PBM', 'better': 'max'},
+        }
 
-            argsMulti = []
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
+        def _best_idx(arr, better):
+            vals = np.asarray(arr, dtype=float)
+            if np.all(np.isnan(vals)):
+                return None
+            return int(np.nanargmin(vals) if better == 'min' else np.nanargmax(vals))
 
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(VM.daviesBouldin,argsMulti)
+        if func == 'All':
+            fig, axes = plt.subplots(2, 3, figsize=(14, 9))
+            axes = axes.flatten()
+            ordered = ['k-means based', 'Silhouette', 'DBI', 'Dunn', 'PBM']
+            for i, name in enumerate(ordered):
+                y = np.asarray(scores[name], dtype=float)
+                ax = axes[i]
+                ax.plot(ks, y, marker='o')
+                bi = _best_idx(y, metric_meta[name]['better'])
+                #if bi is not None:
+                    #ax.plot(ks[bi], y[bi], 'r.', markersize=12)
+                ax.set_title(metric_meta[name]['title'])
+                ax.set_xlabel('Number of clusters (k)')
+                #ax.grid(True, alpha=0.3)
+            axes[5].axis('off')
+            axes[5].text(
+                0.5, 0.5,
+                "Optimal clusters guide:\n"
+                "WCSS = elbow/slope change\n"
+                "Silhouette, Dunn, PBM = max\n"
+                "DBI = min",
+                ha='center', va='center', fontsize=10, wrap=True
+            )
+            plt.tight_layout()
+            plt.savefig('ValidationClusters_AllMetrics.png', dpi=300, transparent=True)
+            plt.show()
+            pd.DataFrame({'k': ks, **scores}).to_csv('ValidationClusters_AllMetrics.csv', index=False)
+            return
 
-            
-            end = time.perf_counter()
-            valIndex = np.asarray(valIndex)
+        if func not in scores:
+            messagebox.showerror(title='Error', message=f'Unknown validation metric: {func}')
+            return
 
-            GB.valPlotting(valIndex,mstOut,valMet = func)
+        y = np.asarray(scores[func], dtype=float)
+        best_i = _best_idx(y, metric_meta[func]['better'])
+        plt.figure(figsize=(6, 5), dpi=300)
+        plt.plot(ks, y, marker='o')
+        #if best_i is not None:
+           # plt.plot(ks[best_i], y[best_i], 'r.', markersize=12)
+           # plt.annotate(f'k={ks[best_i]}', (ks[best_i], y[best_i]))
+        plt.title(metric_meta[func]['title'])
+        plt.xlabel('Number of clusters (k)')
+        plt.ylabel('Score')
+        plt.figtext(1, 1, plt.figtext(0.5, 0.01, 'Optimal clusters: WCSS = elbow/slope change, Silhouette, Dunn, PBM = max, DBI = min,', ha='center', fontsize=9))
+        #plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"ValidationClusters_{func.replace(' ', '_')}.png", dpi=300, transparent=True)
+        plt.show()
+        pd.DataFrame({'k': ks, func: y}).to_csv(f"ValidationClusters_{func.replace(' ', '_')}.csv", index=False)
+        return
 
-        elif func == 'Dunn':
-            logging.info(": Starting Dunn cluster validation!")
-
-            start = time.perf_counter()
-            valIndex = np.zeros((len(validationClusters),2))
-
-            argsMulti = []
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(VM.dunnIndex,argsMulti)
-
-            
-            end = time.perf_counter()
-            valIndex = np.asarray(valIndex)
-
-            GB.valPlotting(valIndex,mstOut,valMet='Dunn')
-
-        elif func == 'PBM':
-            logging.info(": Starting PBM cluster validation!")
-
-            #find the center of all the data.
-            dataPatCenter = np.mean(data, axis=0)
-
-            #put the center at the top of the numpy array to find the sum of the distances
-            dataC = np.vstack([dataPatCenter,data])
-            
-            #find the distances and sum them
-            distances = pdist(dataC)
-            distances = squareform(distances)
-            Eo = np.sum(distances[0,:])
-
-            #start tracking the performance of the threaded PBM valdidation metric
-            start = time.perf_counter()
-            valIndex = np.zeros((len(validationClusters),2))
-
-            argsMulti = []
-
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups,Eo))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups,Eo))
-
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(VM.PBM,argsMulti)
-
-            
-            end = time.perf_counter()
-            valIndex = np.asarray(valIndex)
-            GB.valPlotting(valIndex,mstOut,valMet='PBM')
-            
-        elif func == 'Silhouette':
-            logging.info(": Starting Silhouette cluster validation!")
-
-            #start tracking the performance of non-threaded DBI validation
-            start = time.perf_counter()
-            valIndex = np.zeros((len(validationClusters),2))
-
-            argsMulti = []
-            if len(validationClusters) < 100:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-(int(len(validationClusters)/2)):
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-            else:
-                for i in range(len(validationClusters)):
-                    if i >= len(validationClusters)-101:
-                        argsMulti.append(({0:validationClusters[i]},data,num_groups))
-
-            if __name__ == 'GUIUtils':
-                with Pool(config.numThreads) as p:
-                    valIndex = p.starmap(VM.Silhouette,argsMulti)
-
-            end = time.perf_counter()
-            valIndex = np.asarray(valIndex)
-            GB.valPlotting(valIndex,mstOut,valMet="Silhouette")
-
-
-    def peaksToPathways():
+    def peaksToPathways(raw_file=None, clusters_dir=None):
         '''
         Create input files for the mummichog algorithm, using files output from the ensemble clustering and the in the future from the clustergram function. 
 
@@ -1206,8 +1614,11 @@ class GUIUtils:
         '''
         logging.info(': Entering the Peaks to Pathways generator!')
         #ask user to input the file name of the original data
-        messagebox.showinfo(title='File selection', message="Please select the original data file submitted for clustering!!")
-        filename = filedialog.askopenfilename()
+        if raw_file is None:
+            messagebox.showinfo(title='File selection', message="Please select the original data file submitted for clustering!!")
+            filename = filedialog.askopenfilename()
+        else:
+            filename = raw_file
 
         dataRaw = GB.fileCheck(file = filename)
         if dataRaw is None:
@@ -1216,8 +1627,11 @@ class GUIUtils:
             return
 
         #ask user to select the directory containing the csv files from ensemble clustering output (currently only method available)
-        messagebox.showinfo(title="Directory Selection",message="Please select the directory containing the ensemble clustering output files!")
-        direct = filedialog.askdirectory()
+        if clusters_dir is None:
+            messagebox.showinfo(title="Directory Selection",message="Please select the directory containing the ensemble clustering output files!")
+            direct = filedialog.askdirectory()
+        else:
+            direct = clusters_dir
         curDir = os.getcwd()
 
         #change the current working directory to 
@@ -1232,10 +1646,10 @@ class GUIUtils:
             curCheck =files[i]
             if curCheck[0:5] == 'Ensem':
                 #append to ensemFiles
-                ensemFiles.append(direct + '/' + curCheck)
+                ensemFiles.append(os.path.join(direct, curCheck))
             elif curCheck[0:5] == 'Clust':
                 #append to ensemFiles
-                ensemFiles.append(direct + '/' + curCheck)
+                ensemFiles.append(os.path.join(direct, curCheck))
 
         columnsHead = list(dataRaw.columns)
         columnFirst = columnsHead[0]
@@ -1245,7 +1659,7 @@ class GUIUtils:
             dataClust[:,1] = dataRaw["rtmed"]
             #start the process of reading in and creating the ensemble output files. 
             try:
-                dataCur = pd.read_excel(ensemFiles[i])
+                dataCur = pd.read_excel(ensemFiles[i], engine='openpyxl')
             except:
                 logging.error(': Failed to read in the excel sheet, it is recommend to upload an excel workbook with a single sheet!')
                 messagebox.showerror(title='Error', message="Failed to read the excel sheet, it is recommended to upload an excel workbook with a single sheet!")
@@ -1321,110 +1735,7 @@ class GUIUtils:
         messagebox.showinfo(title="Success",message="Success Peaks to Pathway files have been generated!!")
         return
 
-    def PDFGenerator():
-        '''
-        Generates image of the selected clusters from the Cluster selection tool. 
-
-        Input:
-
-        PDFGenerator does not accept input, but asks for the directory containing the output images. 
-
-        Output:
-
-        PDF report of the results from a MetaboAnalystR run. 
-
-        '''
-
-        #log that the function has been called
-        logging.info(': Entering PDF Generator function.')
-
-        #create the pdf and title for each page.
-        pdf = fpdf.FPDF('P','mm','Letter')
-
-        #Create the title and set the default font
-        directory = filedialog.askdirectory()
-        os.chdir(directory)
-        #determine the current user
-        curUser = getpass.getuser()
-        curUser = GB.who(curUser)
-
-        #Create the first page
-        title = 'Metabolanalyst Results' + '-' + curUser
-        pdf.add_page()
-        pdf.set_font('Arial','B',24)
-        pdf.cell(197,10,title,0,0,'C')
-        pdf.set_font('Arial','B',14)
-        pdf.set_font('')
-        pdf.ln(10)
-        #*******************************************
-        #create the variability in the pdf's here.
-        #*******************************************
-        files = GB.files(directory)
-        #first page should always contain the normalized and sample normalizations
-        #for the first iteration look for the Normalization and sample normalization
-        norm = 'norm_0_dpi300.png' in files
-        snorm = 'snorm_0_dpi300.png' in files
-
-        if norm is True and snorm is True:
-            #input the sample and full data normalization onto the first page of pdf document
-            pdf.cell(197,10,'Normalization',0,0,'L')
-            pdf.ln(10)
-            imRatio = GB.imageSize('norm_0_dpi300.png') 
-            pdf.image('norm_0_dpi300.png',55,30,100*imRatio,100)
-            
-            pdf.ln(120)
-            pdf.cell(197,10,'Sample Normalization',0,0,'L')
-            pdf.ln(10)
-            imRatio = GB.imageSize('snorm_0_dpi300.png')
-            pdf.image('snorm_0_dpi300.png',55,160,100*imRatio,100)
-
-            #remove the first two files used above from the list
-            files.remove('norm_0_dpi300.png')
-            files.remove('snorm_0_dpi300.png')
-
-        #determine the number of pages needed in the pdf report to generate the appropriate for loop.
-        pages = int((len(files))/2)
-        for i in range(pages):
-            # iterating through the images to get create a pdf
-            pdf.add_page()
-
-            # grab the first file that is available and send it to the image size function and then the naming function
-            fileOne = files[0]
-            imRatio = GB.imageSize(fileOne)
-            headerOne = GB.pdfHeader(fileOne)
-
-            #add the first image to the page.
-            pdf.cell(197,10,headerOne,0,0,'L')
-            pdf.ln(10)
-            pdf.image(fileOne,55,30,100*imRatio,100)
-
-            # grab the second file that is available and send it to the image size function and then the naming function
-            fileTwo = files[1]
-            imRatio = GB.imageSize(fileTwo)
-            headerTwo = GB.pdfHeader(fileTwo)
-
-            #add the second image to the page
-            pdf.ln(120)
-            pdf.cell(197,10,headerTwo,0,0,'L')
-            pdf.ln(10)
-            pdf.image(fileTwo,55,160,100*imRatio,100)
-
-            #delete the first two files from the list of files
-            files.remove(fileOne)
-            files.remove(fileTwo)
-
-        #create the pdf of the results
-        ending = '.pdf'
-        fileName = ''
-        curTime = time.strftime("%a_%b_%d_%Y_%H_%M")
-        fileName += curUser + '_' + curTime + ending
-        pdf.output(fileName,'F')
-        #log the sucessful creation of the pdf
-        logging.info(': Sucessfully created a pdf of the results!')
-        logging.info(': Leaving the pdf PDF Generator Function!')
-        return
-
-    def heatmapAnalysis(linkFunc,distMet,cmap,norm, colOrder = [], transform = 'None', scale ='None'):
+    def heatmapAnalysis(linkFunc, distMet, cmap, norm, colOrder=[], transform='None', scale='None', file=None):
         '''
         Allows users to input a subset of the original clutergram from heatmap analysis. 
 
@@ -1436,14 +1747,13 @@ class GUIUtils:
         scale
 
         Output:
-
         Heatmap of the subset of metabolites given as input.
 
         '''
 
         #read in the file
         messagebox.showinfo(message='Input file you would like to have heatmap of.')
-        file = filedialog.askopenfilename()
+        file = file or filedialog.askopenfilename()
         #send the data off to the readAndPreProcess function for analysis. 
         data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func="CC")
 
@@ -1501,8 +1811,6 @@ class GUIUtils:
         plt.show()
 
         return
-        
-
 
     def selectClusters(link,dist,norm=0, colOrder=[], transform = 'None', scale = 'None',cmap = 'viridis'):
         '''
@@ -1660,6 +1968,13 @@ class GUIUtils:
 
     def enzymeLookUp(numSheets):
         '''
+        This function works by asking the user to select a file with the a column of Cpd.Hits, from which it queries KEGG to determine the associated enzymes. 
+
+        Input:
+        xlsx file with a Cpd.Hits column
+
+        Output: 
+        xlsx workbook with multiple sheets that containing information on all of the clusters adn their corresponding compounds and enzymes. 
         '''
 
         #have the user select the file they would like to have read in.
@@ -1732,7 +2047,7 @@ class GUIUtils:
 
         messagebox.showinfo(title="Success", message="Successfully completed getting enzyme IDs for each compound!")
 
-    def anovaHM(transform ='Log transformation',scale='Auto Scaling',cMap = 'viridis'):
+    def anovaHM(transform='Log transformation', scale='Auto Scaling', cMap='viridis', file=None):
         '''
         Allows users to plot the top ### of data objects from ANOVA analysis
 
@@ -1747,7 +2062,7 @@ class GUIUtils:
         '''
         func = 'CC'
         #ask the user for the input excel workbook needs to contain two sheets
-        file = filedialog.askopenfilename()
+        file = file or filedialog.askopenfilename()
 
         #open sheet 0 - containing the original data
         #open sheet 1 - containing all ANOVA outcomes or the pre-truncated ANOVA results
@@ -1758,15 +2073,12 @@ class GUIUtils:
             messagebox.showerror(title="Error", message='Unable to open file!')
             return
 
-
-
         dataOrig = pd.read_excel(file,sheet_name=0)
         dataOrig = dataOrig.iloc[1:,:]
         colHeaders = list(dataOrig.columns)
         colHeaders.pop(0)
         colHeaders.pop(len(colHeaders)-1)
         anovaResC = list(anovaRes.columns)
-
 
         #get column names out
         metabNames = list(dataOrig.columns)
@@ -1785,12 +2097,16 @@ class GUIUtils:
         dataUpdated.to_excel('RawTopANOVA.xlsx')
         g=sns.clustermap(dataUpdated,cMap=cMap)
         plt.show()
-
-
         return
 
     def confidenceIntervals(sampSize, confidenceLevel = 95):
         '''
+        Input:
+        A file of original data.
+        A file of the t-test results. 
+
+        Output:
+        A single file with the confidence intervals for all of the metabolites considered. 
         '''
         messagebox.showinfo(title="Input Order",message="Please first select a column oriented metabolomics files with the intensities between m/z (do not label this column) and rtmed columns. Next, select t_test.csv file from Metaboanalyst output.")
         #get file name and read in the original data file
@@ -1804,7 +2120,6 @@ class GUIUtils:
         tTestsLoc = filedialog.askopenfilename()
         tTests = pd.read_csv(tTestsLoc)
 
-
         #put the tTestMzs into a list for searching
         tTestMzs = tTests['Unnamed: 0'].tolist()
 
@@ -1817,7 +2132,6 @@ class GUIUtils:
         #calculate the df and quantile, given the user inputs
         df = (sampleSize*2)-2
         q = 1- (1- ((confLevel)/100))/2
-
         tCritical = t.ppf(q,df)
 
         #search the values in the list against the original values to find the values of interest.
@@ -1882,13 +2196,17 @@ class GUIUtils:
         messagebox.showinfo(title="Success",message="A t_testWCIs.xlsx file has successfully been created!")
         return
 
-
-    def normalityCheck(transform='None',scale='None'):
+    def normalityCheck(transform='None', scale='None', file=None):
         '''
+        Input:
+        A file in which you would like to check the normality of before performing any downstream analyses. 
+
+        Output:
+        A plot showing the comparison of pre and post normalization results. 
         '''
 
         #have user input the wanted file
-        file =filedialog.askopenfilename()
+        file = file or filedialog.askopenfilename()
 
         #read in the metabolites file, and reshape for the analysis
         data, col_groups = GB.readAndPreProcess(file=file,transform=transform,scale=scale,func='CC')
@@ -1908,6 +2226,11 @@ class GUIUtils:
 
     def progenesis():
         '''
+        Input:
+        An output excel workbook from progenesis see example files for appropriate file type
+
+        Output:
+
         '''
 
         #have the user select the progenesis output spreadsheet. 
@@ -1946,7 +2269,6 @@ class GUIUtils:
         compDict = {}
         for i in range(0,len(SV_pd)):
             # for the chosen searching value
-            
             # look at where it has matches
             temp_indexes = np.where(temp[1]==i)[0]
             d2_indexes =[]
@@ -1978,7 +2300,6 @@ class GUIUtils:
             else: 
                 matches +=1
 
-
             match_DF=match_DF.sort_values("Score",ascending=False)
             match_DF=match_DF.drop(columns=["Compound","Not fragmented","Not identified"])
             sheetName = "Query List " + str(mz_SV[i])
@@ -2004,7 +2325,6 @@ class GUIUtils:
             messagebox.showinfo(message='Saved matching queries to VIPwComps.xlsx')
 
         return
-    
     
     def mfgUtil(fileName,variant):
         '''
@@ -2199,636 +2519,29 @@ class GUIUtils:
         logging.info(":Completed")
         return 
 
-    def metaboBot(analysis='Uni',varianceFilter='SD',sampleNorm='None',trans='Log transformation',scale='Auto Scaling'):
-        '''
-
-        '''
-        start =time.time()
-        #set up the browser runner, update the directory, get all the csv files within the folder of interest
-        directory = filedialog.askdirectory()
-
-        curDir = os.getcwd()
-        os.chdir(directory)
-        files = glob.glob( '*.csv')
-        driver = webdriver.Chrome()#options=chrome_options
-
-        for i in range(len(files)):
-
-
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################### Pre-processing before univariate or multi-variate analysis #################################
-            #get file of interest and 
-            file = files[i]
-            # loc, name = os.path.split(file)
-            name = file.strip('.csv')
-            file = directory+'/'+file
-
-            driver.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/StatUploadView.xhtml')
-
-
-            #wait the homepage loads, if it doesn't load in 10 seconds quit, the expected file input should be a row (unpaired file) 
-            try:
-                #wait for the website to load and then select the Peak Intensities radio button. 
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12:j_idt20"]/div[3]/div'))
-                )
-                #select the radio button peak intensities
-                driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt20"]/div[3]/div').click()
-                #sent the selected file to the website
-                driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt26_input"]').send_keys(file)
-                #click the submit button. 
-                driver.find_element(By.XPATH,'//*[@id="j_idt12:j_idt27"]').click()
-            except:
-                #quit the website, should the bot not work. 
-                driver.quit()
-                messagebox.showerror(message='I quit on homepage')
-                return
-
-            #wait for the data check to complete  
-            try:
-                #wait for element to show up
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt18"]'))
-                )
-                #click proceed, it is the onus of the user to ensure that the files are correct for metaboanalyst.
-                driver.find_element(By.XPATH,'//*[@id="form1:j_idt18"]').click()
-            except:
-                #quit the website, should the bot not work.
-                driver.quit()
-                messagebox.showerror(message='I quit on data processing page')
-                return
-
-            #check for the correct button, and the appropriate filtering then move on. 
-            try:
-                #look for standard deviation filter... if it is present the rest will be as well. 
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span'))
-                )
-                if varianceFilter == 'SD':
-                    #standard deviation filtering into pre-processing
-                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[2]/div/div/div[2]/span').click()
-
-                elif varianceFilter == 'MAD':
-                    #select the median absolute deviation (MAD)
-                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[3]/div/div/div[2]/span').click()
-
-                elif varianceFilter == 'RSD':
-                    #Relative standard deviation
-                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[4]/div/div/div[2]/span').click()
-
-                elif varianceFilter == 'MAD_m':
-                    #Relative standard deviation
-                    driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt24"]/div[5]/div/div/div[2]/span').click()
-                
-                #submit
-                driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt41"]').click()
-                #proceed
-                driver.find_element(By.XPATH,'//*[@id="j_idt14:j_idt42"]').click()
-
-            except:
-                #quit the website, should the bot not work.
-                driver.quit()
-                #add message box here if you end up here.
-                messagebox.showerror(message='I quit on the pre-processing page')
-
-            #get the data normalized
-            try:
-                #check for the log-transformation button
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span'))
-                )
-
-                #select the correct button should the user select a sample normalization
-                if sampleNorm == 'Sum':
-                    #click on the normalization by sum 
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt41"]/div[2]/span').click()
-
-                elif sampleNorm == 'Median':
-                    #click on the normalization by median
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt44"]/div[2]/span').click()
-                
-                elif sampleNorm =='Quantile':
-                    #click on the Quantile Normalization 
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt56"]/div[2]/span').click()
-
-
-                #select the correct data transformation.
-                if trans == 'Log transformation':
-                    #click on log transformation
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt74"]/div[2]/span').click()
-
-                elif trans == 'Square root transformation':
-                    #click on square-root tranformation
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt78"]/div[2]/span').click()
-
-                elif trans == 'Cube root transformation':
-                    #click on the cube-root transformation
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt82"]/div[2]/span').click()
-
-                #select the dataScale = ('None','Mean-Center','Auto-scale','Pareto-scale','Range-scale')correct data scaling
-                if scale == 'Mean centering':
-                    #click on mean centering
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt91"]/div[2]/span').click()
-
-                elif scale == 'Auto Scaling':
-                    #click on auto-scaling
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt94"]/div[2]/span').click()
-
-                elif scale == 'Pareto Scaling':
-                    #click on paret-scaling
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt97"]/div[2]/span').click()
-
-                elif scale =='Range Scaling':
-                    #click on range-scaling
-                    driver.find_element(By.XPATH,'//*[@id="form1:j_idt100"]/div[2]').click()
-
-                #make sure that the normalize button is present and selected each time. 
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:j_idt104"]/span'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="form1:j_idt104"]/span').click()
-            except:
-                driver.quit()
-                #add message here.
-                messagebox.showerror(message='I quit on the data normalization page') 
-                return
-
-            #proceed to next step after pre-processing
-            try:
-                #the element is present but not clickable. 
-                time.sleep(2)
-                #wait for element to show up
-                element = WebDriverWait(driver,15).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="form1:nextBn"]/span'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="form1:nextBn"]/span').click()  
-
-            except:
-                driver.quit()
-                #add appropriate message
-                messagebox.showerror(message='I quit on the preprocessing page')
-                return
-
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ###########################################Univariate or multi-variate analysis ################################################
-            if analysis == 'Uni':
-                #perform fold-change
-                try:
-                #   wait for element to show up
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td/table/tbody/tr/td[1]/a').click()
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I quit on the fold-change selection page')
-                    return
-
-                #peform a t-test
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt78:3_1"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt78:3_1"]/div').click()
-                except:
-                    driver.quit()
-                    messagebox.showerror(message='I quit on the t-test page')
-                    return
-
-
-                #perform volcano plot analysis
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt93:3_2"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt93:3_2"]/div').click()
-
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="form3:j_idt51"]'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt51"]').clear()
-                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt51"]').send_keys(0.05)
-                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt52"]/div[2]/div/div[2]/span').click()
-                    driver.find_element(By.XPATH,'//*[@id="form3:j_idt59"]').click()
-
-                except:
-                    driver.quit()
-                    messagebox.showerror(message='I quit on the volcano plot analyses page')
-                    return
-
-                #principal components analysis.
-                try:
-                    time.sleep(4)
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt112:3_7"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt112:3_7"]/div').click()
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[3]/a'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
-                except:
-                    driver.quit()
-                    messagebox.showerror(message='I quit on the principal components analysis page')
-                    return
-
-                #PLS-DA
-                try:
-                    
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add needed message.
-                    messagebox.showerror(message='I quit on initial PLS-DA')
-                    return
-
-                #PLS-DA extra's
-                try:
-                    time.sleep(2)
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[2]/a'))
-                    )
-                    
-                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[4]/a'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I quit on PLS-DA extras')
-                    return
-
-                #create a dendrogram 
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I quit at the dendrogram')
-                    return
-
-                #create a heatmap
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror('I quit at the heatmap')
-                    return
-                
-                # go to the download page
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div'))
-                    )
-                    time.sleep(3)
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I didn''t make it to the download page' )
-                    return
-
-
-            elif analysis == 'Multi':
-                #ANOVA
-                try:
-                    #the element is present but not clickable. 
-                    #wait for element to show up
-                    element = WebDriverWait(driver,15).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="j_idt12"]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/a').click()  
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message=' I quit on ANOVA page')
-                    return
-
-
-                #principal components analysis.
-                try:
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt92:3_7"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt92:3_7"]/div').click()
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[3]/a'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[3]/a').click()
-                except:
-                    driver.quit()
-                    messagebox.showerror(message='I quit on the principal components analysis page')
-                    return
-
-
-                #PLS-DA
-                try:
-                    
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt167:3_8"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add needed message.
-                    messagebox.showerror(message='I quit on initial PLS-DA')
-                    return
-
-                #PLS-DA extra's
-                try:
-                    time.sleep(2)
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[2]/a'))
-                    )
-                    
-                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[2]/a').click()
-                    #wait for element
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac"]/ul/li[4]/a'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="ac"]/ul/li[4]/a').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I quit on PLS-DA extras')
-                    return
-
-                #create a dendrogram 
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt220:3_13"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I quit at the dendrogram')
-                    return
-
-                #create a heatmap
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt35:3_14"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I quit at the heatmap')
-                    return
-
- 
-                # go to the download page
-                try:
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div'))
-                    )
-                    driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt127:4"]/div').click()
-
-                except:
-                    driver.quit()
-                    #add appropriate message
-                    messagebox.showerror(message='I didn''t make it to the download page' )
-                    return
-                
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ################################################################################################################################
-            ########################################### Downloading and saving results. ####################################################
-
-            ##### After analysis trying to download the data.  
-            #download results
-            try:
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a').click()
-
-            except:
-                driver.quit()
-                #Add appropriate message
-                messagebox.showerror(message='I didn''t download the data. ')
-                return
-
-
-            #rename zip file, but first check that it has downloaded.
-            rename = name+'.zip'
-            basepath = os.path.expanduser('~')
-            basepath +='/Downloads/Download.zip'
-            #get the start time to give plenty of time for the download to occur. 
-            downloadTime = 0
-            downloaded = False
-            start = time.time()
-            while downloadTime < 60:
-                #checking for download.
-                downloadTime = time.time() - start
-                if os.path.exists(basepath):
-                    #file has downloaded
-                    downloaded = True
-                    break
-
-            if downloaded:
-                time.sleep(2)
-                #rename the file and unzip into the appropriate folder
-                os.rename(basepath,rename)
-                directory = os.getcwd()
-                zip_dir = directory + '/'+ name
-                with zipfile.ZipFile(rename,'r') as zip_ref:
-                    zip_ref.extractall(zip_dir)
-                #remove the downloaded and renamed zip file. 
-                os.remove(rename)
-
-        logging.info(' Completed the analysis for the selected inputs. ')
-        messagebox.showinfo(message='Successfully completed runs for all files in the files in the selected directory.')
-
-    def mummiBot(pval = 0.05,lcMode='Positive',db = 'Mouse (KEGG)'):
-        '''
-        
-        '''
-        #set up the browser runner, update the directory, get all the csv files within the folder of interest
-        directory = filedialog.askdirectory()
-
-        curDir = os.getcwd()
-
-        os.chdir(directory)
-        files = glob.glob( '*.csv')
-
-        driver = webdriver.Chrome()
-
-        for i in range(len(files)):
-            #get file of interest and 
-            file = files[i]
-            name = file.strip('.csv')
-            file = directory+'/'+file
-
-            ## Navigate to the MetaboAnalyst Website for the one-factor stats analysis
-            driver.get('https://www.metaboanalyst.ca/MetaboAnalyst/upload/PeakUploadView.xhtml')
-            
-            
-            #determine the machine mode used for analysis. 
-            if lcMode == 'Positive':
-                try:
-                    #wait for the website to load and then select the Peak Intensities radio button. 
-                    element = WebDriverWait(driver,10).until(
-                        EC.presence_of_element_located((By.XPATH,'//*[@id="ac:form2:j_idt19"]/div[2]'))
-                    )
-                    #click on the drop down menu
-                    driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19"]/div[2]').click()
-                    driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt19_0"]').click() #click on the wanted mode, currently this is positive.
-
-                except:
-                    messagebox.showinfo(message='Failed to select the correct mode')
-                    return
-
-
-            #upload the files you would like to have analyzed
-            driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt46_input"]').send_keys(file)
-            #submit the file for analysis
-            driver.find_element(By.XPATH,'//*[@id="ac:form2:j_idt48"]').click()
-
-
-            #proceed after data sanity check
-            try:
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="form1:j_idt18"]'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="form1:j_idt18"]').click()
-
-            except:
-                messagebox.showerror(message='Failed to get past the data sanity check, check input sheet.')
-                return
-
-            
-            
-            try:
-                #verify that the p-value cutoff is present and set it to 0.05
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="j_idt13:j_idt25"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input'))
-                )
-                #clear out the p-value and verify that it is 0.05
-                driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt25"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').clear()
-                driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt25"]/tbody/tr[1]/td[2]/table/tbody/tr[1]/td[3]/table/tbody/tr/td/span/input').send_keys(pval)
-                
-                #determine the database and click on the correct one. 
-                if db == 'Mouse (KEGG)':
-                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt110"]/div[2]/span').click()
-                elif db == 'Human (BioCyc)':
-                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt98"]/div[2]/span').click()
-                elif db == 'Human (KEGG)':
-                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt100"]/div[2]/span').click()
-                elif db == 'Mouse (BioCyc)':
-                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt108"]/div[2]/span').click()
-                elif db == 'Rat (KEGG)':
-                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt112"]/div[2]/span').click()
-                elif db == 'Cow (KEGG)':
-                    driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt120"]/div[2]/span').click()
-
-                driver.find_element(By.XPATH,'//*[@id="j_idt13:j_idt439"]').click()
-            except:
-                messagebox.showerror(message='Failed to input the wanted database, and p-value.')
-                return
-
-
-            try:
-                #making sure the download tab is available
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="treeForm:j_idt77:4"]/div'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="treeForm:j_idt77:4"]/div').click()
-
-            except:
-                messagebox.showerror(message='No download tab')
-                return
-
-            try:
-                time.sleep(2)
-                element = WebDriverWait(driver,10).until(
-                    EC.presence_of_element_located((By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a'))
-                )
-                driver.find_element(By.XPATH,'//*[@id="ac:form1:j_idt20_data"]/tr[1]/td[1]/a').click()
-
-            except:
-                messagebox.showerror(message='File did not start to download')
-                return
-
-            #rename zip file, but first check that it has downloaded.
-            rename = name+'.zip'
-            basepath = os.path.expanduser('~')
-            basepath +='/Downloads/Download.zip'
-            #get the start time to give plenty of time for the download to occur. 
-            downloadTime = 0
-            downloaded = False
-            start = time.time()
-            while downloadTime < 60:
-                #checking for download.
-                downloadTime = time.time() - start
-                if os.path.exists(basepath):
-                    #file has downloaded
-                    downloaded = True
-                    break
-
-            if downloaded:
-                time.sleep(2)
-                #rename the file and unzip into the appropriate folder
-                os.rename(basepath,rename)
-                directory = os.getcwd()
-                zip_dir = directory + '/'+ name
-                with zipfile.ZipFile(rename,'r') as zip_ref:
-                    zip_ref.extractall(zip_dir)
-                #remove the downloaded and renamed zip file. 
-                os.remove(rename)
-
-        #close out the current browser window
-        driver.close()
-
-
     def externalCriteria(comp='rand',trans ='None',scale='None'):
         '''
+        This function is responsible for allowing users to compare single clustering solutions along with the appropriate optimization metric. 
+        
+        Input:
+        File of data you want to cluster, and a file with the input metrics. 
+
+        Output:
+        Plots of the resulting comparisons between the clustering solutions. 
 
         '''
-
+        # Defomomg ECCO parameters to try
+        ENSEMBLE_PARAMS = [
+        {'Distance': 'CNS', 'Linkage': 'ward', 'Correlation': 'spearman', 'Optimizer': 'CH'},
+        {'Distance': 'CNS', 'Linkage': 'average', 'Correlation': 'spearman', 'Optimizer': 'SIL'},
+        {'Distance': 'CS', 'Linkage': 'ward', 'Correlation': 'spearman', 'Optimizer': 'CH'},
+        {'Distance': 'CS', 'Linkage': 'average', 'Correlation': 'spearman', 'Optimizer': 'SIL'},
+        {'Distance': 'CS', 'Linkage': 'complete', 'Correlation': 'spearman', 'Optimizer': 'DBI'},
+        {'Distance': 'CNS', 'Linkage': 'complete', 'Correlation': 'spearman', 'Optimizer': 'DBI'}
+                            ]
+        
+        clusts = pd.DataFrame(ENSEMBLE_PARAMS)
+        
         #set up the dictionary for the distance measure.
         distance = {
         'CNS': GB.correlationNosqrt,
@@ -2844,17 +2557,12 @@ class GUIUtils:
         }
 
         #In this functionality I need to read in the data, and ask for a .csv of the clustering parameters of interest similar to ensemble. 
-
         #read in the data file of interest.
         messagebox.showinfo(message='Select the input file of interest.')
         dataFile = filedialog.askopenfilename()
         data, col_groups = GB.readAndPreProcess(dataFile,transform=trans,scale=scale,func="CC")
 
         #ask the user for the clustering parameters they would like to use.
-        #read in the csv, for ensemble creation
-        messagebox.showinfo(message='Select clustering parameters file.')
-        clustsFile = filedialog.askopenfilename()
-        clusts = pd.read_csv(clustsFile)
         clusts_s = clusts[['Distance','Linkage']]
         distLink = tuple(clusts_s.itertuples(index=False,name=None))
 
@@ -2888,6 +2596,7 @@ class GUIUtils:
 
                 #get the distance metric out
                 dist = distance[clusts['Distance'][i]](data,metric=clusts['Correlation'][i])
+                
                 for j in range(10):
                     #calculate the clustering solutions
                     agglo = AC(n_clusters=j+2,linkage=clusts['Linkage'][i],
@@ -2918,144 +2627,630 @@ class GUIUtils:
                 best_labels[i]= optClust[1]    
 
         #check for what is what and send labels. 
-        if comp =='Rand-index':
-            #send to the rand index function
-            GB.randComp(best_labels,distLink)
-            messagebox.showinfo(title='Completed',message='Successfully saved the output of the Rand-Index comparison.')
-
-        elif comp =='Adjusted Rand-index':
-            #send to the adjusted rand function
-            GB.adjRandComp(best_labels,distLink)
-            messagebox.showinfo(title='Completed',message='Successfully saved the output of the Adjusted Rand-Index comparison.')
-
-        elif comp =='Normalized Mutual Info.':
-            #send to the mutual info function
-            GB.mutualInfo(best_labels,distLink,'norm')
-        
-        elif comp =='Adjusted Mutual Info.':
-            #send to the mutual info function
-            GB.mutualInfo(best_labels,distLink,'adj')
-
+    # External Comparison Logic
+        comp_map = {
+            'Rand-index': lambda: GB.randComp(best_labels, distLink),
+            'Adjusted Rand-index': lambda: GB.adjRandComp(best_labels, distLink),
+            'Normalized Mutual Info.': lambda: GB.mutualInfo(best_labels, distLink, 'norm'),
+            'Adjusted Mutual Info.': lambda: GB.mutualInfo(best_labels, distLink, 'adj')
+        }
+    
+        if comp in comp_map:
+            comp_map[comp]()
+            messagebox.showinfo(title='Completed', message=f'Successfully saved the output of the {comp} comparison.')
         else:
-            #eventually add here so that I can support this functionality. 
-            messagebox.showinfo(message='Currently not supporting the comparison between mono-clustering and ensemble clustering solutions.')
-
+            messagebox.showinfo(message='Currently not supporting this comparison type.')
 
     def geneToPathway():
+        '''Pathway enrichment via gseapy Enrichr + prerank.
+
+        Input CSV: gene ID, log2 fold change, and raw p-value (column names
+        matched case-insensitively, e.g. ECCO_Trial_Deglist.csv: Gene, log2FC,
+        pvalue). Optional FDR/padj column is kept for export only; significance
+        for up/down lists and volcano coloring uses raw p-value and a user-chosen
+        cutoff (default 0.05).
+
+        Enrichr gene_sets: GO BP/MF/CC 2021, KEGG_2021_Human (organism-agnostic
+        block in this function), and Reactome_2022.
         '''
-        '''
+        try:
+            import gseapy as gp
+        except ImportError as e:
+            messagebox.showerror(
+                title="GSEApy import failed",
+                message=(
+                    "Pathway enrichment needs gseapy with the compiled gseapy.gse module "
+                    "(from a PyPI wheel).\n\n"
+                    "Remove any conda copy, then reinstall from pip:\n"
+                    "  conda remove -y gseapy\n"
+                    "  pip uninstall -y gseapy\n"
+                    "  pip install --no-cache-dir \"gseapy>=1.1\"\n\n"
+                    "If you are on Python 3.14+, use 3.12 or 3.13 until wheels exist.\n\n"
+                    f"Error: {e}"
+                ),
+            )
+            return
 
+        sns.set(style="whitegrid", context="talk")
 
-        #give the user the input that tells them what to submit
-        messagebox.showinfo(message="Select a csv file of genes, Fold-change, and p-values")
-
+        # Prompt user
+        messagebox.showinfo(
+            message="Select CSV with Gene, log2FC, and raw p-value "
+            "(e.g. pvalue, P.Value). FDR/padj optional. ECCO-style DEG lists supported."
+        )
         file = filedialog.askopenfilename()
+        if not file:
+            return
 
-        #read in the input parameters
-        genes = pd.read_csv(file)
+        raw_df = pd.read_csv(file)
+        lm = {str(c).strip().lower(): c for c in raw_df.columns}
 
-        #add 10 columns to genes data frame
-        pathIndex = [f"P{i}" for i in range(1, 11)]
-        newCols = pd.DataFrame(np.zeros((genes.shape[0],10)),columns=pathIndex)
+        def _pick_col(*names):
+            for n in names:
+                k = n.lower()
+                if k in lm:
+                    return lm[k]
+            return None
 
-        #add columns for 
-        genes = pd.concat([genes, newCols],axis=1)
-        genes = genes.replace(0, np.nan)
+        gene_c = _pick_col("gene", "symbol")
+        lfc_c = _pick_col("log2fc", "logfc", "log2foldchange", "log2_fold_change")
+        p_c = _pick_col(
+            "pvalue",
+            "p.value",
+            "p_value",
+            "p val",
+            "pval",
+            "raw p",
+            "raw_p",
+            "pvalue.raw",
+        )
+        fdr_c = _pick_col("fdr", "padj", "qvalue", "adj.p.val", "adj_p_val", "qval")
 
-        # Specify the file path and name
-        file_path = 'Results.xlsx'
+        if gene_c is None or lfc_c is None or p_c is None:
+            messagebox.showerror(
+                message="CSV needs gene names, log2 fold change, and a raw p-value column "
+                "(e.g. Gene, log2FC, pvalue).",
+            )
+            return
 
-        # Use ExcelWriter with the openpyxl engine
-        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-            genes.to_excel(writer, index=False, sheet_name='Sheet1')
+        df = raw_df.copy()
+        df.rename(columns={gene_c: "Gene", lfc_c: "log2FC", p_c: "pvalue"}, inplace=True)
+        df["Gene"] = df["Gene"].astype(str)
+        df["log2FC"] = pd.to_numeric(df["log2FC"], errors="coerce")
+        df["pvalue"] = pd.to_numeric(df["pvalue"], errors="coerce")
+        if fdr_c is not None:
+            df["FDR"] = pd.to_numeric(raw_df[fdr_c], errors="coerce")
+
+        df = df.dropna(subset=["Gene", "log2FC", "pvalue"])
+
+        p_cutoff = simpledialog.askfloat(
+            "P-value threshold",
+            "Significance cutoff (raw p-value):",
+            initialvalue=0.05,
+            minvalue=0.0,
+            maxvalue=1.0,
+        )
+        if p_cutoff is None:
+            return
+        if p_cutoff <= 0:
+            messagebox.showerror(message="P-value cutoff must be greater than 0.")
+            return
+
+        sig = df[df["pvalue"] < p_cutoff]
+
+        threshold = simpledialog.askinteger(
+            "Threshold",
+            "What is your log2FC threshold?",
+            initialvalue=0,
+        )
+        if threshold is None:
+            return
+        up = sig[sig["log2FC"] > threshold]
+        down = sig[sig["log2FC"] < -threshold]
+
+        up_genes = up["Gene"].astype(str).tolist()
+        down_genes = down["Gene"].astype(str).tolist()
+
+        def volcano_plot(df_plot, log2_thresh, p_thresh):
+            eps = max(np.finfo(float).tiny, float(p_thresh) * 1e-6)
+            ycol = "-log10(P-value)"
+            df_v = df_plot.copy()
+            df_v[ycol] = -np.log10(df_v["pvalue"].clip(lower=eps))
+            df_v["Regulation"] = "NS"
+            up_m = (df_v["pvalue"] < p_thresh) & (df_v["log2FC"] > log2_thresh)
+            down_m = (df_v["pvalue"] < p_thresh) & (df_v["log2FC"] < -log2_thresh)
+            df_v.loc[up_m, "Regulation"] = "Up"
+            df_v.loc[down_m, "Regulation"] = "Down"
+
+            plt.figure(figsize=(8, 6))
+            palette = {"Up": "red", "Down": "blue", "NS": "gray"}
+            for key, group in df_v.groupby("Regulation"):
+                plt.scatter(
+                    group["log2FC"],
+                    group[ycol],
+                    c=palette[key],
+                    label=key,
+                    alpha=0.7,
+                    s=20,
+                )
+
+            top = df_v[df_v["pvalue"] < p_thresh].nlargest(10, ycol)
+            for _, row in top.iterrows():
+                plt.text(row["log2FC"], row[ycol], row["Gene"], fontsize=8)
+
+            plt.axhline(-np.log10(p_thresh), linestyle="--", color="black")
+            plt.axvline(log2_thresh, linestyle="--", color="black")
+            plt.axvline(-log2_thresh, linestyle="--", color="black")
+
+            plt.xlabel("log2 Fold Change")
+            plt.ylabel(ycol)
+            plt.title("Volcano Plot (P-value cutoff: {p_cutoff})")
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig("volcano_plot.png", dpi=300)
+            plt.close()
+
+        volcano_plot(df, threshold, p_cutoff)
+
+        # GO libraries
+        organism = "human"
+        go_libraries = {
+            "BP": "GO_Biological_Process_2021",
+            "MF": "GO_Molecular_Function_2021",
+            "CC": "GO_Cellular_Component_2021"
+        }
+        
+        kegg_map = {"human": "KEGG_2021_Human"}
+
+        kegg_lib = kegg_map.get(organism, "KEGG_2021_Human")
+        
+        reactome_lib = "Reactome_2022"
+
+        geneset_lines = [
+            f"Organism passed to Enrichr: {organism}",
+            "",
+            "Gene set libraries (Enrichr names):",
+            f"  • {go_libraries['BP']} (GO Biological Process)",
+            f"  • {go_libraries['MF']} (GO Molecular Function)",
+            f"  • {go_libraries['CC']} (GO Cellular Component)",
+            f"  • {kegg_lib}",
+            f"  • {reactome_lib}",
+            "",
+            "GSEA prerank uses this same list (GO ×3, KEGG, Reactome).",
+        ]
+        if organism not in kegg_map:
+            geneset_lines.append(
+                f"(Unrecognized organism for KEGG: using {kegg_lib}; "
+                "use 'human' or 'mouse' for matched KEGG libraries.)"
+            )
+        messagebox.showinfo(
+            title="Gene set libraries",
+            message="\n".join(geneset_lines),
+        )
+
+        # Run enrichment
+        def run_enrichment(gene_list, library):
+            if len(gene_list) == 0:
+                return pd.DataFrame()
+
+            enr = gp.enrichr(
+                gene_list=gene_list,
+                gene_sets=library,
+                organism=organism,
+                outdir=None,
+                cutoff=0.05
+            )
+            return enr.results
+
+        results = {}
+
+        for name, lib in go_libraries.items():
+            results[f"UP_GO_{name}"] = run_enrichment(up_genes, lib)
+            results[f"DOWN_GO_{name}"] = run_enrichment(down_genes, lib)
+
+        results["UP_KEGG"] = run_enrichment(up_genes, kegg_lib)
+        results["DOWN_KEGG"] = run_enrichment(down_genes, kegg_lib)
+        results["UP_Reactome"] = run_enrichment(up_genes, reactome_lib)
+        results["DOWN_Reactome"] = run_enrichment(down_genes, reactome_lib)
+
+        #GSEA (Ranked List)
+        ranked = df[['Gene','log2FC']].sort_values(by='log2FC', ascending=False)
+        ranked = ranked.set_index('Gene')
+
+        gsea_res = gp.prerank(
+            rnk=ranked,
+            gene_sets=list(go_libraries.values()) + [kegg_lib, reactome_lib],
+            outdir="GSEA_results",
+            permutation_num=100
+        )
+
+        def plot_gsea_curves(pre_res, outdir="GSEA_plots"):
+            os.makedirs(outdir, exist_ok=True)
+
+            res2d = pre_res.res2d
+            if res2d is None or getattr(res2d, "empty", True):
+                return
+
+            def _df_col(df, name):
+                n = name.lower()
+                for c in df.columns:
+                    if str(c).lower() == n:
+                        return c
+                return None
+
+            nes_c = _df_col(res2d, "nes")
+            term_c = _df_col(res2d, "term")
+            if nes_c is None or term_c is None:
+                return
+
+            res = res2d.sort_values(nes_c, ascending=False, na_position="last")
+            high = list(res[term_c].head(3))
+            low = list(res[term_c].tail(3))
+            top_terms = []
+            seen = set()
+            for t in high + low:
+                if t in seen:
+                    continue
+                seen.add(t)
+                top_terms.append(t)
+
+            def _safe_stem(label):
+                s = str(label).replace(" ", "_")
+                for ch in '<>:"/\\|?*\n\r\t':
+                    s = s.replace(ch, "_")
+                return (s[:180] if s else "pathway")
+
+            res_by_term = pre_res.results
+
+            def _gsd_get(gsd, *aliases):
+                keymap = {str(k).lower(): k for k in gsd}
+                for a in aliases:
+                    k = keymap.get(a.lower())
+                    if k is not None:
+                        return gsd[k]
+                raise KeyError(aliases)
+
+            for term in top_terms:
+                if term not in res_by_term:
+                    continue
+                ofn = os.path.join(outdir, f"{_safe_stem(term)}.png")
+                try:
+                    if hasattr(pre_res, "plot") and callable(pre_res.plot):
+                        pre_res.plot(terms=term, ofname=ofn)
+                    else:
+                        gsd = res_by_term[term]
+                        gp.gseaplot(
+                            term=term,
+                            hits=_gsd_get(gsd, "hits"),
+                            nes=float(_gsd_get(gsd, "nes", "NES")),
+                            pval=float(_gsd_get(gsd, "pval", "NOM p-val")),
+                            fdr=float(_gsd_get(gsd, "fdr", "FDR q-val")),
+                            RES=_gsd_get(gsd, "RES"),
+                            rank_metric=pre_res.ranking,
+                            ofname=ofn,
+                        )
+                except Exception:
+                    continue
+
+        plot_gsea_curves(gsea_res)
+
+        #Reduce redundacy
+        def reduce_redundancy(res, overlap_cutoff=0.5):
+
+            if res.empty:
+                return res
+
+            res = res.sort_values('Adjusted P-value').copy()
+            keep = []
+            seen = []
+
+            for _, row in res.iterrows():
+                genes = set(row['Genes'].split(';'))
+
+                redundant = False
+                for s in seen:
+                    overlap = len(genes & s) / len(genes | s)
+                    if overlap > overlap_cutoff:
+                        redundant = True
+                        break
+
+                if not redundant:
+                    keep.append(row)
+                    seen.append(genes)
+
+            return pd.DataFrame(keep)
+
+        # Plotting function
+        def plot_results(res, name):
+            if res.empty:
+                return
+
+            top = res.sort_values('Adjusted P-value').head(10).copy()
+
+            # Extract gene counts
+            top['Gene_Count'] = top['Overlap'].str.split('/').str[0].astype(int)
+
+            # Barplot
+            plt.figure(figsize=(8,6))
+            sns.barplot(
+                data=top,
+                y='Term',
+                x=-np.log10(top['Adjusted P-value']),
+                color='steelblue'
+            )
+            plt.xlabel("-log10(FDR)")
+            plt.ylabel("")
+            plt.title(name)
+
+            plt.tight_layout()
+            plt.savefig(f"{name}_barplot.png", dpi=300)
+            plt.close()
+
+            # Dotplot
+            plt.figure(figsize=(8,6))
+
+            scatter = plt.scatter(
+                -np.log10(top['Adjusted P-value']),
+                top['Term'],
+                s=top['Gene_Count'] * 25,
+                c=top['Adjusted P-value'],
+                cmap='viridis_r',
+                edgecolor='black'
+            )
+
+            plt.xlabel("-log10(FDR)")
+            plt.ylabel("")
+            plt.title(name)
+
+            # Colorbar (FDR)
+            cbar = plt.colorbar(scatter)
+            cbar.set_label("FDR")
+
+            # Size legend
+            for size in [5, 10, 20]:
+                plt.scatter([], [], s=size*25, c='gray', label=str(size))
+            plt.legend(title="Gene Count", loc='lower right')
+
+            plt.tight_layout()
+            plt.savefig(f"{name}_dotplot.png", dpi=300)
+            plt.close()
+
+        # Enrichment Map
+        def enrichment_map(res, name):
+
+            if res.empty:
+                return
+
+            top = res.sort_values('Adjusted P-value').head(20).copy()
+
+            # Convert gene lists
+            top['Gene_List'] = top['Genes'].apply(lambda x: set(x.split(';')))
+
+            G = nx.Graph()
+
+            for i in range(len(top)):
+                G.add_node(top.iloc[i]['Term'])
+
+            # Add edges based on overlap
+            for i in range(len(top)):
+                for j in range(i+1, len(top)):
+                    overlap = len(top.iloc[i]['Gene_List'] & top.iloc[j]['Gene_List'])
+                    if overlap >= 3:
+                        G.add_edge(top.iloc[i]['Term'], top.iloc[j]['Term'], weight=overlap)
+    
+            plt.figure(figsize=(8,8))
+            pos = nx.spring_layout(G, seed=42)
+
+            nx.draw(
+                G, pos,
+                with_labels=True,
+                node_size=500,
+                font_size=6
+            )
+
+            plt.title(f"{name} Enrichment Map")
+            plt.savefig(f"{name}_network.png", dpi=300)
+            plt.close()
             
-            # Load the openpyxl workbook object
-            workbook = writer.book
-            sheet = writer.sheets['Sheet1']
-            columnN = 3
-            count = 0
-            for j in range(genes.shape[0]):
-                request = REST.kegg_find("mmu",genes['Gene'][j])
+        # Generate plots
+        for name, res in results.items():
+            res = reduce_redundancy(res)
 
-                #write the file to the wanted location
-                txtFCur = 'Testing'+ '.txt'
-                open(txtFCur,'w').write(request.read())
-
-                #open the file and read, parse out to search names
-                geneSearch = open(txtFCur,"r")
-                geneMatches = geneSearch.read()
-
-                #start parsing
-                geneList = geneMatches.split("\n")
-                for i in range(len(geneList)):
-                    #check the current gene_i for the name, removing tab
-                    curCheck = geneList[i].split("\t")
-                    if len(curCheck) == 1:
-                        continue
-                    #hello
-                    curCheck1 = curCheck[1].split(",")
-
-                    if genes['Gene'][j] in curCheck1:
-                        count +=1  
-                        requestGene = REST.kegg_get(curCheck[0])
-                        #write the file to the wanted location
-                        txtFCur = 'TestingGet'+ '.txt'
-                        open(txtFCur,'w').write(requestGene.read())
-
-
-                        #open the txtFCur,read split then look for start and end
-                        check = open(txtFCur,"r")
-                        check1 = check.read()
-                        pathwayStart = check1.split("\n")
-                        #get the starting and ending positions for pathway then get pathways. 
-                        pathway = False
-                        pathwayStartI = None
-                        pathwayEndI = None
-                        #search for start and end positions of pathway
-                        for k in range(len(pathwayStart)):
-                            if pathway == False:
-                                #figure out where the start of the pathway is 
-                                if 'PATHWAY' in pathwayStart[k]:
-                                    pathway = True
-                                    pathwayStartI = k 
-                                else:
-                                    continue
-
-                            else:
-                                if pathwayStart[k][0].isalpha():
-                                    #keep as the wrong index for easy input to the range function
-                                    pathwayEndI = k
-                                    break
-
-                        if pathwayEndI == None:
-                            continue
-
-
-                        #get out the pathways of interest
-                        pathList = 10*[None]
-                        count2 = -1
-
-                        for m in range(pathwayStartI,pathwayEndI):
-                            count2 +=1
-                            if count2 == 10:
-                                break
-                            
-                            if m == pathwayStartI:
-                                #removing pathway and getting the list
-                                pathList[count2] = pathwayStart[m].strip('PATHWAY').strip()
-                            
-                            else:
-                                pathList[count2] = pathwayStart[m].strip()
+            plot_results(res, name)
+            enrichment_map(res, name)
             
-                #save the hyperlinks to the appropriate location.
-                columnN = 3
-                for l in range(len(pathList)):
-                    if pathList[l] == None:
-                        continue
-                    columnN += 1
-                #go through each pathway and add to the spreadsheet.
-                    # Use openpyxl to add a hyperlink
-                    # Note: Excel uses 1-based indexing, adjust cell accordingly
-                    sheet.cell(row=j+2, column=columnN).hyperlink = "https://www.genome.jp/pathway/" + pathList[l][:8]
-                    sheet.cell(row=j+2, column=columnN).value = pathList[l]
-                    sheet.cell(row=j+2, column=columnN).style = "Hyperlink"
+        # Identify unused genes (not recognized by enrichment tools)
+        used_genes = set()
+        for res in results.values():
+            if not res.empty:
+                used_genes.update(
+                    sum([g.split(';') for g in res['Genes']], [])
+                )
+
+        unused_genes = set(df['Gene'].astype(str)) - used_genes
+
+        # Write to Excel
+        with pd.ExcelWriter("Gene_Enrichment_Results.xlsx") as writer:
+            df.to_excel(writer, sheet_name="All Genes", index=False)
+            up.to_excel(writer, sheet_name="Upregulated", index=False)
+            down.to_excel(writer, sheet_name="Downregulated", index=False)
+
+            for name, res in results.items():
+                res.to_excel(writer, sheet_name=name[:30], index=False)
+
+            pd.DataFrame(list(unused_genes), columns=["Unused Genes"])\
+                .to_excel(writer, sheet_name="Unused Genes", index=False)
+
+        messagebox.showinfo(
+            message=f"Analysis complete!\n\nUnused genes: {len(unused_genes)}"
+        )
+
+    def RNASeqDeg():
+        """
+        DESeq2 on a count-matrix CSV; save a DEG list like ECCO_Trial_Deglist.csv.
+        Expects a header row (gene id + sample columns), then either:
+        - **ECCO-style**: first data row = group label per sample (e.g. condition1...condition1, condition2...condition2),
+          following rows = genes × raw counts; or
+        - **Simple matrix**: first data row starts with a gene name and numeric counts
+          (no separate group row) — not supported; an error explains the Condition1vCondition2 format.
+
+        Output columns: Gene, log2FC, pvalue, FDR (Wald test, BH-adjusted ``padj``).
+        """
+        if DefaultInference is None:
+            messagebox.showerror(
+                title="PyDESeq2",
+                message="This workflow requires pydeseq2 with DefaultInference "
+                "(upgrade pydeseq2 to a recent release, e.g. >= 0.4).",
+            )
+            return
+
+        messagebox.showinfo(
+            message="Select a count matrix CSV (e.g. ECCO_Count_Matrix.csv): "
+            "header = gene column + sample IDs; row 2 = one group label per sample "
+            "(e.g. Condition1, Condition2); remaining rows = genes and raw integer counts.",
+        )
+        path = filedialog.askopenfilename(filetypes=[("CSV", "*.csv"), ("All", "*.*")])
+        if not path:
+            return
+
+        raw = pd.read_csv(path, header=0, dtype=str, low_memory=False)
+        if raw.shape[1] < 3:
+            messagebox.showerror(message="Need at least one gene column and two sample columns.")
+            return
+
+        sample_cols = [str(c) for c in raw.columns[1:]]
+
+        def _cell_float(x):
+            try:
+                return float(str(x).replace(",", "").strip())
+            except ValueError:
+                return np.nan
+
+        group_row = None
+        data_start = 0
+        if raw.shape[0] >= 2:
+            top0 = _cell_float(raw.iloc[0, 1])
+            top1 = _cell_float(raw.iloc[1, 1])
+            if np.isnan(top0) and not np.isnan(top1):
+                group_row = [str(x).strip() for x in raw.iloc[0, 1:].tolist()]
+                data_start = 1
+
+        if group_row is None:
+            messagebox.showerror(
+                message="Could not find a group-label row after the header.\n\n"
+                "Use a format like ECCO_Count_Matrix.csv: row 1 = gene_id, samples…; "
+                "row 2 = condition per sample (e.g. Condition1, Condition1, …, Condition2, Condition2, …); "
+                "row 3+ = genes and counts.",
+            )
+            return
+
+        if len(group_row) != len(sample_cols):
+            messagebox.showerror(
+                message="Number of group labels does not match the number of sample columns.",
+            )
+            return
+
+        body = raw.iloc[data_start:].copy()
+        body.index = body.iloc[:, 0].astype(str).str.strip()
+        body = body.iloc[:, 1:]
+        body.columns = sample_cols
+        body = body.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        body = body.astype(np.int64)
+        body = body[body.index.astype(str).str.len() > 0]
+        if body.index.duplicated().any():
+            body = body[~body.index.duplicated(keep="first")]
+
+        # PyDESeq2: samples × genes
+        counts = body.T
+        counts.index = counts.index.astype(str)
+
+        metadata = pd.DataFrame({"group": group_row}, index=counts.index)
+        metadata["group"] = metadata["group"].astype(str).str.strip()
+        _g = metadata["group"]
+        if _g.isna().any() or (_g == "").any():
+            messagebox.showerror(message="Missing or empty group label for some samples.")
+            return
+
+        levels = sorted(set(metadata["group"].tolist()))
+        if len(levels) != 2:
+            messagebox.showerror(
+                message=f"DESeq2 comparison needs exactly two groups; found: {levels}",
+            )
+            return
+
+        if set(levels) == {"Condition1", "Condition2"}:
+            test_g, ref_g = "Condition2", "Condition1"
+        else:
+            test_g, ref_g = levels[1], levels[0]
+
+        test_g = simpledialog.askstring(
+            "Contrast",
+            "Log2 fold-change = log2(test / reference).\n"
+            "Enter test group (numerator, e.g. Condition2):",
+            initialvalue=test_g,
+        )
+        if test_g is None:
+            return
+        test_g = test_g.strip()
+        ref_g = simpledialog.askstring(
+            "Contrast",
+            "Enter reference group (denominator, e.g. Condition1):",
+            initialvalue=ref_g,
+        )
+        if ref_g is None:
+            return
+        ref_g = ref_g.strip()
+        if test_g == ref_g:
+            messagebox.showerror(message="Test and reference groups must differ.")
+            return
+
+        inference = DefaultInference(n_cpus=None)
+
+        try:
+            dds = DeseqDataSet(
+                counts=counts,
+                metadata=metadata,
+                design="~group",
+                refit_cooks=True,
+                inference=inference,
+                quiet=True,
+            )
+            dds.deseq2()
+            stats = DeseqStats(
+                dds,
+                contrast=["group", test_g, ref_g],
+                inference=inference,
+                quiet=True,
+            )
+            stats.summary()
+        except Exception as exc:
+            messagebox.showerror(title="DESeq2 failed", message=str(exc))
+            return
+
+        res = stats.results_df
+        out = pd.DataFrame(
+            {
+                "Gene": res.index.astype(str),
+                "log2FC": res["log2FoldChange"],
+                "pvalue": res["pvalue"],
+                "FDR": res["padj"],
+            }
+        )
+
+        default_out = os.path.splitext(path)[0] + "_deglist.csv"
+        out_path = filedialog.asksaveasfilename(
+            title="Save DEG list (ECCO-style)",
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv"), ("All", "*.*")],
+            initialfile=os.path.basename(default_out),
+            initialdir=os.path.dirname(path) or ".",
+        )
+        if not out_path:
+            return
+
+        out.to_csv(out_path, index=False)
+        messagebox.showinfo(
+            title="Done",
+            message=f"Saved {out.shape[0]} genes to:\n{out_path}\n\n"
+            f"Contrast: {test_g} vs {ref_g} (reference).",
+        )
