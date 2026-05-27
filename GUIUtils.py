@@ -804,7 +804,7 @@ class GUIUtils:
         messagebox.showinfo(title="Success", message="Compound Matches has been generated!")
         return
     
-    def ensembleClusteringFullOpt(numClusts=10, transform='None', scale='None', file=None,
+    def ensembleClusteringFullOpt(numClusts=10, transform='None', scale='None', file=None, default=True,
                                   colMap='viridis'):
         '''
         colMap - matplotlib colormap name for ensemble clustermaps.
@@ -821,8 +821,12 @@ class GUIUtils:
             {'Distance': 'CS', 'Linkage': 'complete', 'Correlation': 'spearman', 'Optimizer': 'DBI'},
             {'Distance': 'CNS', 'Linkage': 'complete', 'Correlation': 'spearman', 'Optimizer': 'DBI'}
                                 ]
-            
-        parameters = pd.DataFrame(ENSEMBLE_PARAMS)
+        ### Create an ensemble parameters datasheet, from the default or ask for user input. 
+        if default:
+            parameters = pd.DataFrame(ENSEMBLE_PARAMS)
+        else:
+            messagebox.showinfo(title='File selection',message='Select the ensemble clustering specification file.')
+            parameters = pd.read_csv(filedialog.askopenfilename())
                     
         #optimum number of clusters from validation index.
         sys.setrecursionlimit(10**8)

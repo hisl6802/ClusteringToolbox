@@ -194,7 +194,7 @@ class JuneLabClusteringGUI(ttk.Frame):
 
         numThreads = int(multiprocessing.cpu_count())
 
-        ttk.Label(self, text="Clustering Toolbox Set-Up", style="RW.TLabel").grid(
+        ttk.Label(self, text="ECCO Set-Up", style="RW.TLabel").grid(
             column=1, row=0, columnspan=3, pady=20)
         ttk.Label(self, text="Please input your name or a Project name:",
                   font=("TkHeadingFont", 16)).grid(
@@ -268,7 +268,7 @@ class JuneLabClusteringGUI(ttk.Frame):
                             format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %I:%M:%S %p',
                             level=logging.INFO)
-        logging.info('Clustering Toolbox appropriately started...')
+        logging.info('ECCO appropriately started...')
 
         self._show_home()
 
@@ -293,7 +293,7 @@ class JuneLabClusteringGUI(ttk.Frame):
                              padding=8,
                              relief='raised')
 
-        ttk.Label(self, text="Clustering Toolbox",
+        ttk.Label(self, text="ECCO",
                   style="RW.TLabel").grid(
             column=0, row=0, columnspan=5, pady=10)
 
@@ -832,7 +832,7 @@ class JuneLabClusteringGUI(ttk.Frame):
         def ensembleScale(*args):
             global scaleSel
             scaleSel = scaleList[scaleLB.curselection()[0]]
-            submit_btn.grid(column=1, row=5, columnspan=3,
+            submit_btn.grid(column=1, row=6, columnspan=3,
                             sticky=(E,W), padx=60, pady=5)
 
         colorList     = config.colorList
@@ -861,13 +861,27 @@ class JuneLabClusteringGUI(ttk.Frame):
             text="Also generate PeaksToPathways files and prompt for Mummichog results",
             variable=self.run_p2p_cascade
         ).grid(column=1, row=4, columnspan=3, pady=5, padx=5, sticky=(E, W))
+        self.run_default = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            self,
+            text="Run default ensemble",
+            variable=self.run_default
+        ).grid(column=1, row=5, columnspan=3, pady=5, padx=5, sticky=(E, W))
 
         def run_ensemble_and_cascade():
             sel = colorMapLB.curselection()
             col_map = colorList[sel[0]] if sel else 'viridis'
-            result = GU.ensembleClusteringFullOpt(
-                transform=transSel, scale=scaleSel, colMap=col_map,
-            )
+
+            #have the user select a file for ensemble clustering or use the default. 
+            if not self.run_default.get():
+                result = GU.ensembleClusteringFullOpt(
+                    transform=transSel, scale=scaleSel, colMap=col_map, default=False,
+                )
+            else:
+                result = GU.ensembleClusteringFullOpt(
+                    transform=transSel, scale=scaleSel, colMap=col_map
+                )
+
             try:
                 opt_k, out_dir = result
             except Exception:
@@ -1384,6 +1398,6 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     root = tk.Tk()
     root.minsize(700, 500)
-    root.title("Clustering Toolbox")
+    root.title("ECCO")
     app = JuneLabClusteringGUI(master=root)
     root.mainloop()
