@@ -1,4 +1,6 @@
-import logging, time, os, multiprocessing, webbrowser, matplotlib, config
+import multiprocessing
+multiprocessing.freeze_support() 
+import logging, time, os,webbrowser, matplotlib, config
 from collections import defaultdict
 matplotlib.use("TkAgg")
 import tkinter as tk

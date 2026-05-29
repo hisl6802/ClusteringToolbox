@@ -1,5 +1,5 @@
 #Creating a class containing functions that will be used in GUI
-import time, glob, sys, logging, warnings, config, mplcursors
+import time, glob, sys, logging, warnings, config, mplcursors,os
 import pandas as pd
 import numpy as np
 import statistics as stat
@@ -3110,8 +3110,8 @@ class GUIUtils:
 
         messagebox.showinfo(
             message="Select a count matrix CSV (e.g. ECCO_Count_Matrix.csv): "
-            "header = gene column + sample IDs; row 2 = one group label per sample "
-            "(e.g. Condition1, Condition2); remaining rows = genes and raw integer counts.",
+            # "header = gene column + sample IDs; row 2 = one group label per sample "
+            # "(e.g. Condition1, Condition2); remaining rows = genes and raw integer counts.",
         )
         path = filedialog.askopenfilename(filetypes=[("CSV", "*.csv"), ("All", "*.*")])
         if not path:
@@ -3208,7 +3208,8 @@ class GUIUtils:
             messagebox.showerror(message="Test and reference groups must differ.")
             return
 
-        inference = DefaultInference(n_cpus=None)
+        # inference = DefaultInference(n_cpus=None)
+        inference = DefaultInference(n_cpus=1)
 
         try:
             dds = DeseqDataSet(
