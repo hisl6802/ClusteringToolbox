@@ -5,7 +5,6 @@
 - [Ensemble Clustering combined with Clustering Optimization (ECCO)](#ensemble-clustering-combined-with-clustering-optimization-ecco)
 - [Data Pre-processing notes](#data-pre-processing-notes)
 - [Installation and set-up](#installation-and-set-up)
-  - [After Installation of python](#after-installation-of-python)
 - [Example Files](#example-files)
 - [Troubleshooting](#troubleshooting)
 
